@@ -1,0 +1,26 @@
+{
+  "name": "@yunbox/server",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "description": "YunBox Git LFS HTTP 服务端",
+  "license": "MIT",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./cli": "./dist/cli.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsx watch src/cli.ts",
+    "start": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@yunbox/core": "workspace:*"
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@yunbox/core",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "description": "YunBox 的 Git LFS 协议类型、校验与存储接口",
+  "license": "MIT",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch"
+  }
+}
