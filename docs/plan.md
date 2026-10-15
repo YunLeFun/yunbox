@@ -44,6 +44,7 @@ git-lfs 客户端（原版） ──Batch API / Verify / Locks──▶ YunBox �
   - **本地文件存储**：由服务端自己收发文件内容。协议测试和 CI 都用它，**不需要任何云端密钥**。
   - **COS**：服务端返回预签名地址，文件内容不经过服务端。
 - **对象按仓库隔离**：对象键为 `<owner>/<repo>/<oid[0:2]>/<oid[2:4]>/<oid>`，第一版不做跨仓库去重。
+- **仓库组织**：基于 [starter-monorepo](https://github.com/YunYouJun/starter-monorepo) 的 pnpm monorepo。`packages/core`（协议、校验、存储接口）、`packages/server`（HTTP 服务端）在 M1 实现；`packages/cli`（`yunbox` / `git-yunbox`）和 `apps/web`（素材预览）在 M3 实现。
 - **命令行**：一个 npm 包同时注册 `yunbox` 和 `git-yunbox` 两个命令，后者可以用 `git yunbox ...` 调用。第一版提供 `init`、`doctor`、`status`。
 
 ### 协议约定（第一版）
