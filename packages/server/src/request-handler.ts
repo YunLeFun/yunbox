@@ -212,15 +212,19 @@ function requirePermission(
   required: TokenPermission,
 ): Authorized {
   const token = authentication.token!
-  const granted = resolvePermission(token, repository)
+  const granted = resolvePermission(authentication.grant, repository)
   if (!permits(granted, required)) {
     throw new HttpError(403, granted === 'read'
       ? 'This token has read-only access to the repository'
       : 'This token has no access to the repository')
   }
   // Actions expire relative to the token snapshot that authorized them, so a
-  // revocation is fully effective at most actionTtlSeconds after it is saved.
-  const expiresAt = Math.floor(authentication.snapshotAt / 1000) + options.actionTtlSeconds
+  // revocation is fully effective at most actionTtlSeconds after it is saved,
+  // and never outlive the token itself.
+  const expiresAt = Math.min(
+    Math.floor(authentication.snapshotAt / 1000) + options.actionTtlSeconds,
+    Math.floor(Date.parse(token.expiresAt) / 1000),
+  )
   return {
     token,
     actionExpiresInSeconds: Math.max(1, expiresAt - Math.floor(Date.now() / 1000)),

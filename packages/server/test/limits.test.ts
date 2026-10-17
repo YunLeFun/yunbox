@@ -16,13 +16,13 @@ import { LINGER_TIMEOUT_MS, MAX_DISCARDED_BODY_BYTES, MAX_JSON_BODY_BYTES } from
 import { startYunBoxServer } from '../src/server.ts'
 import { createToken } from '../src/tokens.ts'
 import { basicAuth, batch, batchRequest, expectLfsError, getAction, postJson } from './http-helpers.ts'
-import { MemoryTokenStore } from './memory-token-store.ts'
+import { MemoryMetadataStore } from './memory-metadata.ts'
 
 const repository = { owner: 'team', repo: 'assets' }
 
 describe('server limits, error format and logging', () => {
   let directory: string
-  let tokens: MemoryTokenStore
+  let metadata: MemoryMetadataStore
   let secret: string
   let auth: Record<string, string>
   let logs: RequestLogEntry[]
@@ -32,7 +32,7 @@ describe('server limits, error format and logging', () => {
   async function start(overrides: Partial<YunBoxServerOptions> = {}): Promise<RunningYunBoxServer> {
     running = await startYunBoxServer({
       storage: new LocalFileObjectStorage(directory),
-      tokens,
+      metadata,
       port: 0,
       log: entry => logs.push(entry),
       ...overrides,
@@ -64,8 +64,8 @@ describe('server limits, error format and logging', () => {
 
   beforeEach(async () => {
     directory = await mkdtemp(join(tmpdir(), 'yunbox-limits-test-'))
-    tokens = new MemoryTokenStore()
-    secret = (await createToken(tokens, { name: 'writer', repos: { 'team/*': 'write' } })).secret
+    metadata = new MemoryMetadataStore()
+    secret = (await createToken(metadata, { name: 'writer', repos: { 'team/*': 'write' } })).secret
     auth = basicAuth(secret)
     logs = []
   })

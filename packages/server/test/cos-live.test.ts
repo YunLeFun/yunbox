@@ -1,18 +1,22 @@
 import { randomUUID } from 'node:crypto'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import process from 'node:process'
 import { createCosAuthorization } from '@yunbox/core'
 import { describe, expect, it } from 'vitest'
+import { LocalMetadataStore } from '../src/metadata-local.ts'
 import { createCosStorageFromEnvironment } from '../src/storage-config.ts'
-import { CosTokenStore, TOKEN_DOCUMENT_NAME } from '../src/tokens.ts'
 import { runGitLfsWorkflow, WORKFLOW_REPOSITORY } from './lfs-workflow.ts'
 
 /**
  * Runs the shared Git LFS workflow against a real COS bucket.
  *
  * Skipped unless `YUNBOX_COS_E2E=1`. It needs the variables documented in
- * `createCosStorageFromEnvironment`, writes objects and its token document
- * under a random sub-prefix of `YUNBOX_COS_PREFIX` (default `yunbox-e2e`) and
- * deletes what it wrote.
+ * `createCosStorageFromEnvironment`, writes objects under a random sub-prefix
+ * of `YUNBOX_COS_PREFIX` (default `yunbox-e2e`) and deletes what it wrote.
+ * Tokens are kept in a temporary local metadata store; the CloudBase store
+ * has its own live test (`metadata-live.test.ts`).
  */
 describe.skipIf(process.env.YUNBOX_COS_E2E !== '1')('git LFS workflow on real COS', () => {
   it('pushes, clones, restores history and enforces tokens through presigned COS URLs', async () => {
@@ -44,11 +48,12 @@ describe.skipIf(process.env.YUNBOX_COS_E2E !== '1')('git LFS workflow on real CO
       return fetch(new URL(`/${key}`, origin), { method, headers })
     }
 
+    const metadataDirectory = await mkdtemp(join(tmpdir(), 'yunbox-cos-live-metadata-'))
     let oids: string[] = []
     try {
       ;({ oids } = await runGitLfsWorkflow({
         storage,
-        tokens: new CosTokenStore(storage),
+        metadata: new LocalMetadataStore(metadataDirectory),
         writeStamp: async (oid) => {
           const response = await request('HEAD', storage.objectKey(WORKFLOW_REPOSITORY, oid))
           expect(response.status).toBe(200)
@@ -62,7 +67,7 @@ describe.skipIf(process.env.YUNBOX_COS_E2E !== '1')('git LFS workflow on real CO
         await request('DELETE', key)
         await request('DELETE', `${key}.verified.json`)
       }
-      await request('DELETE', storage.metadataKey(TOKEN_DOCUMENT_NAME))
+      await rm(metadataDirectory, { recursive: true, force: true })
     }
   }, 300_000)
 })

@@ -1,13 +1,13 @@
 import type { ObjectStorage } from '@yunbox/core'
 import type { Server } from 'node:http'
 import type { RequestLogger } from './logging.ts'
-import type { TokenStore } from './tokens.ts'
+import type { MetadataStore } from './metadata.ts'
 
 /** Options for starting a YunBox Git LFS server. */
 export interface YunBoxServerOptions {
   storage: ObjectStorage
-  /** Personal tokens accepted as the HTTP Basic password. */
-  tokens: TokenStore
+  /** Tokens accepted as the HTTP Basic password, and the grants of their users. */
+  metadata: MetadataStore
   /** Listen address (default `127.0.0.1`). Non-loopback hosts require an https `publicUrl`. */
   host?: string
   port?: number
@@ -18,8 +18,10 @@ export interface YunBoxServerOptions {
   publicUrl?: string
   /** Lifetime of upload / download URLs, in seconds (default 300). */
   actionTtlSeconds?: number
-  /** How long a token store snapshot is reused, in seconds (default 30, must be below `actionTtlSeconds`). */
+  /** How long a snapshot of tokens and grants is reused, in seconds (default 30, must be below `actionTtlSeconds`). */
   tokenCacheTtlSeconds?: number
+  /** Minimum time between two `lastUsedAt` writes of one token, in seconds (default 3600). */
+  lastUsedWriteIntervalSeconds?: number
   /** Concurrent batch and verify requests before answering 503 (default 32). */
   maxConcurrentRequests?: number
   /** Concurrent server-hosted PUT / GET transfers before answering 503 (default 4). */

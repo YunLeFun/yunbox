@@ -2,7 +2,7 @@
 
 import { ConfigError } from './config-error.ts'
 import { DEFAULT_HOST, DEFAULT_PORT, resolvePublicUrl } from './server.ts'
-import { checkStorageEnvironment } from './storage-config.ts'
+import { checkMetadataEnvironment, checkStorageEnvironment, defaultMetadataDirectory, defaultMetadataKind } from './storage-config.ts'
 
 export { ConfigError } from './config-error.ts'
 export { DEFAULT_HOST, DEFAULT_PORT } from './server.ts'
@@ -23,12 +23,16 @@ export const CONFIG_ENVIRONMENT = {
   publicUrl: ['YUNBOX_PUBLIC_URL'],
   storage: ['YUNBOX_STORAGE'],
   storageDirectory: ['YUNBOX_STORAGE_DIR'],
+  metadata: ['YUNBOX_METADATA'],
+  metadataDirectory: ['YUNBOX_METADATA_DIR'],
 } as const
 
 /** Command-line values for the settings shared by `serve` and `token`; `undefined` means not given. */
 export interface StorageOptionValues {
   'storage'?: string
   'storage-dir'?: string
+  'metadata'?: string
+  'metadata-dir'?: string
 }
 
 /** Command-line values for `serve`; `undefined` means not given. */
@@ -38,10 +42,13 @@ export interface ServeOptionValues extends StorageOptionValues {
   'public-url'?: string
 }
 
-/** Where object storage and tokens live. */
+/** Where objects and metadata (tokens, grants, locks, audit log) live. */
 export interface StorageSettings {
   kind: 'local' | 'cos'
   storageDirectory: string
+  metadata: 'local' | 'cloudbase'
+  /** Directory of local metadata. */
+  metadataDirectory: string
 }
 
 /** Fully resolved and checked `serve` settings. */
@@ -77,18 +84,30 @@ function pick(cliName: string, cliValue: string | undefined, env: NodeJS.Process
 function resolveStorage(values: StorageOptionValues, env: NodeJS.ProcessEnv, problems: string[]): StorageSettings {
   const kind = pick('storage', values.storage, env, CONFIG_ENVIRONMENT.storage, DEFAULT_STORAGE)
   const storageDirectory = pick('storage-dir', values['storage-dir'], env, CONFIG_ENVIRONMENT.storageDirectory, DEFAULT_STORAGE_DIRECTORY).value
-  if (kind.value !== 'local' && kind.value !== 'cos') {
+  const metadataDirectory = pick('metadata-dir', values['metadata-dir'], env, CONFIG_ENVIRONMENT.metadataDirectory, defaultMetadataDirectory(storageDirectory)).value
+  const storageKind = kind.value === 'cos' ? 'cos' : 'local'
+  if (kind.value !== 'local' && kind.value !== 'cos')
     problems.push(`storage (from ${kind.source}) must be local or cos`)
-    return { kind: 'local', storageDirectory }
+  else
+    problems.push(...checkStorageEnvironment(kind.value, env))
+  const metadata = pick('metadata', values.metadata, env, CONFIG_ENVIRONMENT.metadata, defaultMetadataKind(kind.value))
+  const metadataKind = metadata.value === 'cloudbase' ? 'cloudbase' : 'local'
+  if (metadata.value !== 'local' && metadata.value !== 'cloudbase') {
+    problems.push(`metadata (from ${metadata.source}) must be local or cloudbase`)
   }
-  problems.push(...checkStorageEnvironment(kind.value, env))
-  return { kind: kind.value, storageDirectory }
+  else {
+    // Missing Tencent Cloud keys are already reported once for COS storage.
+    problems.push(...checkMetadataEnvironment(metadata.value, env).filter(problem =>
+      !(problem.startsWith('TENCENTCLOUD_SECRETID and') && problems.some(other => other.startsWith('TENCENTCLOUD_SECRET')))))
+  }
+  return { kind: storageKind, storageDirectory, metadata: metadataKind, metadataDirectory }
 }
 
 /**
- * Resolve storage settings for `yunbox-server token`, with the same precedence
- * as the server: command-line option, then `YUNBOX_STORAGE` /
- * `YUNBOX_STORAGE_DIR`, then the defaults.
+ * Resolve storage settings for `yunbox-server token` and `grant`, with the
+ * same precedence as the server: command-line option, then the environment
+ * variables in {@link CONFIG_ENVIRONMENT}, then the defaults. Metadata
+ * defaults to `cloudbase` with COS storage and `local` otherwise.
  *
  * @throws {ConfigError} listing every problem, including missing COS variables.
  */

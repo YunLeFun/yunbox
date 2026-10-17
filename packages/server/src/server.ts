@@ -20,6 +20,7 @@ const DEFAULT_MAX_CONCURRENT_TRANSFERS = 4
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
 const DEFAULT_IDLE_TIMEOUT_MS = 30_000
 const DEFAULT_TOKEN_CACHE_TTL_SECONDS = 30
+const DEFAULT_LAST_USED_WRITE_INTERVAL_SECONDS = 3600
 const MAX_HEADERS_TIMEOUT_MS = 10_000
 /** How often Node checks the headers timeout; its 30 s default would let slow headers linger that long. */
 const CONNECTIONS_CHECKING_INTERVAL_MS = 1000
@@ -27,8 +28,9 @@ const CONNECTIONS_CHECKING_INTERVAL_MS = 1000
 /**
  * Start the YunBox Git LFS server.
  *
- * Every endpoint requires HTTP Basic authentication with a personal token
- * from `options.tokens`. The server listens on `127.0.0.1` unless `host` says
+ * Every endpoint requires HTTP Basic authentication with an unexpired
+ * personal token from `options.metadata`, whose user must be granted the
+ * repository. The server listens on `127.0.0.1` unless `host` says
  * otherwise; any non-loopback host also requires an `https` `publicUrl`,
  * which is then the base of every action and verify URL.
  */
@@ -37,6 +39,7 @@ export async function startYunBoxServer(options: YunBoxServerOptions): Promise<R
   const port = options.port ?? DEFAULT_PORT
   const actionTtlSeconds = options.actionTtlSeconds ?? DEFAULT_ACTION_TTL_SECONDS
   const tokenCacheTtlSeconds = options.tokenCacheTtlSeconds ?? DEFAULT_TOKEN_CACHE_TTL_SECONDS
+  const lastUsedWriteIntervalSeconds = options.lastUsedWriteIntervalSeconds ?? DEFAULT_LAST_USED_WRITE_INTERVAL_SECONDS
   const maxConcurrentRequests = options.maxConcurrentRequests ?? DEFAULT_MAX_CONCURRENT_REQUESTS
   const maxConcurrentTransfers = options.maxConcurrentTransfers ?? DEFAULT_MAX_CONCURRENT_TRANSFERS
   const requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS
@@ -44,6 +47,7 @@ export async function startYunBoxServer(options: YunBoxServerOptions): Promise<R
   assertIntegerInRange(port, 0, 65_535, 'port')
   assertIntegerInRange(actionTtlSeconds, 1, 3600, 'actionTtlSeconds')
   assertIntegerInRange(tokenCacheTtlSeconds, 0, actionTtlSeconds - 1, 'tokenCacheTtlSeconds')
+  assertIntegerInRange(lastUsedWriteIntervalSeconds, 0, 7 * 24 * 3600, 'lastUsedWriteIntervalSeconds')
   assertIntegerInRange(maxConcurrentRequests, 1, 10_000, 'maxConcurrentRequests')
   assertIntegerInRange(maxConcurrentTransfers, 1, 1000, 'maxConcurrentTransfers')
   assertIntegerInRange(requestTimeoutMs, 100, 10 * 60_000, 'requestTimeoutMs')
@@ -56,10 +60,14 @@ export async function startYunBoxServer(options: YunBoxServerOptions): Promise<R
     throw new TypeError('storage must implement readObject or createDownloadAction')
 
   let listenUrl = ''
+  const authenticator = new TokenAuthenticator(options.metadata, {
+    cacheTtlMs: tokenCacheTtlSeconds * 1000,
+    lastUsedWriteIntervalMs: lastUsedWriteIntervalSeconds * 1000,
+  })
   const handler = createRequestHandler({
     storage,
     actions: new SignedActionFactory(randomBytes(32)),
-    authenticator: new TokenAuthenticator(options.tokens, { cacheTtlMs: tokenCacheTtlSeconds * 1000 }),
+    authenticator,
     actionTtlSeconds,
     getBaseUrl: () => publicUrl ?? listenUrl,
     maxConcurrentRequests,
@@ -124,7 +132,7 @@ export async function startYunBoxServer(options: YunBoxServerOptions): Promise<R
           else
             resolve()
         })
-      })
+      }).then(() => authenticator.flush())
       return closePromise
     },
   }

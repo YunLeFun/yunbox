@@ -60,6 +60,13 @@
 - token 增加过期时间和最后使用时间；过期返回 401。
 - 测试覆盖并发签发和吊销不会互相覆盖。
 
+> **进度（2026-10-17）：代码完成，真实 CloudBase 未实测。**
+> - [x] `MetadataStore` 接口（token、授权、锁、审计日志）；本地文件版和 CloudBase 文档数据库版（HTTP API，TC3 签名复用运行角色的 `TENCENTCLOUD_*` 临时密钥，备用 API Key）。锁的原子创建、审计日志只追加，已有契约测试，供阶段 2、4 使用。
+> - [x] token 改存元数据存储，权限改为按用户授权（新增 `grant list` / `grant set`）；`token migrate` 从旧 `tokens.json` 迁移，可重复执行，已迁移后吊销的不会被重新导入。
+> - [x] token 默认 90 天过期（`--expires-in`），过期返回 401，地址不会比 token 活得更久；最后使用时间每个 token 最多每小时写一次。
+> - [x] 测试：并发签发和吊销（跨实例、命令行）、并发修改授权、抢锁、过期、迁移幂等、吊销 5 分钟上界；e2e 增加「COS 测试替身 + CloudBase 测试替身」组合和过期 token。
+> - [ ] 在真实 CloudBase 环境运行 `metadata-live.test.ts`，核实 deploy.md「文档数据库的访问方式」中的未核实项（依赖阶段 0 的云资源）。
+
 ### 阶段 2：文件锁
 
 - 实现 Git LFS Locks API：`POST /locks`、`GET /locks`、`POST /locks/verify`、`POST /locks/:id/unlock`（含 `force`）。创建锁必须是原子的，同一路径不能有两把锁；强制解锁只允许管理员。

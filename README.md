@@ -15,7 +15,8 @@ YunBox 是一个 Git LFS 服务端：代码仍托管在 GitHub 等平台，LFS �
 - Verify API：核对对象大小并持久化“已校验”状态
 - 仓库隔离的本地文件存储，以及由服务端提供的签名 PUT / GET 地址
 - 腾讯云 COS 存储：服务端只签发预签名地址，素材由 git-lfs 直接上传到 COS、从 COS 下载，不经过服务端
-- 个人 token 鉴权（HTTP Basic，用户名任意，密码是 token），按仓库区分读写权限，可单独吊销
+- 个人 token 鉴权（HTTP Basic，用户名任意，密码是 token），按用户授权仓库读写，token 默认 90 天过期，可单独吊销
+- 元数据存储（token、仓库授权、文件锁、审计日志）：本地文件版本用于开发和测试，生产使用 CloudBase 文档数据库；对象和已校验标记仍在 COS
 - 请求超时、并发上限、请求体大小限制、统一的 LFS JSON 错误格式、脱敏的访问日志
 - 真实 `git` 和 `git-lfs` 端到端测试（通过 Git 凭据管理器提供 token）
 - Docker 镜像、免鉴权的健康检查 `GET /_health`、全部来自环境变量的配置和启动时的配置自检
@@ -38,12 +39,12 @@ pnpm test
 工作区目前包含三个私有包：
 
 - `packages/core`：LFS 协议类型、输入校验、存储接口、本地文件存储和 COS 存储
-- `packages/server`：基于 `node:http` 的 Batch、Verify、PUT 和 GET 服务
+- `packages/server`：基于 `node:http` 的 Batch、Verify、PUT 和 GET 服务，以及元数据存储（`metadata.ts` 定义接口，`metadata-local.ts` 和 `metadata-cloudbase.ts` 是两个实现）
 - `packages/cli`（包名 `yunbox`）：协作者使用的 `yunbox` / `git-yunbox` 命令
 
 命令行的测试位于 `packages/cli/test/`：用真实的 `git` 和 `git-lfs` 在临时目录里检查 `init` 生成的配置和幂等性，并对本仓库的服务端（本地存储加 token）检查 `doctor` 在通过、缺少凭据、只读 token、无效 token 等情况下的输出和退出码。测试使用独立的 HOME 和 `credential.helper store`，不会碰到本机的钥匙串。
 
-端到端测试位于 `packages/server/test/`：`e2e.test.ts` 分别用本地存储和一个 COS 测试替身（`packages/core/test/fake-cos-server.ts`，用官方 SDK 重新核对每个签名）跑同一套 git-lfs 流程（`lfs-workflow.ts`），不需要任何云端凭据。流程通过 `credential.helper store` 把 token 交给 git-lfs，并覆盖只读 token 不能 push、无权限的仓库被拒、未提供凭据和吊销后被拒。`cos-live.test.ts` 对真实 COS 跑这套流程，默认跳过。
+端到端测试位于 `packages/server/test/`：`e2e.test.ts` 分别用「本地存储 + 本地元数据」和「COS 测试替身（`packages/core/test/fake-cos-server.ts`，用官方 SDK 重新核对每个签名）+ CloudBase 文档数据库测试替身（`fake-cloudbase-server.ts`，独立重算每个请求的 TC3 签名）」跑同一套 git-lfs 流程（`lfs-workflow.ts`），不需要任何云端凭据。流程通过 `credential.helper store` 把 token 交给 git-lfs，并覆盖只读 token 不能 push、无权限的仓库被拒、过期 token、未提供凭据和吊销后被拒。`metadata.test.ts` 对本地文件版和 CloudBase 版跑同一套元数据契约测试（`metadata-contract.ts`，包括跨实例的并发签发、吊销、授权修改和抢锁）。`cos-live.test.ts` 和 `metadata-live.test.ts` 分别对真实 COS 和真实 CloudBase 运行，默认跳过。
 
 ## 启动本地服务
 
@@ -55,28 +56,49 @@ pnpm --filter @yunbox/server start --port 8080 --storage-dir .yunbox-data
 ```
 
 - 服务默认监听 `http://127.0.0.1:8080`，`--port 0` 可让系统分配临时端口。
-- 每个参数都有对应的环境变量：`YUNBOX_HOST`、`YUNBOX_PORT`（其次读平台设置的 `PORT`）、`YUNBOX_PUBLIC_URL`、`YUNBOX_STORAGE`、`YUNBOX_STORAGE_DIR`，命令行参数优先。启动前会检查全部配置，缺什么一次列出并以状态码 1 退出，错误信息里不会出现任何配置值或密钥。
+- 每个参数都有对应的环境变量：`YUNBOX_HOST`、`YUNBOX_PORT`（其次读平台设置的 `PORT`）、`YUNBOX_PUBLIC_URL`、`YUNBOX_STORAGE`、`YUNBOX_STORAGE_DIR`、`YUNBOX_METADATA`、`YUNBOX_METADATA_DIR`，命令行参数优先。启动前会检查全部配置，缺什么一次列出并以状态码 1 退出，错误信息里不会出现任何配置值或密钥。
 - `GET /_health` 不需要鉴权，只返回 `{"status":"ok"}`，供容器平台探测；成功的探测不写访问日志。
 - `--host 0.0.0.0 --public-url https://lfs.example.com`：监听其他地址时必须同时给出 https 的 `--public-url`，上传、下载和 verify 地址都基于它生成。服务端不读取任何 `X-Forwarded-*` 头，所以反向代理不需要额外的信任设置；TLS 由反向代理终止。
 - 每个请求输出一行 JSON 访问日志（请求 id、方法、不含查询串的路径、状态码、耗时、token id），不包含 token、`Authorization` 头和任何上传或下载地址。
 
-### 管理 token
+### 管理 token 和授权
 
-`token` 子命令只在部署环境或管理员本机执行，`--storage` 和 `--storage-dir`（或 `YUNBOX_STORAGE`、`YUNBOX_STORAGE_DIR`）要和服务端一致：
+`token` 和 `grant` 子命令只在部署环境或管理员本机执行，存储参数（`--storage`、`--storage-dir`、`--metadata`、`--metadata-dir`，或对应的环境变量）要和服务端一致：
 
 ```bash
 # 创建：只在这里输出一次明文 token；服务端只保存它的 SHA-256 哈希
 pnpm --filter @yunbox/server start token create --name alice --write 'team/game-assets' --read 'team/*'
-# 列出：显示 id、名称、创建时间和权限，不显示哈希
+# 同一个人的第二个 token（例如 CI 用），沿用 alice 的授权，30 天过期
+pnpm --filter @yunbox/server start token create --name alice-ci --user alice --expires-in 30d
+# 列出：显示 id、名称、用户、创建时间、过期时间和最后使用时间，不显示哈希
 pnpm --filter @yunbox/server start token list
 # 吊销：按 id 或名称
-pnpm --filter @yunbox/server start token revoke alice
+pnpm --filter @yunbox/server start token revoke alice-ci
+# 查看和修改授权；grant set 整体替换某个用户的授权，不带 --read / --write 则删除
+pnpm --filter @yunbox/server start grant list
+pnpm --filter @yunbox/server start grant set alice --write 'team/game-assets' --read 'team/*'
 ```
 
+- 每个 token 属于一个用户（`--user`，默认和 token 名称相同），权限来自这个用户的授权，所以同一个人的所有 token 权限相同。`token create` 的 `--read` / `--write` 会加到用户的授权里，只增不减；要收回权限用 `grant set`。用户还没有任何授权时，`token create` 必须带 `--read` 或 `--write`。
 - 权限写成 `<owner>/<repo>` 或 `<owner>/*`（在 shell 里要加引号）。`write` 包含 `read`；同一个仓库同时匹配精确条目和通配条目时，以精确条目为准，例如 `--write 'team/*' --read team/locked` 对 `team/locked` 只有读权限。
-- 本地存储把 token 存在 `<storage-dir>/_yunbox/tokens.json`（权限 `0600`），COS 存储存在 `<prefix>/_yunbox/tokens.json`。仓库的 owner 必须以字母或数字开头，所以这个位置不会和素材冲突。
-- 服务端最多缓存 token 列表 30 秒。上传、下载地址的有效期从授权时所用的 token 列表的读取时间算起，最长 5 分钟，所以**吊销最迟 5 分钟后完全生效**：服务端自己签发的地址每次使用都要重新鉴权，吊销 30 秒内失效；COS 预签名地址无法撤回，只能等它过期。
+- token 默认 90 天后过期，`--expires-in` 可以改成例如 `30d`、`12h`、`30m`（最长 3650 天）。过期的 token 和无效 token 一样返回 401；服务端签发的上传、下载地址也不会比 token 活得更久。
+- 服务端记录每个 token 的最后使用时间，同一个 token 最多每小时写一次，不会每个请求都写数据库。
+- 元数据的位置：本地模式在 `<storage-dir>/_yunbox/metadata/`（`--metadata-dir` 可改；每条记录一个文件，目录 `0700`、文件 `0600`）。COS 存储默认使用 CloudBase 文档数据库，配置见 [docs/deploy.md](./docs/deploy.md)。每个 token 是单独的一条记录，几个管理员同时签发和吊销不会互相覆盖。
+- 服务端最多缓存 token 和授权 30 秒。上传、下载地址的有效期从授权时所用的缓存的读取时间算起，最长 5 分钟，所以**吊销和收回授权最迟 5 分钟后完全生效**：服务端自己签发的地址每次使用都要重新鉴权，30 秒内失效；COS 预签名地址无法撤回，只能等它过期。
 - token 丢失后无法找回，吊销后重新创建即可。
+
+### 从旧版 `tokens.json` 迁移
+
+旧版本把 token 存在 `<storage-dir>/_yunbox/tokens.json` 或 COS 的 `<prefix>/_yunbox/tokens.json`，新版本不再读取它（启动时发现旧文件而新存储里没有 token，会提示执行迁移）。用和服务端相同的配置执行一次：
+
+```bash
+pnpm --filter @yunbox/server start token migrate
+```
+
+- 已发出的 token 明文、格式和哈希都不变，迁移后继续可用。每个旧 token 变成一个同名用户，旧 token 上的仓库权限成为这个用户的授权。
+- 旧 token 没有过期时间，迁移时统一设为迁移后 90 天过期（`--expires-in` 可改），请在此之前给大家换发新 token。
+- 可以重复执行：已经迁移过的 token 会跳过，迁移后被吊销的 token 也不会被重新导入。迁移记录写在审计日志里（`token.migrate`）。
+- 旧文件不会被删除，确认迁移结果后自行删除或归档。
 
 ### 使用 COS 存储
 
@@ -94,6 +116,8 @@ pnpm --filter @yunbox/server start --storage cos
 - 对象键为 `<prefix>/<owner>/<repo>/<oid[0:2]>/<oid[2:4]>/<oid>`，旁边的 `<oid>.verified.json` 是已校验标记。
 - 上传地址的签名包含 `Content-Length`，大小不符的上传会被 COS 直接拒绝。下载地址的签名包含 `If-Match: <ETag>`，对象在校验后被覆盖时 COS 会拒绝下载。
 
+COS 存储默认把元数据放在 CloudBase 文档数据库，还需要 `YUNBOX_CLOUDBASE_ENV` 等变量，见 [docs/deploy.md](./docs/deploy.md)。本地试用 COS 时可以加 `--metadata local` 把元数据留在本机。
+
 ### 用真实 COS 跑端到端测试
 
 ```bash
@@ -101,6 +125,14 @@ YUNBOX_COS_E2E=1 pnpm exec vitest run packages/server/test/cos-live.test.ts
 ```
 
 需要上面的环境变量。测试写在 `YUNBOX_COS_PREFIX`（默认 `yunbox-e2e`）下的随机子前缀里，结束后会删除写入的对象。GitHub Actions 里也可以手动触发 `COS E2E` 工作流，它从 `cos-e2e` environment 读取凭据和 bucket 配置。
+
+### 用真实 CloudBase 跑元数据测试
+
+```bash
+YUNBOX_CLOUDBASE_E2E=1 YUNBOX_CLOUDBASE_ENV=<环境 ID> pnpm exec vitest run packages/server/test/metadata-live.test.ts
+```
+
+凭据和 CloudBase 服务端一样读取（`TENCENTCLOUD_*` 或 `YUNBOX_CLOUDBASE_API_KEY`）。测试使用 `yunbox_e2e_tokens`、`yunbox_e2e_grants`、`yunbox_e2e_locks`、`yunbox_e2e_audit` 四个集合（`YUNBOX_CLOUDBASE_COLLECTION_PREFIX` 可改前缀），需要事先创建，并且**只用于测试**：每个用例前后都会清空它们。
 
 ## 配置测试仓库
 
@@ -145,7 +177,7 @@ yunbox doctor
 
 ### 自检和用量
 
-- `yunbox doctor` 逐项检查 git 和 git-lfs 版本、LFS 过滤器、是否在 Git 仓库里、`lfs.url`、HTTPS、`lfs.locksverify`、凭据、服务连通性，并用 download 和 upload 各发一次 batch 请求试探读写权限（不会上传或修改任何数据）。token 无效或已吊销（401）和没有权限（403）分开报告，每个失败项都附带可以直接照做的修复命令。全部通过时退出码为 0，否则为 1。只需要拉取素材的人用 `yunbox doctor --read-only`，不要求写权限。地址是非本机的 http 时，doctor 不会发送 token。
+- `yunbox doctor` 逐项检查 git 和 git-lfs 版本、LFS 过滤器、是否在 Git 仓库里、`lfs.url`、HTTPS、`lfs.locksverify`、凭据、服务连通性，并用 download 和 upload 各发一次 batch 请求试探读写权限（不会上传或修改任何数据）。token 无效、已过期或已吊销（401）和没有权限（403）分开报告，每个失败项都附带可以直接照做的修复命令。全部通过时退出码为 0，否则为 1。只需要拉取素材的人用 `yunbox doctor --read-only`，不要求写权限。地址是非本机的 http 时，doctor 不会发送 token。
 - `yunbox status` 根据 `git lfs ls-files` 列出当前提交引用的 LFS 对象数量、总大小和本地已下载的数量，以及当前生效的 `lfs.url`；`--all` 统计所有分支和历史。它不访问网络。
 
 ### 手动配置

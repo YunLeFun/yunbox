@@ -249,7 +249,7 @@ function reportPermission(service: ServiceUrl, access: 'read' | 'write', result:
     report({
       status: 'fail',
       title,
-      detail: `token 无效或已被吊销（HTTP 401）${describeServerMessage(result)}`,
+      detail: `token 无效、已过期或已被吊销（HTTP 401）${describeServerMessage(result)}`,
       fixes: [
         `${rejectCommand(service)}   # 删除旧 token`,
         '向管理员要一个新 token，然后运行 git yunbox init 按提示输入',

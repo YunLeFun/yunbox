@@ -6,7 +6,7 @@ import { createServer } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { LocalFileObjectStorage } from '@yunbox/core'
-import { createToken, FileTokenStore, startYunBoxServer } from '@yunbox/server'
+import { createToken, LocalMetadataStore, startYunBoxServer } from '@yunbox/server'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { createRepository, createSandbox, git, runYunBox } from './helpers.ts'
 
@@ -18,11 +18,11 @@ const sandboxes: Sandbox[] = []
 
 beforeAll(async () => {
   storageDirectory = await mkdtemp(join(tmpdir(), 'yunbox-cli-doctor-'))
-  const tokens = new FileTokenStore(join(storageDirectory, '_yunbox', 'tokens.json'))
-  secrets.writer = (await createToken(tokens, { name: 'writer', repos: { 'team/assets': 'write' } })).secret
-  secrets.reader = (await createToken(tokens, { name: 'reader', repos: { 'team/*': 'read' } })).secret
-  secrets.outsider = (await createToken(tokens, { name: 'outsider', repos: { 'other/*': 'write' } })).secret
-  running = await startYunBoxServer({ storage: new LocalFileObjectStorage(storageDirectory), tokens, port: 0 })
+  const metadata = new LocalMetadataStore(join(storageDirectory, '_yunbox', 'metadata'))
+  secrets.writer = (await createToken(metadata, { name: 'writer', repos: { 'team/assets': 'write' } })).secret
+  secrets.reader = (await createToken(metadata, { name: 'reader', repos: { 'team/*': 'read' } })).secret
+  secrets.outsider = (await createToken(metadata, { name: 'outsider', repos: { 'other/*': 'write' } })).secret
+  running = await startYunBoxServer({ storage: new LocalFileObjectStorage(storageDirectory), metadata, port: 0 })
   serviceUrl = `${running.url}/team/assets`
 })
 
@@ -101,7 +101,7 @@ describe('yunbox doctor', () => {
     const invalid = await initializedRepository(bogus)
     const unauthorized = await runYunBox(invalid.sandbox, invalid.repo, ['doctor'])
     expect(unauthorized.code).toBe(1)
-    expect(unauthorized.stdout).toContain('✗ 读权限：token 无效或已被吊销（HTTP 401）')
+    expect(unauthorized.stdout).toContain('✗ 读权限：token 无效、已过期或已被吊销（HTTP 401）')
     expect(unauthorized.stdout).toMatch(/printf 'protocol=http\\nhost=127\.0\.0\.1:\d+\\n\\n' \| git credential reject/)
     expect(unauthorized.stdout).toContain('- 写权限：读权限检查没有通过')
     expectNoSecrets(unauthorized.stdout)

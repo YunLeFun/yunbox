@@ -1,6 +1,6 @@
 import type { ObjectStorage, RepositoryId } from '@yunbox/core'
 import type { RequestLogEntry } from '../src/logging.ts'
-import type { TokenStore } from '../src/tokens.ts'
+import type { MetadataStore } from '../src/metadata.ts'
 import { Buffer } from 'node:buffer'
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -20,7 +20,7 @@ export const WORKFLOW_REPOSITORY: RepositoryId = { owner: 'team', repo: 'assets'
 export interface WorkflowHarness {
   storage: ObjectStorage
   /** Where the workflow creates and revokes its tokens. */
-  tokens: TokenStore
+  metadata: MetadataStore
   /** A value that changes whenever the object's bytes are written again. */
   writeStamp: (oid: string) => Promise<unknown>
   /** Optional fault injection; backends that cannot intercept uploads skip the retry step. */
@@ -39,7 +39,7 @@ export interface WorkflowResult {
 /**
  * Push, clone, restore history, retry and repeat pushes with real `git` and
  * `git-lfs` against a YunBox server backed by the harness storage, then check
- * that read-only, unrelated, missing and revoked tokens are refused.
+ * that read-only, unrelated, expired, missing and revoked tokens are refused.
  *
  * Tokens reach git-lfs the way they would for a user: through a Git
  * credential helper (`credential.helper store`) rather than the URL.
@@ -51,13 +51,14 @@ export async function runGitLfsWorkflow(harness: WorkflowHarness): Promise<Workf
   const origin = join(root, 'origin.git')
   await Promise.all([mkdir(home), mkdir(source)])
 
-  const writer = await createToken(harness.tokens, { name: 'writer', repos: { 'team/assets': 'write' } })
-  const reader = await createToken(harness.tokens, { name: 'reader', repos: { 'team/*': 'read' } })
-  const outsider = await createToken(harness.tokens, { name: 'outsider', repos: { 'other/*': 'write' } })
+  const writer = await createToken(harness.metadata, { name: 'writer', repos: { 'team/assets': 'write' } })
+  const reader = await createToken(harness.metadata, { name: 'reader', repos: { 'team/*': 'read' } })
+  const outsider = await createToken(harness.metadata, { name: 'outsider', repos: { 'other/*': 'write' } })
+  const expired = await createToken(harness.metadata, { name: 'expired', repos: { 'team/*': 'write' }, lifetimeMs: 1 })
   const logs: RequestLogEntry[] = []
   const running = await startYunBoxServer({
     storage: harness.storage,
-    tokens: harness.tokens,
+    metadata: harness.metadata,
     port: 0,
     tokenCacheTtlSeconds: 1,
     log: entry => logs.push(entry),
@@ -167,6 +168,11 @@ export async function runGitLfsWorkflow(harness: WorkflowHarness): Promise<Workf
     await expect(lfsPullIntoFreshClone('outsider-clone')).rejects.toThrow(/no access to the repository/)
     await expect(git(source, environment, 'push', 'origin', 'main')).rejects.toThrow(/no access to the repository/)
 
+    // An expired token is refused like an unknown one.
+    await useToken(expired.secret)
+    await expect(lfsPullIntoFreshClone('expired-clone')).rejects.toThrow(/Git credentials for .* not found/)
+    expect(logs.some(entry => entry.tokenId === expired.token.id)).toBe(false)
+
     // Without credentials, the server asks for them and git-lfs gives up.
     await useToken(undefined)
     await expect(lfsPullIntoFreshClone('anonymous-clone')).rejects.toThrow(/Git credentials for .* not found/)
@@ -174,7 +180,7 @@ export async function runGitLfsWorkflow(harness: WorkflowHarness): Promise<Workf
     // A revoked token stops working once the token cache TTL has passed.
     await useToken(writer.secret)
     await lfsPullIntoFreshClone('writer-clone')
-    await revokeToken(harness.tokens, writer.token.id)
+    await revokeToken(harness.metadata, writer.token.id)
     await delay(1100)
     const logsBeforeRevokedPull = logs.length
     await expect(lfsPullIntoFreshClone('revoked-clone')).rejects.toThrow(/Git credentials for .* not found/)
@@ -185,7 +191,7 @@ export async function runGitLfsWorkflow(harness: WorkflowHarness): Promise<Workf
 
     expect(logs.some(entry => entry.tokenId === writer.token.id && entry.status === 200)).toBe(true)
     const serializedLogs = JSON.stringify(logs)
-    for (const secret of [writer.secret, reader.secret, outsider.secret, 'ybx_', 'signature', 'Basic', '://'])
+    for (const secret of [writer.secret, reader.secret, outsider.secret, expired.secret, 'ybx_', 'signature', 'Basic', '://'])
       expect(serializedLogs).not.toContain(secret)
     return { oids }
   }

@@ -10,7 +10,7 @@ import { startYunBoxServer } from '../src/server.ts'
 import { configureStorage } from '../src/storage-config.ts'
 import { listTokens } from '../src/tokens.ts'
 import { expectLfsError } from './http-helpers.ts'
-import { MemoryTokenStore } from './memory-token-store.ts'
+import { MemoryMetadataStore } from './memory-metadata.ts'
 
 const SECRET_ID = 'AKIDsecretidvalue0000000000000000'
 const SECRET_KEY = 'super-secret-key-value-do-not-print'
@@ -22,6 +22,7 @@ const cosEnvironment = {
   TENCENTCLOUD_SECRETID: SECRET_ID,
   TENCENTCLOUD_SECRETKEY: SECRET_KEY,
   TENCENTCLOUD_SESSIONTOKEN: SESSION_TOKEN,
+  YUNBOX_CLOUDBASE_ENV: 'yunbox-test-1a2b3c',
 }
 
 function configError(action: () => unknown): ConfigError {
@@ -46,7 +47,7 @@ describe('configuration', () => {
       host: '127.0.0.1',
       port: 8080,
       publicUrl: undefined,
-      storage: { kind: 'local', storageDirectory: '.yunbox-data' },
+      storage: { kind: 'local', storageDirectory: '.yunbox-data', metadata: 'local', metadataDirectory: join('.yunbox-data', '_yunbox', 'metadata') },
     })
   })
 
@@ -62,7 +63,7 @@ describe('configuration', () => {
       host: '0.0.0.0',
       port: 9000,
       publicUrl: 'https://lfs.example.com',
-      storage: { kind: 'cos', storageDirectory: '/data' },
+      storage: { kind: 'cos', storageDirectory: '/data', metadata: 'cloudbase', metadataDirectory: '/data/_yunbox/metadata' },
     })
   })
 
@@ -86,7 +87,7 @@ describe('configuration', () => {
       host: '127.0.0.1',
       port: 8081,
       publicUrl: 'http://127.0.0.1:8081',
-      storage: { kind: 'local', storageDirectory: '/cli-data' },
+      storage: { kind: 'local', storageDirectory: '/cli-data', metadata: 'local', metadataDirectory: '/cli-data/_yunbox/metadata' },
     })
   })
 
@@ -102,10 +103,38 @@ describe('configuration', () => {
   })
 
   it('resolves token command storage with the same precedence', () => {
-    expect(resolveStorageSettings({}, { YUNBOX_STORAGE_DIR: '/env-data' })).toEqual({ kind: 'local', storageDirectory: '/env-data' })
+    expect(resolveStorageSettings({}, { YUNBOX_STORAGE_DIR: '/env-data' }))
+      .toEqual({ kind: 'local', storageDirectory: '/env-data', metadata: 'local', metadataDirectory: '/env-data/_yunbox/metadata' })
     expect(resolveStorageSettings({ 'storage-dir': '/cli-data' }, { YUNBOX_STORAGE_DIR: '/env-data' }).storageDirectory).toBe('/cli-data')
     expect(resolveStorageSettings({}, { YUNBOX_STORAGE: 'cos', ...cosEnvironment }).kind).toBe('cos')
     expect(resolveStorageSettings({ storage: 'local' }, { YUNBOX_STORAGE: 'cos' }).kind).toBe('local')
+  })
+
+  it('selects the metadata store, defaulting to CloudBase with COS and local files otherwise', () => {
+    expect(resolveStorageSettings({}, { YUNBOX_STORAGE: 'cos', ...cosEnvironment }).metadata).toBe('cloudbase')
+    const { YUNBOX_CLOUDBASE_ENV: _, ...withoutCloudBase } = cosEnvironment
+    expect(resolveStorageSettings({}, { YUNBOX_STORAGE: 'cos', YUNBOX_METADATA: 'local', ...withoutCloudBase }).metadata).toBe('local')
+    expect(resolveStorageSettings({ 'metadata': 'local', 'metadata-dir': '/cli-meta' }, { YUNBOX_METADATA: 'cloudbase', YUNBOX_METADATA_DIR: '/env-meta' }))
+      .toMatchObject({ metadata: 'local', metadataDirectory: '/cli-meta' })
+    expect(resolveStorageSettings({}, { YUNBOX_METADATA_DIR: '/env-meta' }).metadataDirectory).toBe('/env-meta')
+    // A server API key can replace the Tencent Cloud keys for CloudBase alone.
+    expect(resolveStorageSettings({ metadata: 'cloudbase' }, { YUNBOX_CLOUDBASE_ENV: 'env-1', YUNBOX_CLOUDBASE_API_KEY: SECRET_KEY }).metadata).toBe('cloudbase')
+
+    expect(configError(() => resolveStorageSettings({}, { YUNBOX_METADATA: 'redis' })).problems)
+      .toEqual(['metadata (from YUNBOX_METADATA) must be local or cloudbase'])
+    expect(configError(() => resolveStorageSettings({ metadata: 'cloudbase' }, {})).problems).toEqual([
+      'YUNBOX_CLOUDBASE_ENV must be set to use CloudBase metadata',
+      'TENCENTCLOUD_SECRETID and TENCENTCLOUD_SECRETKEY (or YUNBOX_CLOUDBASE_API_KEY) must be set to use CloudBase metadata',
+    ])
+    for (const [name, value] of [
+      ['YUNBOX_CLOUDBASE_ENV', `env ${SECRET_KEY}`],
+      ['YUNBOX_CLOUDBASE_ENDPOINT', `http://${SECRET_KEY}.example.com`],
+      ['YUNBOX_CLOUDBASE_COLLECTION_PREFIX', `${SECRET_KEY}`],
+    ] as const) {
+      const error = configError(() => resolveStorageSettings({ storage: 'cos' }, { ...cosEnvironment, [name]: value }))
+      expect(error.problems).toEqual([expect.stringMatching(/^CloudBase settings are invalid: /)])
+      expectNoSecrets(error.message)
+    }
   })
 
   it('reports every problem at once and names where each setting came from', () => {
@@ -137,6 +166,7 @@ describe('configuration', () => {
       'YUNBOX_COS_BUCKET must be set to use COS storage',
       'YUNBOX_COS_REGION must be set to use COS storage',
       'TENCENTCLOUD_SECRETID must be set to use COS storage',
+      'YUNBOX_CLOUDBASE_ENV must be set to use CloudBase metadata',
     ])
     expectNoSecrets(error.message)
 
@@ -189,6 +219,7 @@ describe('configuration', () => {
         'YUNBOX_COS_BUCKET must be set to use COS storage',
         'YUNBOX_COS_REGION must be set to use COS storage',
         'TENCENTCLOUD_SECRETID must be set to use COS storage',
+        'YUNBOX_CLOUDBASE_ENV must be set to use CloudBase metadata',
       ])
       expectNoSecrets((failure as Error).message)
       expect(lines).toEqual([])
@@ -197,12 +228,12 @@ describe('configuration', () => {
     it('lets token commands find the storage through the environment', async () => {
       const io = { stdout: (line: string) => lines.push(line), env: { YUNBOX_STORAGE_DIR: directory } }
       await main(['token', 'create', '--name', 'alice', '--write', 'team/assets'], io)
-      const { tokens } = configureStorage({ kind: 'local', storageDirectory: directory, env: {} })
-      expect((await listTokens(tokens)).map(token => token.name)).toEqual(['alice'])
+      const { metadata: local } = configureStorage({ kind: 'local', storageDirectory: directory, env: {} })
+      expect((await listTokens(local)).map(token => token.name)).toEqual(['alice'])
 
       const override = join(directory, 'other')
       await main(['token', 'create', '--name', 'bob', '--read', 'team/assets', '--storage-dir', override], io)
-      const other = configureStorage({ kind: 'local', storageDirectory: override, env: {} }).tokens
+      const other = configureStorage({ kind: 'local', storageDirectory: override, env: {} }).metadata
       expect((await listTokens(other)).map(token => token.name)).toEqual(['bob'])
 
       await expect(main(['token', 'list'], { ...io, env: { YUNBOX_STORAGE: 's3' } })).rejects.toThrow(/storage \(from YUNBOX_STORAGE\) must be local or cos/)
@@ -213,16 +244,16 @@ describe('configuration', () => {
 describe('health check', () => {
   let directory: string
   let running: RunningYunBoxServer | undefined
-  let tokens: MemoryTokenStore
+  let metadata: MemoryMetadataStore
   let logged: number
 
   beforeEach(async () => {
     directory = await mkdtemp(join(tmpdir(), 'yunbox-health-test-'))
-    tokens = new MemoryTokenStore()
+    metadata = new MemoryMetadataStore()
     logged = 0
     running = await startYunBoxServer({
       storage: new LocalFileObjectStorage(directory),
-      tokens,
+      metadata,
       port: 0,
       log: () => {
         logged += 1
@@ -237,13 +268,13 @@ describe('health check', () => {
   })
 
   it('answers without credentials, storage or token store access, and reveals nothing', async () => {
-    tokens.failReads = true
+    metadata.failReads = true
     const response = await fetch(`${running!.url}/_health`)
     expect(response.status).toBe(200)
     expect(response.headers.get('content-type')).toBe('application/json')
     expect(response.headers.get('cache-control')).toBe('no-store')
     expect(await response.json()).toEqual({ status: 'ok' })
-    expect(tokens.reads).toBe(0)
+    expect(metadata.reads).toBe(0)
 
     const head = await fetch(`${running!.url}/_health?probe=1`, { method: 'HEAD' })
     expect(head.status).toBe(200)

@@ -9,11 +9,11 @@ import { LFS_AUTHENTICATE } from '../src/request-handler.ts'
 import { startYunBoxServer } from '../src/server.ts'
 import { createToken, revokeToken } from '../src/tokens.ts'
 import { basicAuth, batch, batchRequest, expectLfsError, getAction, postJson } from './http-helpers.ts'
-import { MemoryTokenStore } from './memory-token-store.ts'
+import { MemoryMetadataStore } from './memory-metadata.ts'
 
 describe('git LFS HTTP protocol', () => {
   let directory: string
-  let tokens: MemoryTokenStore
+  let metadata: MemoryMetadataStore
   let running: RunningYunBoxServer | undefined
   let writer: Record<string, string>
 
@@ -21,7 +21,7 @@ describe('git LFS HTTP protocol', () => {
     await running?.close()
     running = await startYunBoxServer({
       storage: new LocalFileObjectStorage(directory),
-      tokens,
+      metadata,
       port: 0,
       ...overrides,
     })
@@ -36,8 +36,8 @@ describe('git LFS HTTP protocol', () => {
 
   beforeEach(async () => {
     directory = await mkdtemp(join(tmpdir(), 'yunbox-protocol-test-'))
-    tokens = new MemoryTokenStore()
-    writer = basicAuth((await createToken(tokens, { name: 'writer', repos: { 'team/*': 'write' } })).secret)
+    metadata = new MemoryMetadataStore()
+    writer = basicAuth((await createToken(metadata, { name: 'writer', repos: { 'team/*': 'write' } })).secret)
   })
 
   afterEach(async () => {
@@ -134,8 +134,8 @@ describe('git LFS HTTP protocol', () => {
 
   it('enforces read and write permissions with owner wildcards', async () => {
     const server = await start()
-    const reader = basicAuth((await createToken(tokens, { name: 'reader', repos: { 'team/*': 'read' } })).secret)
-    const mixed = basicAuth((await createToken(tokens, {
+    const reader = basicAuth((await createToken(metadata, { name: 'reader', repos: { 'team/*': 'read' } })).secret)
+    const mixed = basicAuth((await createToken(metadata, {
       name: 'mixed',
       repos: { 'team/*': 'write', 'team/locked': 'read' },
     })).secret)
@@ -160,12 +160,12 @@ describe('git LFS HTTP protocol', () => {
 
   it('stops accepting a revoked token after the cache TTL, including on signed URLs', async () => {
     const server = await start({ tokenCacheTtlSeconds: 1 })
-    const created = await createToken(tokens, { name: 'temporary', repos: { 'team/assets': 'write' } })
+    const created = await createToken(metadata, { name: 'temporary', repos: { 'team/assets': 'write' } })
     const temporary = basicAuth(created.secret)
     const oid = 'f'.repeat(64)
     const upload = getAction(await batch(server.url, 'team/assets', 'upload', oid, 4, temporary), 'upload')
 
-    await revokeToken(tokens, created.token.id)
+    await revokeToken(metadata, created.token.id)
     await delay(1100)
     await expectLfsError(await batchRequest(server.url, 'team/assets', 'upload', oid, 4, temporary), 401)
     await expectLfsError(await fetch(upload.href, { method: 'PUT', body: 'data', headers: temporary }), 401)
@@ -183,9 +183,22 @@ describe('git LFS HTTP protocol', () => {
     expect(Number(new URL(cached.href).searchParams.get('expires'))).toBe(Number(new URL(fresh.href).searchParams.get('expires')))
   })
 
+  it('refuses expired tokens and never issues actions that outlive a token', async () => {
+    const server = await start()
+    const shortLived = await createToken(metadata, { name: 'short', repos: { 'team/assets': 'write' }, lifetimeMs: 3000 })
+    const auth = basicAuth(shortLived.secret)
+    const oid = '4'.repeat(64)
+    const upload = getAction(await batch(server.url, 'team/assets', 'upload', oid, 4, auth), 'upload')
+    expect(upload.expires_in).toBeGreaterThan(0)
+    expect(upload.expires_in).toBeLessThanOrEqual(3)
+    await delay(3100)
+    await expectLfsError(await batchRequest(server.url, 'team/assets', 'upload', oid, 4, auth), 401)
+    await expectLfsError(await fetch(upload.href, { method: 'PUT', body: 'data', headers: auth }), 401)
+  })
+
   it('fails closed with 503 when the token store cannot be read', async () => {
     const server = await start({ tokenCacheTtlSeconds: 0 })
-    tokens.failReads = true
+    metadata.failReads = true
     const response = await batchRequest(server.url, 'team/assets', 'download', '2'.repeat(64), 1, writer)
     expect(response.headers.get('retry-after')).toBe('5')
     await expectLfsError(response, 503, /temporarily unavailable/)
@@ -199,14 +212,14 @@ describe('git LFS HTTP protocol', () => {
     expect(getAction(response, 'verify').href).toBe('https://lfs.example.com/team/assets/objects/verify')
 
     const storage = new LocalFileObjectStorage(directory)
-    await expect(startYunBoxServer({ storage, tokens, host: '0.0.0.0', port: 0 })).rejects.toThrow(/publicUrl \(https\) is required/)
-    await expect(startYunBoxServer({ storage, tokens, host: '0.0.0.0', port: 0, publicUrl: 'http://lfs.example.com' }))
+    await expect(startYunBoxServer({ storage, metadata, host: '0.0.0.0', port: 0 })).rejects.toThrow(/publicUrl \(https\) is required/)
+    await expect(startYunBoxServer({ storage, metadata, host: '0.0.0.0', port: 0, publicUrl: 'http://lfs.example.com' }))
       .rejects
       .toThrow(/must use https/)
-    await expect(startYunBoxServer({ storage, tokens, host: '::', port: 0, publicUrl: 'https://lfs.example.com/base' }))
+    await expect(startYunBoxServer({ storage, metadata, host: '::', port: 0, publicUrl: 'https://lfs.example.com/base' }))
       .rejects
       .toThrow(/origin without/)
-    await expect(startYunBoxServer({ storage, tokens, port: 0, actionTtlSeconds: 30, tokenCacheTtlSeconds: 30 }))
+    await expect(startYunBoxServer({ storage, metadata, port: 0, actionTtlSeconds: 30, tokenCacheTtlSeconds: 30 }))
       .rejects
       .toThrow(RangeError)
   })
