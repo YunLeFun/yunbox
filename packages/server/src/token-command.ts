@@ -2,6 +2,7 @@
 
 import type { TokenPermission, TokenSummary } from './tokens.ts'
 import { parseArgs } from 'node:util'
+import { resolveStorageSettings } from './config.ts'
 import { configureStorage } from './storage-config.ts'
 import { assertRepositoryPattern, createToken, listTokens, revokeToken } from './tokens.ts'
 
@@ -22,9 +23,10 @@ Usage:
 it in the shell). write implies read; an exact repository entry overrides the
 owner wildcard.
 
-Storage options (must match the server):
-  --storage       local or cos (default: local)
-  --storage-dir   Local storage directory (default: .yunbox-data)
+Storage options (must match the server; command-line options override the
+environment variables):
+  --storage       local or cos; YUNBOX_STORAGE (default: local)
+  --storage-dir   Local storage directory; YUNBOX_STORAGE_DIR (default: .yunbox-data)
 
 create prints the token once. Only its SHA-256 hash is stored, so it cannot be
 shown again; revoke and create a new one if it is lost.
@@ -39,8 +41,8 @@ export async function runTokenCommand(args: string[], io: CommandIo): Promise<vo
       'name': { type: 'string' },
       'read': { type: 'string', multiple: true },
       'write': { type: 'string', multiple: true },
-      'storage': { type: 'string', default: 'local' },
-      'storage-dir': { type: 'string', default: '.yunbox-data' },
+      'storage': { type: 'string' },
+      'storage-dir': { type: 'string' },
       'help': { type: 'boolean', short: 'h' },
     },
   })
@@ -49,7 +51,8 @@ export async function runTokenCommand(args: string[], io: CommandIo): Promise<vo
     io.stdout(tokenHelp)
     return
   }
-  const { tokens } = configureStorage({ kind: values.storage, storageDirectory: values['storage-dir'], env: io.env })
+  const settings = resolveStorageSettings(values, io.env)
+  const { tokens } = configureStorage({ kind: settings.kind, storageDirectory: settings.storageDirectory, env: io.env })
 
   switch (subcommand) {
     case 'create': {

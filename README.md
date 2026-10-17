@@ -2,11 +2,12 @@
 
 > 兼容 Git LFS 的素材托管。代码交给 Git，素材交给云匣。
 
-**状态：G1 阶段 2（鉴权与权限）已完成，尚未部署到公网，也未在真实 COS 上实测。**
+**状态：G1 阶段 2（鉴权与权限）已完成；阶段 3 的镜像、配置自检和部署文档已完成，尚未部署到公网，也未在真实 COS 上实测。**
 
 YunBox 是一个 Git LFS 服务端：代码仍托管在 GitHub 等平台，LFS 大文件存到你自己的对象存储（先支持腾讯云 COS）。协作者只需原版 [git-lfs](https://git-lfs.com) 和仓库里的 `.lfsconfig`，不必安装 YunBox。
 
 - 方案与里程碑：[docs/plan.md](./docs/plan.md)
+- 部署到 CloudBase 云托管：[docs/deploy.md](./docs/deploy.md)
 
 ## 当前能力
 
@@ -17,8 +18,9 @@ YunBox 是一个 Git LFS 服务端：代码仍托管在 GitHub 等平台，LFS �
 - 个人 token 鉴权（HTTP Basic，用户名任意，密码是 token），按仓库区分读写权限，可单独吊销
 - 请求超时、并发上限、请求体大小限制、统一的 LFS JSON 错误格式、脱敏的访问日志
 - 真实 `git` 和 `git-lfs` 端到端测试（通过 Git 凭据管理器提供 token）
+- Docker 镜像、免鉴权的健康检查 `GET /_health`、全部来自环境变量的配置和启动时的配置自检
 
-默认只监听 `127.0.0.1`。监听其他地址时必须用 `--public-url` 配置 https 地址，否则拒绝启动；Basic 认证的内容是明文，**公网部署必须经过 HTTPS**。部署方式见 [docs/goal.md](./docs/goal.md) 阶段 3，在那之前不要把服务暴露到其他网络。
+默认只监听 `127.0.0.1`。监听其他地址时必须用 `--public-url` 配置 https 地址，否则拒绝启动；Basic 认证的内容是明文，**公网部署必须经过 HTTPS**。部署方式见 [docs/deploy.md](./docs/deploy.md)，按其中的检查清单确认之前不要把服务暴露到其他网络。
 
 ## 开发
 
@@ -49,12 +51,14 @@ pnpm --filter @yunbox/server start --port 8080 --storage-dir .yunbox-data
 ```
 
 - 服务默认监听 `http://127.0.0.1:8080`，`--port 0` 可让系统分配临时端口。
+- 每个参数都有对应的环境变量：`YUNBOX_HOST`、`YUNBOX_PORT`（其次读平台设置的 `PORT`）、`YUNBOX_PUBLIC_URL`、`YUNBOX_STORAGE`、`YUNBOX_STORAGE_DIR`，命令行参数优先。启动前会检查全部配置，缺什么一次列出并以状态码 1 退出，错误信息里不会出现任何配置值或密钥。
+- `GET /_health` 不需要鉴权，只返回 `{"status":"ok"}`，供容器平台探测；成功的探测不写访问日志。
 - `--host 0.0.0.0 --public-url https://lfs.example.com`：监听其他地址时必须同时给出 https 的 `--public-url`，上传、下载和 verify 地址都基于它生成。服务端不读取任何 `X-Forwarded-*` 头，所以反向代理不需要额外的信任设置；TLS 由反向代理终止。
 - 每个请求输出一行 JSON 访问日志（请求 id、方法、不含查询串的路径、状态码、耗时、token id），不包含 token、`Authorization` 头和任何上传或下载地址。
 
 ### 管理 token
 
-`token` 子命令只在部署环境或管理员本机执行，`--storage` 和 `--storage-dir` 要和服务端一致：
+`token` 子命令只在部署环境或管理员本机执行，`--storage` 和 `--storage-dir`（或 `YUNBOX_STORAGE`、`YUNBOX_STORAGE_DIR`）要和服务端一致：
 
 ```bash
 # 创建：只在这里输出一次明文 token；服务端只保存它的 SHA-256 哈希

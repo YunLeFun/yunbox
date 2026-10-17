@@ -7,6 +7,7 @@ import { resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
+import { resolveServeConfig } from './config.ts'
 import { startYunBoxServer } from './server.ts'
 import { configureStorage } from './storage-config.ts'
 import { runTokenCommand, tokenHelp } from './token-command.ts'
@@ -17,19 +18,26 @@ Usage:
   yunbox-server [serve] [options]
   yunbox-server token create | list | revoke ...   (see yunbox-server token --help)
 
-Serve options:
-  --host          Listen address (default: 127.0.0.1)
-  --port          Port, or 0 for an ephemeral port (default: 8080)
-  --public-url    External https origin, required when --host is not a loopback address
-  --storage       local: files under --storage-dir; cos: Tencent Cloud COS (default: local)
-  --storage-dir   Local object storage directory (default: .yunbox-data)
+Serve options (each falls back to an environment variable, then a default):
+  --host          Listen address; YUNBOX_HOST (default: 127.0.0.1)
+  --port          Port, or 0 for an ephemeral port; YUNBOX_PORT, then PORT (default: 8080)
+  --public-url    External https origin, required when the host is not a loopback
+                  address; YUNBOX_PUBLIC_URL
+  --storage       local: files under the storage directory; cos: Tencent Cloud COS;
+                  YUNBOX_STORAGE (default: local)
+  --storage-dir   Local object storage directory; YUNBOX_STORAGE_DIR (default: .yunbox-data)
   --help, -h      Show this help
 
-Every request needs HTTP Basic authentication whose password is a token from
-"yunbox-server token create". COS storage reads YUNBOX_COS_BUCKET,
-YUNBOX_COS_REGION, optional YUNBOX_COS_PREFIX, and credentials from
-TENCENTCLOUD_SECRETID, TENCENTCLOUD_SECRETKEY and TENCENTCLOUD_SESSIONTOKEN.
-Access logs are JSON lines on stdout and never contain tokens or URLs.
+Command-line options override environment variables. The configuration is
+checked before the server starts; every problem is reported and the process
+exits with status 1. Problems name settings, never their values.
+
+Every request except GET /_health needs HTTP Basic authentication whose
+password is a token from "yunbox-server token create". COS storage reads
+YUNBOX_COS_BUCKET, YUNBOX_COS_REGION, optional YUNBOX_COS_PREFIX, and
+credentials from TENCENTCLOUD_SECRETID, TENCENTCLOUD_SECRETKEY and
+TENCENTCLOUD_SESSIONTOKEN. Access logs are JSON lines on stdout and never
+contain tokens or URLs.
 `
 
 /** Run the `yunbox-server` command line. */
@@ -45,11 +53,11 @@ async function serve(args: string[], io: CommandIo): Promise<void> {
   const { values } = parseArgs({
     args,
     options: {
-      'host': { type: 'string', default: '127.0.0.1' },
-      'port': { type: 'string', default: '8080' },
+      'host': { type: 'string' },
+      'port': { type: 'string' },
       'public-url': { type: 'string' },
-      'storage': { type: 'string', default: 'local' },
-      'storage-dir': { type: 'string', default: '.yunbox-data' },
+      'storage': { type: 'string' },
+      'storage-dir': { type: 'string' },
       'help': { type: 'boolean', short: 'h' },
     },
   })
@@ -59,18 +67,19 @@ async function serve(args: string[], io: CommandIo): Promise<void> {
     return
   }
 
+  const config = resolveServeConfig(values, io.env)
   const { storage, tokens, description } = configureStorage({
-    kind: values.storage,
-    storageDirectory: values['storage-dir'],
+    kind: config.storage.kind,
+    storageDirectory: config.storage.storageDirectory,
     env: io.env,
   })
   const existing = await tokens.read()
   const running = await startYunBoxServer({
     storage,
     tokens,
-    host: values.host,
-    port: parsePort(values.port),
-    publicUrl: values['public-url'],
+    host: config.host,
+    port: config.port,
+    publicUrl: config.publicUrl,
     log: entry => io.stdout(JSON.stringify(entry)),
   })
   io.stdout(`YunBox is listening on ${running.url}; clients use ${running.publicUrl}`)
@@ -87,15 +96,6 @@ async function serve(args: string[], io: CommandIo): Promise<void> {
   }
   process.once('SIGINT', () => void stop())
   process.once('SIGTERM', () => void stop())
-}
-
-function parsePort(value: string): number {
-  if (!/^\d+$/.test(value))
-    throw new Error('port must be an integer from 0 to 65535')
-  const port = Number(value)
-  if (!Number.isInteger(port) || port < 0 || port > 65_535)
-    throw new Error('port must be an integer from 0 to 65535')
-  return port
 }
 
 if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === realpathSync(resolve(process.argv[1]))) {

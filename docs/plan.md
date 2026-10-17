@@ -195,14 +195,28 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
   - 日志：每个请求一行 JSON，包含请求 id、方法、去掉查询串的路径、状态码、耗时和 token id；5xx 时记录脱敏后的错误名和信息（URL 换成 `[url]`，token、Basic 凭据和签名字段都替换掉）。从不记录请求头、查询串和完整地址。
 - **本地存储的上传大小限制**：原来用 Transform 限制大小，超限时要等客户端断开 pipeline 才会结束，服务端发不出 413。改成在异步迭代里抛错后，超限时能立即返回 413。
 
+### G1 阶段 3（不需要云账号的部分）已定结论（2026-10-17）
+
+- **配置来源**：每个命令行参数都有对应的环境变量（`YUNBOX_HOST`、`YUNBOX_PORT`、`YUNBOX_PUBLIC_URL`、`YUNBOX_STORAGE`、`YUNBOX_STORAGE_DIR`），优先级是命令行参数 > 环境变量 > 默认值，空字符串等于没有设置。端口在 `YUNBOX_PORT` 之后还读 `PORT`：CloudBase 云托管官方文档说明容器内的 `PORT` 始终等于请求发到的端口，并建议优先监听它。`token` 子命令用同样的规则读取存储配置，在容器里不用重复传参。
+- **配置自检**：启动前先检查端口、`publicUrl`（非回环地址必须是 https origin）、存储类型，以及 COS 的 bucket、region、prefix、endpoint 格式和 `TENCENTCLOUD_SECRETID` / `TENCENTCLOUD_SECRETKEY`。所有问题一次列出，以状态码 1 退出。错误信息只写配置项和来源（例如 `port (from PORT)`），从不写值；COS 格式错误的信息来自 `CosObjectStorage`，本身就不含值。自检不访问网络；通过后服务端从 COS 读一次 token 文档，读不到也退出（快速失败，交给平台重启）。启动日志按是否有 `TENCENTCLOUD_SESSIONTOKEN` 说明用的是临时密钥还是长期密钥，用来确认运行角色是否生效。
+- **健康检查**：`GET` / `HEAD /_health` 不需要鉴权，只返回 `{"status":"ok"}`，不读存储和 token 文档，不暴露配置；其他方法返回 405。它只表示进程能处理 HTTP 请求：COS 或 token 文档暂时不可用时，batch 返回 503，但不会因为探测失败让平台反复重启实例。成功的探测不写访问日志，避免每隔几秒一行。仓库 owner 必须以字母或数字开头，所以 `/_health` 不会和 LFS 路由冲突。
+- **镜像**：多阶段构建，`pnpm fetch` 按锁文件缓存依赖，构建 core 和 server 后用 `pnpm deploy --prod --legacy` 生成只含生产依赖的目录（目前只有构建产物和 `@yunbox/core`）。不用 `--legacy` 时 pnpm 要求打开 `injectWorkspacePackages`，会改变本地开发时工作区包的链接方式，所以没有采用。运行阶段以 `node` 用户运行，应用文件归 root。镜像默认 `YUNBOX_HOST=0.0.0.0` 和 `YUNBOX_STORAGE=cos`：漏配环境变量时自检会拒绝启动，而不是悄悄把素材写进容器里会丢失的本地目录。
+- **部署文档**：[deploy.md](./deploy.md) 记录了 CloudBase 的创建步骤、CAM 最小权限策略、TLS 和 HTTP 检查、token 管理和 `COS E2E` 的运行方法。官方文档里查不到的平台细节一律标「未核实」，真实部署时逐项确认。
+
 ### 后续风险
 
+- CloudBase 云托管绑定运行角色后是否以 `TENCENTCLOUD_*` 环境变量注入临时密钥**未核实**（云函数是这样做的）。如果不是，需要在服务端增加从平台元数据接口获取密钥的代码，或者临时改用只挂最小权限策略的子账号长期密钥。
+- 临时密钥的有效期和预签名地址：预签名地址用签发时的临时密钥签名，密钥过期后地址也失效。如果平台只在容器启动时注入一次密钥、运行中不更新环境变量，服务会在密钥过期后整体失效；即使会更新，临近过期时签发的地址也可能不到 5 分钟就失效。需要在真实环境里确认密钥的有效期和刷新方式，必要时在签名前检查剩余有效期。
+- 服务端看不到客户端用的是 http 还是 https（不读 `X-Forwarded-Proto`），明文 HTTP 能否到达服务完全取决于 CloudBase 入口。部署时要按 deploy.md 用 `curl http://...` 确认会跳转或被拒绝；如果入口会转发明文 HTTP，就只能靠所有人的 `lfs.url` 写 https。
+- CloudBase 路由的网关鉴权如果开启，可能会占用 `Authorization` 头，导致 git-lfs 的 Basic 认证失效，必须保持关闭（**未核实**）。
+- CloudBase 健康检查的探测方式和路径文档里没有写。如果只有 TCP 探测，事件循环卡死时实例不会被重启；镜像里的 Docker `HEALTHCHECK` 是否被平台使用也**未核实**。
+- 基础镜像只固定到 `node:24-bookworm-slim` 标签，没有固定摘要，重新构建可能拿到不同的 Node 24 补丁版本。试点稳定后可以改成固定摘要，并定期更新。
 - 真实 COS 尚未实测：预签名签名、`If-Match`、临时密钥和 CAM 最小权限都只在测试替身上验证过，需要用 `COS E2E` 工作流在真实 bucket 上跑一遍。这个工作流现在也会在随机前缀下写入并删除 `_yunbox/tokens.json`。
 - token 文档没有并发保护：两个管理员同时执行 `token create` / `revoke` 时，后写入的会覆盖先写入的。COS 的普通 PUT 不支持按 ETag 条件写入，G1 只有一两个管理员，先在文档里约定同一时间只有一人管理 token；以后可以改成写入后读回核对，或者换成每个 token 一个对象。
 - token 文档和对象放在同一个 bucket 里，运行角色本来就有这个前缀的读写权限，所以服务端被攻破时 token 哈希也会暴露（但哈希不能反推出 token）。如果需要更强的隔离，可以把 token 文档放到单独的前缀，并给管理命令和服务端分配不同的 CAM 权限。
 - 吊销时限依赖每个实例自己的缓存，多实例部署时每个实例都满足 5 分钟的上界；但 COS 读取 token 文档是否总能读到刚写入的内容（强一致），需要在真实 COS 上确认。
 - git-lfs 在新仓库里的第一次上传会先不带凭据发送，收到 401 后重试。服务端会在读请求体之前拒绝并断开连接，但客户端可能已经通过网络发出了一部分请求体；大文件的首次 push 会因此多花一点流量。COS 直传模式下上传地址不经过服务端，没有这个问题。
-- Basic 认证的内容是明文，公网部署时 TLS 必须在 CloudBase 的入口终止，服务端只监听容器内部地址。阶段 3 需要确认 CloudBase 云托管不会把 HTTP 请求转发到公网。
+- Basic 认证的内容是明文，公网部署时 TLS 必须在 CloudBase 的入口终止，服务端只监听容器内部地址。阶段 3 的部署文档给出了检查方法，但还没有在真实环境确认 CloudBase 云托管会不会把明文 HTTP 请求转发给服务（见上面关于 `X-Forwarded-Proto` 的风险）。
 - ETag 在单次 PUT 时是内容的 MD5。有写权限的人理论上可以用 MD5 碰撞构造同样大小、同样 ETag 的不同内容，在地址有效期内覆盖已校验对象；这种情况由客户端下载时的 SHA-256 校验兜底，第一版不做服务端哈希校验。
 - Windows 下 npm 生成的 `git-yunbox` shim 能否被 Git for Windows 识别，需要实测；长期考虑用 Node SEA 或 `bun build --compile` 打成单个可执行文件。
 - Locks API 需要持久化存储，锁的语义（强制解锁、过期）还要设计。

@@ -34,6 +34,14 @@ import { permits, resolvePermission, TokenStoreUnavailableError } from './tokens
 /** Largest accepted batch or verify request body. */
 export const MAX_JSON_BODY_BYTES = 1024 * 1024
 
+/**
+ * Unauthenticated liveness endpoint for container platforms. It answers
+ * `GET` / `HEAD` with `{"status":"ok"}` and never touches storage or reveals
+ * configuration. Repository owners must start with a letter or digit, so the
+ * path cannot collide with an LFS route.
+ */
+export const HEALTH_PATH = '/_health'
+
 /** Value of the `LFS-Authenticate` header sent with every 401 response. */
 export const LFS_AUTHENTICATE = 'Basic realm="YunBox", charset="UTF-8"'
 
@@ -84,6 +92,11 @@ export function createRequestHandler(options: RequestHandlerOptions): (request: 
   const apiSlots = new Slots(options.maxConcurrentRequests)
   const transferSlots = new Slots(options.maxConcurrentTransfers)
   return (request, response) => {
+    // Successful probes are not logged: platforms send them every few seconds.
+    if (isHealthCheck(request)) {
+      sendHealth(request, response)
+      return
+    }
     const context: RequestContext = { id: randomUUID(), startedAt: performance.now() }
     response.once('close', () => {
       options.log?.({
@@ -111,6 +124,8 @@ async function handleRequest(
   apiSlots: Slots,
   transferSlots: Slots,
 ): Promise<void> {
+  if (requestPath(request.url) === HEALTH_PATH)
+    throw new HttpError(405, 'Method must be GET or HEAD', { Allow: 'GET, HEAD' })
   const route = parseRoute(request.url)
   if (route === undefined)
     throw new HttpError(404, 'Route not found')
@@ -362,6 +377,27 @@ async function handleDownload(
     'Content-Length': String(object.size),
   })
   await pipeline(Readable.from(object.body), response)
+}
+
+function requestPath(rawUrl: string | undefined): string | undefined {
+  if (rawUrl === undefined)
+    return undefined
+  const queryIndex = rawUrl.indexOf('?')
+  return queryIndex === -1 ? rawUrl : rawUrl.slice(0, queryIndex)
+}
+
+function isHealthCheck(request: IncomingMessage): boolean {
+  return (request.method === 'GET' || request.method === 'HEAD') && requestPath(request.url) === HEALTH_PATH
+}
+
+function sendHealth(request: IncomingMessage, response: ServerResponse): void {
+  const body = Buffer.from('{"status":"ok"}')
+  response.writeHead(200, {
+    'Content-Type': 'application/json',
+    'Content-Length': String(body.byteLength),
+    'Cache-Control': 'no-store',
+  })
+  response.end(request.method === 'HEAD' ? undefined : body)
 }
 
 function parseRoute(rawUrl: string | undefined): Route | undefined {
