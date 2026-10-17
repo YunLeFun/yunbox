@@ -12,6 +12,7 @@ import { join } from 'node:path'
 import { CosObjectStorage, LocalFileObjectStorage } from '@yunbox/core'
 import { afterEach, describe, expect, it } from 'vitest'
 import { FakeCosServer } from '../../core/test/fake-cos-server.ts'
+import { CosTokenStore, FileTokenStore } from '../src/tokens.ts'
 import { runGitLfsWorkflow, WORKFLOW_REPOSITORY } from './lfs-workflow.ts'
 
 const cleanups: Array<() => Promise<void>> = []
@@ -21,7 +22,7 @@ afterEach(async () => {
 })
 
 describe('git LFS end-to-end workflow', () => {
-  it('pushes, clones, restores history, retries and remains idempotent with local storage', async () => {
+  it('pushes, clones, restores history, retries and enforces tokens with local storage', async () => {
     const directory = await mkdtemp(join(tmpdir(), 'yunbox-e2e-objects-'))
     cleanups.push(() => rm(directory, { recursive: true, force: true }))
     const localStorage = new LocalFileObjectStorage(directory)
@@ -29,6 +30,7 @@ describe('git LFS end-to-end workflow', () => {
 
     await runGitLfsWorkflow({
       storage,
+      tokens: new FileTokenStore(join(directory, '_yunbox', 'tokens.json')),
       writeStamp: async oid => (await stat(localStorage.objectPath(WORKFLOW_REPOSITORY, oid))).mtimeMs,
       interruption: {
         start: oid => storage.interruptUploads(oid),
@@ -38,7 +40,7 @@ describe('git LFS end-to-end workflow', () => {
     })
   }, 120_000)
 
-  it('transfers objects directly to COS through presigned URLs', async () => {
+  it('transfers objects directly to COS through presigned URLs and enforces tokens', async () => {
     const credentials = {
       secretId: 'AKIDTESTTESTTESTTESTTESTTESTTEST',
       secretKey: 'test-secret-key-test-secret-key',
@@ -56,6 +58,7 @@ describe('git LFS end-to-end workflow', () => {
 
     const { oids } = await runGitLfsWorkflow({
       storage,
+      tokens: new CosTokenStore(storage),
       writeStamp: async oid => cos.putCount(storage.objectKey(WORKFLOW_REPOSITORY, oid)),
       interruption: {
         start: oid => cos.interruptPuts(storage.objectKey(WORKFLOW_REPOSITORY, oid)),
@@ -70,6 +73,7 @@ describe('git LFS end-to-end workflow', () => {
       expect(cos.requests.some(request => request.key === key && request.method === 'GET' && request.presigned && request.status === 200)).toBe(true)
     }
     expect(cos.requests.every(request => request.status !== 403)).toBe(true)
+    expect(cos.objects.has('yunbox/_yunbox/tokens.json')).toBe(true)
   }, 120_000)
 })
 

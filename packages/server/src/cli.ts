@@ -1,64 +1,82 @@
+#!/usr/bin/env node
 // @env node
 
-import type { ObjectStorage } from '@yunbox/core'
+import type { CommandIo } from './token-command.ts'
+import { realpathSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
-import { LocalFileObjectStorage } from '@yunbox/core'
 import { startYunBoxServer } from './server.ts'
-import { createCosStorageFromEnvironment } from './storage-config.ts'
+import { configureStorage } from './storage-config.ts'
+import { runTokenCommand, tokenHelp } from './token-command.ts'
 
-const help = `Start the YunBox Git LFS server (local testing only, no authentication yet).
+const help = `YunBox Git LFS server.
 
 Usage:
-  pnpm --filter @yunbox/server start [--port 8080] [--storage local|cos] [--storage-dir .yunbox-data]
+  yunbox-server [serve] [options]
+  yunbox-server token create | list | revoke ...   (see yunbox-server token --help)
 
-Options:
-  --port          Loopback port, or 0 for an ephemeral port (default: 8080)
+Serve options:
+  --host          Listen address (default: 127.0.0.1)
+  --port          Port, or 0 for an ephemeral port (default: 8080)
+  --public-url    External https origin, required when --host is not a loopback address
   --storage       local: files under --storage-dir; cos: Tencent Cloud COS (default: local)
   --storage-dir   Local object storage directory (default: .yunbox-data)
   --help, -h      Show this help
 
-COS storage reads YUNBOX_COS_BUCKET, YUNBOX_COS_REGION, optional YUNBOX_COS_PREFIX,
-and credentials from TENCENTCLOUD_SECRETID, TENCENTCLOUD_SECRETKEY and
-TENCENTCLOUD_SESSIONTOKEN.
+Every request needs HTTP Basic authentication whose password is a token from
+"yunbox-server token create". COS storage reads YUNBOX_COS_BUCKET,
+YUNBOX_COS_REGION, optional YUNBOX_COS_PREFIX, and credentials from
+TENCENTCLOUD_SECRETID, TENCENTCLOUD_SECRETKEY and TENCENTCLOUD_SESSIONTOKEN.
+Access logs are JSON lines on stdout and never contain tokens or URLs.
 `
 
-async function main(): Promise<void> {
+/** Run the `yunbox-server` command line. */
+export async function main(argv: string[], io: CommandIo): Promise<void> {
+  if (argv[0] === 'token') {
+    await runTokenCommand(argv.slice(1), io)
+    return
+  }
+  await serve(argv[0] === 'serve' ? argv.slice(1) : argv, io)
+}
+
+async function serve(args: string[], io: CommandIo): Promise<void> {
   const { values } = parseArgs({
+    args,
     options: {
+      'host': { type: 'string', default: '127.0.0.1' },
       'port': { type: 'string', default: '8080' },
+      'public-url': { type: 'string' },
       'storage': { type: 'string', default: 'local' },
       'storage-dir': { type: 'string', default: '.yunbox-data' },
       'help': { type: 'boolean', short: 'h' },
     },
   })
   if (values.help) {
-    console.log(help)
+    io.stdout(help)
+    io.stdout(tokenHelp)
     return
   }
 
-  const port = parsePort(values.port)
-  let storage: ObjectStorage
-  let storageDescription: string
-  if (values.storage === 'local') {
-    const storageDirectory = resolve(values['storage-dir'])
-    storage = new LocalFileObjectStorage(storageDirectory)
-    storageDescription = `Objects are stored in ${storageDirectory}`
-  }
-  else if (values.storage === 'cos') {
-    storage = createCosStorageFromEnvironment(process.env)
-    storageDescription = 'Objects are stored in COS and transferred directly by Git LFS clients'
-  }
-  else {
-    throw new Error('storage must be local or cos')
-  }
-
-  const running = await startYunBoxServer({ storage, port })
-  console.log(`YunBox is listening on ${running.url}`)
-  console.log(storageDescription)
-  console.log('This server has no authentication yet and is not suitable for production use.')
+  const { storage, tokens, description } = configureStorage({
+    kind: values.storage,
+    storageDirectory: values['storage-dir'],
+    env: io.env,
+  })
+  const existing = await tokens.read()
+  const running = await startYunBoxServer({
+    storage,
+    tokens,
+    host: values.host,
+    port: parsePort(values.port),
+    publicUrl: values['public-url'],
+    log: entry => io.stdout(JSON.stringify(entry)),
+  })
+  io.stdout(`YunBox is listening on ${running.url}; clients use ${running.publicUrl}`)
+  io.stdout(description)
+  if (existing.length === 0)
+    io.stdout('No tokens exist yet, so every request is rejected. Create one with "yunbox-server token create".')
 
   let stopping = false
   const stop = async (): Promise<void> => {
@@ -80,9 +98,9 @@ function parsePort(value: string): number {
   return port
 }
 
-if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
-  main().catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : 'Unable to start YunBox')
+if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === realpathSync(resolve(process.argv[1]))) {
+  main(process.argv.slice(2), { stdout: line => console.log(line), env: process.env }).catch((error: unknown) => {
+    console.error(error instanceof Error ? error.message : 'yunbox-server failed')
     process.exitCode = 1
   })
 }

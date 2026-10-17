@@ -3,17 +3,19 @@ import process from 'node:process'
 import { createCosAuthorization } from '@yunbox/core'
 import { describe, expect, it } from 'vitest'
 import { createCosStorageFromEnvironment } from '../src/storage-config.ts'
+import { CosTokenStore, TOKEN_DOCUMENT_NAME } from '../src/tokens.ts'
 import { runGitLfsWorkflow, WORKFLOW_REPOSITORY } from './lfs-workflow.ts'
 
 /**
  * Runs the shared Git LFS workflow against a real COS bucket.
  *
  * Skipped unless `YUNBOX_COS_E2E=1`. It needs the variables documented in
- * `createCosStorageFromEnvironment`, writes under a random sub-prefix of
- * `YUNBOX_COS_PREFIX` (default `yunbox-e2e`) and deletes what it wrote.
+ * `createCosStorageFromEnvironment`, writes objects and its token document
+ * under a random sub-prefix of `YUNBOX_COS_PREFIX` (default `yunbox-e2e`) and
+ * deletes what it wrote.
  */
 describe.skipIf(process.env.YUNBOX_COS_E2E !== '1')('git LFS workflow on real COS', () => {
-  it('pushes, clones and restores history through presigned COS URLs', async () => {
+  it('pushes, clones, restores history and enforces tokens through presigned COS URLs', async () => {
     const prefix = `${process.env.YUNBOX_COS_PREFIX || 'yunbox-e2e'}/${randomUUID()}`
     const env: NodeJS.ProcessEnv = { ...process.env, YUNBOX_COS_PREFIX: prefix }
     const storage = createCosStorageFromEnvironment(env)
@@ -46,6 +48,7 @@ describe.skipIf(process.env.YUNBOX_COS_E2E !== '1')('git LFS workflow on real CO
     try {
       ;({ oids } = await runGitLfsWorkflow({
         storage,
+        tokens: new CosTokenStore(storage),
         writeStamp: async (oid) => {
           const response = await request('HEAD', storage.objectKey(WORKFLOW_REPOSITORY, oid))
           expect(response.status).toBe(200)
@@ -59,6 +62,7 @@ describe.skipIf(process.env.YUNBOX_COS_E2E !== '1')('git LFS workflow on real CO
         await request('DELETE', key)
         await request('DELETE', `${key}.verified.json`)
       }
+      await request('DELETE', storage.metadataKey(TOKEN_DOCUMENT_NAME))
     }
   }, 300_000)
 })

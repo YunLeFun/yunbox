@@ -16,6 +16,7 @@ import { assertOid, assertRepository } from './validation.ts'
 const BUCKET_PATTERN = /^[a-z\d][a-z\d-]{0,48}-\d{5,20}$/
 const REGION_PATTERN = /^[a-z\d][a-z\d-]{1,40}$/
 const PREFIX_SEGMENT_PATTERN = /^[\w.-]+$/
+const METADATA_NAME_PATTERN = /^[a-z\d][\w.-]{0,63}$/i
 const DEFAULT_MAX_CONCURRENT_REQUESTS = 16
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000
 /** Server-side COS requests are signed for a short window to tolerate clock skew. */
@@ -104,6 +105,40 @@ export class CosObjectStorage implements ObjectStorage {
     assertRepository(repository)
     assertOid(oid)
     return `${this.#prefix}${repository.owner}/${repository.repo}/${oid.slice(0, 2)}/${oid.slice(2, 4)}/${oid}`
+  }
+
+  /**
+   * Resolve the key of a private YunBox metadata document, `<prefix>/_yunbox/<name>`.
+   *
+   * Repository owners must start with a letter or digit, so this namespace can
+   * never collide with object keys.
+   */
+  metadataKey(name: string): string {
+    if (!METADATA_NAME_PATTERN.test(name))
+      throw new TypeError('metadata document name may only contain letters, digits, ".", "_" and "-"')
+    return `${this.#prefix}_yunbox/${name}`
+  }
+
+  /** Read a private metadata document, or `undefined` when it does not exist yet. */
+  async readMetadataDocument(name: string): Promise<string | undefined> {
+    const response = await this.#request('GET', this.metadataKey(name))
+    if (response.status === 404) {
+      await response.body?.cancel()
+      return undefined
+    }
+    if (!response.ok) {
+      await response.body?.cancel()
+      throw new CosRequestError('GET', response.status)
+    }
+    return await response.text()
+  }
+
+  /** Replace a private metadata document with a JSON body. */
+  async writeMetadataDocument(name: string, body: string): Promise<void> {
+    const response = await this.#request('PUT', this.metadataKey(name), body)
+    await response.body?.cancel()
+    if (!response.ok)
+      throw new CosRequestError('PUT', response.status)
   }
 
   /** Inspect object size and whether its current ETag has a verification marker. */

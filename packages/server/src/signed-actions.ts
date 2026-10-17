@@ -14,6 +14,7 @@ interface CreateActionOptions {
   oid: string
   size: number
   headers: Record<string, string>
+  expiresInSeconds: number
 }
 
 interface VerifyActionOptions {
@@ -23,17 +24,23 @@ interface VerifyActionOptions {
   searchParams: URLSearchParams
 }
 
+/**
+ * Signs server-hosted PUT / GET action URLs with a per-process HMAC key.
+ *
+ * The signature proves the server issued this exact action (method,
+ * repository, oid, size, expiry). It does not identify the caller: transfer
+ * requests must also pass Basic authentication with a token that still has
+ * the required permission.
+ */
 export class SignedActionFactory {
   readonly #secret: Uint8Array
-  readonly #ttlSeconds: number
 
-  constructor(secret: Uint8Array, ttlSeconds: number) {
+  constructor(secret: Uint8Array) {
     this.#secret = secret
-    this.#ttlSeconds = ttlSeconds
   }
 
   create(options: CreateActionOptions): LfsAction {
-    const expires = Math.floor(Date.now() / 1000) + this.#ttlSeconds
+    const expires = Math.floor(Date.now() / 1000) + options.expiresInSeconds
     const path = transferPath(options.repository, options.oid)
     const signature = this.#sign(options.method, path, options.size, expires)
     const url = new URL(path, options.baseUrl)
@@ -43,7 +50,7 @@ export class SignedActionFactory {
     return {
       href: url.href,
       header: options.headers,
-      expires_in: this.#ttlSeconds,
+      expires_in: options.expiresInSeconds,
     }
   }
 

@@ -12,6 +12,9 @@
     "./package.json": "./package.json"
   },
   "types": "./dist/index.d.mts",
+  "bin": {
+    "server": "./dist/cli.mjs"
+  },
   "files": [
     "dist"
   ],

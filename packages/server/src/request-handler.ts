@@ -10,30 +10,43 @@ import type {
   StoredObjectInfo,
 } from '@yunbox/core'
 import type { IncomingMessage, ServerResponse } from 'node:http'
+import type { RequestLogger } from './logging.ts'
 import type { SignedActionFactory } from './signed-actions.ts'
+import type { Authentication, TokenAuthenticator, TokenPermission, TokenSummary } from './tokens.ts'
 import { Buffer } from 'node:buffer'
+import { randomUUID } from 'node:crypto'
+import { performance } from 'node:perf_hooks'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import {
   assertOid,
   assertRepository,
   LFS_JSON_MEDIA_TYPE,
-  MAX_OBJECT_SIZE,
   ObjectTooLargeError,
   parseBatchRequest,
   parseLfsObject,
   ValidationError,
 } from '@yunbox/core'
+import { describeErrorForLog, loggablePath } from './logging.ts'
 import { ActionAuthorizationError } from './signed-actions.ts'
+import { permits, resolvePermission, TokenStoreUnavailableError } from './tokens.ts'
 
-const MAX_JSON_BODY_BYTES = 1024 * 1024
+/** Largest accepted batch or verify request body. */
+export const MAX_JSON_BODY_BYTES = 1024 * 1024
 
-interface RequestHandlerOptions {
+/** Value of the `LFS-Authenticate` header sent with every 401 response. */
+export const LFS_AUTHENTICATE = 'Basic realm="YunBox", charset="UTF-8"'
+
+export interface RequestHandlerOptions {
   storage: ObjectStorage
   actions: SignedActionFactory
+  authenticator: TokenAuthenticator
   actionTtlSeconds: number
   getBaseUrl: () => string
+  maxConcurrentRequests: number
   maxConcurrentTransfers: number
+  requestTimeoutMs: number
+  log?: RequestLogger
 }
 
 type Route
@@ -41,7 +54,21 @@ type Route
     | { type: 'verify', repository: RepositoryId, searchParams: URLSearchParams }
     | { type: 'transfer', repository: RepositoryId, oid: string, searchParams: URLSearchParams }
 
-class HttpError extends Error {
+interface RequestContext {
+  id: string
+  startedAt: number
+  tokenId?: string
+  error?: string
+}
+
+interface Authorized {
+  token: TokenSummary
+  /** Seconds until actions issued for this request must expire. */
+  actionExpiresInSeconds: number
+}
+
+/** An error with an HTTP status, rendered as an LFS JSON error body. */
+export class HttpError extends Error {
   readonly status: number
   readonly headers?: Record<string, string>
 
@@ -54,9 +81,25 @@ class HttpError extends Error {
 }
 
 export function createRequestHandler(options: RequestHandlerOptions): (request: IncomingMessage, response: ServerResponse) => void {
-  const slots = new TransferSlots(options.maxConcurrentTransfers)
+  const apiSlots = new Slots(options.maxConcurrentRequests)
+  const transferSlots = new Slots(options.maxConcurrentTransfers)
   return (request, response) => {
-    void handleRequest(request, response, options, slots).catch(error => sendError(response, error))
+    const context: RequestContext = { id: randomUUID(), startedAt: performance.now() }
+    response.once('close', () => {
+      options.log?.({
+        time: new Date().toISOString(),
+        requestId: context.id,
+        method: request.method ?? '',
+        path: loggablePath(request.url),
+        status: response.statusCode,
+        durationMs: Math.round(performance.now() - context.startedAt),
+        ...(context.tokenId === undefined ? {} : { tokenId: context.tokenId }),
+        ...(context.error === undefined ? {} : { error: context.error }),
+        ...(response.writableFinished ? {} : { aborted: true }),
+      })
+    })
+    void handleRequest(request, response, options, context, apiSlots, transferSlots)
+      .catch(error => sendError(request, response, context, error))
   }
 }
 
@@ -64,53 +107,120 @@ async function handleRequest(
   request: IncomingMessage,
   response: ServerResponse,
   options: RequestHandlerOptions,
-  slots: TransferSlots,
+  context: RequestContext,
+  apiSlots: Slots,
+  transferSlots: Slots,
 ): Promise<void> {
   const route = parseRoute(request.url)
   if (route === undefined)
     throw new HttpError(404, 'Route not found')
 
-  if (route.type === 'batch') {
-    requireMethod(request, 'POST')
-    await handleBatch(request, response, route.repository, options)
-    return
-  }
-  if (route.type === 'verify') {
-    requireMethod(request, 'POST')
-    await handleVerify(request, response, route.repository, options.storage)
+  if (route.type === 'transfer') {
+    assertOid(route.oid)
+    if (request.method !== 'PUT' && request.method !== 'GET')
+      throw new HttpError(405, 'Transfer method not allowed', { Allow: 'GET, PUT' })
+    const { putObject, readObject } = options.storage
+    if ((request.method === 'PUT' ? putObject : readObject) === undefined)
+      throw new HttpError(404, 'Route not found')
+    const release = acquire(transferSlots, 'Too many concurrent transfers')
+    try {
+      await authorize(request, options, context, route.repository, request.method === 'PUT' ? 'write' : 'read')
+      if (request.method === 'PUT')
+        await handleUpload(request, response, route, options)
+      else
+        await handleDownload(response, route, options)
+    }
+    finally {
+      release()
+    }
     return
   }
 
-  assertOid(route.oid)
-  if (request.method !== 'PUT' && request.method !== 'GET')
-    throw new HttpError(405, 'Transfer method not allowed', { Allow: 'GET, PUT' })
-  const { putObject, readObject } = options.storage
-  if ((request.method === 'PUT' ? putObject : readObject) === undefined)
-    throw new HttpError(404, 'Route not found')
-  const release = slots.acquire()
-  if (release === undefined)
-    throw new HttpError(503, 'Too many concurrent transfers', { 'Retry-After': '1' })
+  requireMethod(request, 'POST')
+  const timer = setTimeout(() => {
+    sendError(request, response, context, request.complete
+      ? new HttpError(503, 'Request timed out', { 'Retry-After': '1' })
+      : new HttpError(408, 'Request body was not received in time'))
+  }, options.requestTimeoutMs)
+  response.once('close', () => clearTimeout(timer))
+  const release = acquire(apiSlots, 'Too many concurrent requests')
   try {
-    if (request.method === 'PUT')
-      await handleUpload(request, response, route, options)
-    else
-      await handleDownload(response, route, options)
+    if (route.type === 'batch') {
+      const authentication = await authenticate(request, options, context)
+      const batch = parseBatchRequest(await readJson(request))
+      const authorized = requirePermission(authentication, options, route.repository, batch.operation === 'upload' ? 'write' : 'read')
+      if (batch.transfers !== undefined && !batch.transfers.includes('basic'))
+        throw new HttpError(406, 'Only the basic transfer is supported')
+      await handleBatch(response, route.repository, batch, authorized, options)
+    }
+    else {
+      await authorize(request, options, context, route.repository, 'write')
+      await handleVerify(request, response, route.repository, options.storage)
+    }
   }
   finally {
     release()
   }
 }
 
-async function handleBatch(
+async function authenticate(request: IncomingMessage, options: RequestHandlerOptions, context: RequestContext): Promise<Authentication> {
+  const authentication = await options.authenticator.authenticate(parseBasicPassword(request.headers.authorization))
+  if (authentication.token === undefined)
+    throw new HttpError(401, 'Credentials are missing or invalid', { 'LFS-Authenticate': LFS_AUTHENTICATE })
+  context.tokenId = authentication.token.id
+  return authentication
+}
+
+async function authorize(
   request: IncomingMessage,
+  options: RequestHandlerOptions,
+  context: RequestContext,
+  repository: RepositoryId,
+  required: TokenPermission,
+): Promise<Authorized> {
+  return requirePermission(await authenticate(request, options, context), options, repository, required)
+}
+
+function requirePermission(
+  authentication: Authentication,
+  options: RequestHandlerOptions,
+  repository: RepositoryId,
+  required: TokenPermission,
+): Authorized {
+  const token = authentication.token!
+  const granted = resolvePermission(token, repository)
+  if (!permits(granted, required)) {
+    throw new HttpError(403, granted === 'read'
+      ? 'This token has read-only access to the repository'
+      : 'This token has no access to the repository')
+  }
+  // Actions expire relative to the token snapshot that authorized them, so a
+  // revocation is fully effective at most actionTtlSeconds after it is saved.
+  const expiresAt = Math.floor(authentication.snapshotAt / 1000) + options.actionTtlSeconds
+  return {
+    token,
+    actionExpiresInSeconds: Math.max(1, expiresAt - Math.floor(Date.now() / 1000)),
+  }
+}
+
+/** Extract the password from an HTTP Basic `Authorization` header. The user name is ignored. */
+export function parseBasicPassword(header: string | undefined): string | undefined {
+  const match = header === undefined ? null : /^Basic +([A-Z\d+/]+=*) *$/i.exec(header)
+  if (match === null)
+    return undefined
+  const decoded = Buffer.from(match[1]!, 'base64').toString('utf8')
+  const separator = decoded.indexOf(':')
+  return separator === -1 ? undefined : decoded.slice(separator + 1)
+}
+
+async function handleBatch(
   response: ServerResponse,
   repository: RepositoryId,
+  batch: ReturnType<typeof parseBatchRequest>,
+  authorized: Authorized,
   options: RequestHandlerOptions,
 ): Promise<void> {
-  const batch = parseBatchRequest(await readJson(request))
-  if (batch.transfers !== undefined && !batch.transfers.includes('basic'))
-    throw new HttpError(406, 'Only the basic transfer is supported')
-
+  const expiresInSeconds = authorized.actionExpiresInSeconds
   const objects = await Promise.all(batch.objects.map(async (object): Promise<LfsObjectResponse> => {
     const stored = await options.storage.inspectObject(repository, object.oid)
     if (batch.operation === 'upload') {
@@ -118,7 +228,7 @@ async function handleBatch(
         return { ...object }
       return {
         ...object,
-        actions: await createUploadActions(repository, object, stored, options),
+        actions: await createUploadActions(repository, object, stored, expiresInSeconds, options),
       }
     }
 
@@ -136,11 +246,9 @@ async function handleBatch(
           oid: object.oid,
           size: object.size,
           headers: { Accept: 'application/octet-stream' },
+          expiresInSeconds,
         })
-      : await options.storage.createDownloadAction(repository, object, {
-          expiresInSeconds: options.actionTtlSeconds,
-          stored,
-        })
+      : await options.storage.createDownloadAction(repository, object, { expiresInSeconds, stored })
     return {
       ...object,
       actions: {
@@ -157,6 +265,7 @@ async function createUploadActions(
   repository: RepositoryId,
   object: LfsObject,
   stored: StoredObjectInfo | undefined,
+  expiresInSeconds: number,
   options: RequestHandlerOptions,
 ): Promise<{ upload: LfsAction, verify: LfsAction }> {
   const baseUrl = options.getBaseUrl()
@@ -168,11 +277,9 @@ async function createUploadActions(
         oid: object.oid,
         size: object.size,
         headers: { 'Content-Type': 'application/octet-stream' },
+        expiresInSeconds,
       })
-    : await options.storage.createUploadAction(repository, object, {
-        expiresInSeconds: options.actionTtlSeconds,
-        stored,
-      })
+    : await options.storage.createUploadAction(repository, object, { expiresInSeconds, stored })
   return {
     upload,
     verify: {
@@ -221,17 +328,14 @@ async function handleUpload(
   const contentLength = request.headers['content-length']
   if (contentLength !== undefined) {
     const parsed = Number(contentLength)
-    if (!Number.isSafeInteger(parsed) || parsed < 0)
+    if (!/^\d+$/.test(contentLength) || !Number.isSafeInteger(parsed))
       throw new HttpError(400, 'Content-Length is invalid')
-    if (parsed > MAX_OBJECT_SIZE)
-      throw new HttpError(413, 'Object body exceeds the service limit')
+    if (parsed > expectedSize)
+      throw new HttpError(413, 'Object body is larger than the size in the upload action')
   }
 
-  await options.storage.putObject!(route.repository, route.oid, request, { maxBytes: MAX_OBJECT_SIZE })
-  response.writeHead(200, {
-    'Content-Length': '0',
-    'X-Expected-Object-Size': String(expectedSize),
-  })
+  await options.storage.putObject!(route.repository, route.oid, request, { maxBytes: expectedSize })
+  response.writeHead(200, { 'Content-Length': '0' })
   response.end()
 }
 
@@ -292,6 +396,9 @@ function parseRoute(rawUrl: string | undefined): Route | undefined {
 }
 
 async function readJson(request: IncomingMessage): Promise<unknown> {
+  const contentLength = Number(request.headers['content-length'])
+  if (Number.isFinite(contentLength) && contentLength > MAX_JSON_BODY_BYTES)
+    throw new HttpError(413, 'JSON request body is too large')
   const chunks: Buffer[] = []
   let receivedBytes = 0
   for await (const chunk of request) {
@@ -314,6 +421,13 @@ function requireMethod(request: IncomingMessage, method: string): void {
     throw new HttpError(405, `Method must be ${method}`, { Allow: method })
 }
 
+function acquire(slots: Slots, message: string): () => void {
+  const release = slots.acquire()
+  if (release === undefined)
+    throw new HttpError(503, message, { 'Retry-After': '1' })
+  return release
+}
+
 function sendJson(response: ServerResponse, status: number, value: unknown, headers: Record<string, string> = {}): void {
   const body = Buffer.from(JSON.stringify(value))
   response.writeHead(status, {
@@ -324,31 +438,35 @@ function sendJson(response: ServerResponse, status: number, value: unknown, head
   response.end(body)
 }
 
-function sendError(response: ServerResponse, error: unknown): void {
+function sendError(request: IncomingMessage, response: ServerResponse, context: RequestContext, error: unknown): void {
   if (response.headersSent) {
+    context.error ??= describeErrorForLog(error)
     response.destroy()
     return
   }
-  if (error instanceof HttpError) {
-    sendJson(response, error.status, { message: error.message }, error.headers)
-    return
-  }
-  if (error instanceof ActionAuthorizationError) {
-    sendJson(response, 403, { message: error.message })
-    return
-  }
-  if (error instanceof ValidationError) {
-    sendJson(response, 422, { message: error.message })
-    return
-  }
-  if (error instanceof ObjectTooLargeError) {
-    sendJson(response, 413, { message: error.message })
-    return
-  }
-  sendJson(response, 500, { message: 'Internal server error' })
+  const { status, message, headers } = toHttpError(error)
+  if (status >= 500)
+    context.error ??= describeErrorForLog(error)
+  // Stop reading an unconsumed upload instead of draining it into the void.
+  const connection: Record<string, string> = request.complete ? {} : { Connection: 'close' }
+  sendJson(response, status, { message, request_id: context.id }, { ...headers, ...connection })
 }
 
-class TransferSlots {
+function toHttpError(error: unknown): HttpError {
+  if (error instanceof HttpError)
+    return error
+  if (error instanceof ActionAuthorizationError)
+    return new HttpError(403, error.message)
+  if (error instanceof ValidationError)
+    return new HttpError(422, error.message)
+  if (error instanceof ObjectTooLargeError)
+    return new HttpError(413, 'Object body is larger than the size in the upload action')
+  if (error instanceof TokenStoreUnavailableError)
+    return new HttpError(503, 'Authentication is temporarily unavailable', { 'Retry-After': '5' })
+  return new HttpError(500, 'Internal server error')
+}
+
+class Slots {
   readonly #limit: number
   #active = 0
 
@@ -360,7 +478,11 @@ class TransferSlots {
     if (this.#active >= this.#limit)
       return undefined
     this.#active += 1
+    let released = false
     return () => {
+      if (released)
+        return
+      released = true
       this.#active -= 1
     }
   }

@@ -1,6 +1,5 @@
 // @env node
 
-import type { Buffer } from 'node:buffer'
 import type { Stats } from 'node:fs'
 import type {
   ObjectStorage,
@@ -14,7 +13,7 @@ import { randomUUID } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
-import { Readable, Transform } from 'node:stream'
+import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { MAX_OBJECT_SIZE } from './constants.ts'
 import { assertOid, assertRepository } from './validation.ts'
@@ -84,22 +83,9 @@ export class LocalFileObjectStorage implements ObjectStorage {
     await mkdir(dirname(objectPath), { recursive: true })
     await rm(markerPath, { force: true })
 
-    let receivedBytes = 0
-    const limiter = new Transform({
-      transform(chunk: Buffer, _encoding, callback) {
-        receivedBytes += chunk.byteLength
-        if (receivedBytes > maxBytes) {
-          callback(new ObjectTooLargeError(maxBytes))
-          return
-        }
-        callback(null, chunk)
-      },
-    })
-
     try {
       await pipeline(
-        Readable.from(body),
-        limiter,
+        Readable.from(limitBytes(body, maxBytes)),
         createWriteStream(temporaryPath, { flags: 'wx' }),
       )
       await replaceFile(temporaryPath, objectPath)
@@ -160,6 +146,21 @@ export class LocalFileObjectStorage implements ObjectStorage {
 
   #markerPath(objectPath: string): string {
     return `${objectPath}.verified.json`
+  }
+}
+
+/**
+ * Enforce a byte limit while iterating the body. Throwing from the iteration
+ * (rather than from a Transform) ends the source promptly, so a caller such as
+ * an HTTP handler can answer 413 while the client is still sending.
+ */
+async function* limitBytes(body: AsyncIterable<Uint8Array>, maxBytes: number): AsyncIterable<Uint8Array> {
+  let receivedBytes = 0
+  for await (const chunk of body) {
+    receivedBytes += chunk.byteLength
+    if (receivedBytes > maxBytes)
+      throw new ObjectTooLargeError(maxBytes)
+    yield chunk
   }
 }
 

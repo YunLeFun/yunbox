@@ -111,6 +111,18 @@ describe('storing objects in COS', () => {
     expect(calls).toBe(3)
   })
 
+  it('keeps private metadata documents in a namespace no repository can use', async () => {
+    const storage = createStorage()
+    expect(storage.metadataKey('tokens.json')).toBe('yunbox/_yunbox/tokens.json')
+    expect(() => storage.metadataKey('../tokens.json')).toThrow(TypeError)
+    expect(() => storage.objectKey({ owner: '_yunbox', repo: 'tokens.json' }, 'a'.repeat(64))).toThrow()
+
+    expect(await storage.readMetadataDocument('tokens.json')).toBeUndefined()
+    await storage.writeMetadataDocument('tokens.json', '{"version":1}\n')
+    expect(await storage.readMetadataDocument('tokens.json')).toBe('{"version":1}\n')
+    expect(cos.objects.get('yunbox/_yunbox/tokens.json')?.body.toString()).toBe('{"version":1}\n')
+  })
+
   it('reports COS failures without leaking request URLs or keys', async () => {
     const storage = createStorage({ credentials: { ...credentials, secretKey: 'wrong-secret' } })
     const error = await storage.inspectObject(repository, 'a'.repeat(64)).catch((error: unknown) => error)

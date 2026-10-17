@@ -48,6 +48,8 @@
 
 ### 阶段 2：鉴权与权限
 
+> 进度（2026-10-17）：已完成，在本地存储和 COS 测试替身上通过带真实 git 凭据的端到端测试。实现时去掉了「可信反向代理设置」：服务端不读取任何 `X-Forwarded-*` 头，地址全部基于 `publicUrl` 生成，所以没有需要信任的代理头。吊销时限、HMAC 签名和 Basic 认证的关系等结论见 plan.md 第 12 节。
+
 - Basic 认证：用户名任意，密码是个人 token，由 Git 凭据管理器保存。token 用随机数生成，服务端只保存哈希值，比较时用定时安全比较。
 - 权限模型：`token → { name, repos: { "<owner>/<repo>": "read" | "write" } }`，支持通配 `<owner>/*`。
 - 管理命令：`yunbox-server token create | list | revoke`，只在部署环境或管理员本机执行，创建时只输出一次明文 token。
