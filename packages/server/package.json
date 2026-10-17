@@ -13,7 +13,7 @@
   },
   "types": "./dist/index.d.mts",
   "bin": {
-    "server": "./dist/cli.mjs"
+    "yunbox-server": "./dist/cli.mjs"
   },
   "files": [
     "dist"

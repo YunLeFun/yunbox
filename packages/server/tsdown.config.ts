@@ -9,5 +9,10 @@ export default defineConfig({
   target: 'node22',
   format: 'esm',
   dts: true,
-  exports: true,
+  exports: {
+    // Without an explicit name tsdown derives the bin from the unscoped package name (`server`).
+    bin: {
+      'yunbox-server': './src/cli.ts',
+    },
+  },
 })
