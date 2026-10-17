@@ -6,9 +6,9 @@ import { createHash, createHmac } from 'node:crypto'
 import { assertDocumentId, assertFieldNames, DocumentMetadataStore, newEtag } from './metadata.ts'
 
 /**
- * Credentials for the CloudBase HTTP API: a Tencent Cloud key pair (signed
- * with TC3-HMAC-SHA256, temporary keys include `sessionToken`) or a CloudBase
- * server API key sent as a Bearer token.
+ * Credentials for the CloudBase HTTP API: a Tencent Cloud key pair
+ * (temporary keys include `sessionToken`), exchanged for an access token, or
+ * a CloudBase server API key sent as a Bearer token.
  */
 export type CloudBaseCredentials
   = | { secretId: string, secretKey: string, sessionToken?: string }
@@ -30,9 +30,12 @@ export interface CloudBaseDocumentBackendOptions {
   credentials: () => CloudBaseCredentials
   /** Per-request timeout in milliseconds (default 10000). */
   timeoutMs?: number
-  /** Clock for signatures, in milliseconds. */
+  /** Clock for signatures and access token expiry, in milliseconds. */
   now?: () => number
 }
+
+/** Path of the endpoint that exchanges a signed request for an access token. */
+export const CLIENT_CREDENTIAL_PATH = '/auth/v1/token/clientCredential'
 
 /** Error from the CloudBase HTTP API. The message names the operation, status and error code, never URLs or credentials. */
 export class CloudBaseRequestError extends Error {
@@ -54,16 +57,33 @@ const COLLECTION_PREFIX_PATTERN = /^\w{0,32}$/
 const PAGE_SIZE = 100
 const MAX_DOCUMENTS = 100_000
 const DEFAULT_TIMEOUT_MS = 10_000
+/** Refresh an access token this long before it expires. */
+const TOKEN_REFRESH_MARGIN_MS = 5 * 60 * 1000
+
+interface AccessToken {
+  value: string
+  expiresAt: number
+  /** The key pair it was obtained with; rotated keys get a new token. */
+  owner: string
+}
 
 /**
  * {@link DocumentBackend} on the CloudBase document database (NoSQL), through
  * its HTTP API, without the CloudBase SDK.
  *
+ * Authentication follows `@cloudbase/node-sdk`: with a key pair, one request
+ * to {@link CLIENT_CREDENTIAL_PATH} is signed with TC3-HMAC-SHA256 and
+ * returns an access token, which every database request then sends as a
+ * Bearer token. The token is reused until shortly before it expires, fetched
+ * again when the keys rotate, and refreshed once if a request answers 401.
+ * A server API key is sent as the Bearer token directly.
+ *
  * Documents are stored as `{ _id, etag, ...fields }`. Creation inserts with
- * the given `_id`, and a duplicate id is reported as `409
- * DATABASE_DUPLICATE_WRITE`; conditional updates and deletes filter on
- * `{ _id, etag }` and check how many documents matched. The four collections
- * must exist before the server starts.
+ * the given `_id` and checks that the database kept it; an id that already
+ * exists is detected by reading it back after a 409, whatever the error code.
+ * Conditional updates and deletes filter on `{ _id, etag }` and check how
+ * many documents matched. The four collections must exist before the server
+ * starts.
  */
 export class CloudBaseDocumentBackend implements DocumentBackend {
   readonly #origin: string
@@ -73,6 +93,8 @@ export class CloudBaseDocumentBackend implements DocumentBackend {
   readonly #timeoutMs: number
   readonly #now: () => number
   readonly #envId: string
+  #token: AccessToken | undefined
+  #tokenLoading: Promise<AccessToken> | undefined
 
   constructor(options: CloudBaseDocumentBackendOptions) {
     if (!ENV_ID_PATTERN.test(options.envId))
@@ -146,11 +168,22 @@ export class CloudBaseDocumentBackend implements DocumentBackend {
     assertDocumentId(id)
     assertFieldNames(data)
     const etag = newEtag()
-    const { status } = await this.#request('insert', 'POST', this.#documents(collection), {
+    const { status, body } = await this.#request('insert', 'POST', this.#documents(collection), {
       body: { data: [{ ...data, _id: id, etag }] },
-      conflict: 'DATABASE_DUPLICATE_WRITE',
+      conflict: true,
     })
-    return status === 409 ? undefined : etag
+    if (status === 409) {
+      // The documented code for a duplicate key is DATABASE_DUPLICATE_WRITE;
+      // rather than rely on it, check that the id is taken by someone else.
+      const existing = await this.get(collection, id)
+      if (existing === undefined)
+        throw new CloudBaseRequestError('insert', 409, undefined, undefined)
+      return existing.etag === etag ? etag : undefined
+    }
+    const inserted = (body as { insertedIds?: unknown }).insertedIds
+    if (!Array.isArray(inserted) || inserted.length !== 1 || inserted[0] !== id)
+      throw new TypeError('CloudBase did not keep the document id given on insert')
+    return etag
   }
 
   async update(collection: MetadataCollection, id: string, expectedEtag: string, fields: Record<string, unknown>): Promise<string | undefined> {
@@ -185,27 +218,80 @@ export class CloudBaseDocumentBackend implements DocumentBackend {
     operation: string,
     method: 'GET' | 'POST' | 'PATCH',
     path: string,
-    options: { query?: Record<string, string>, body?: unknown, notFound?: string, conflict?: string },
+    options: { query?: Record<string, string>, body?: unknown, notFound?: string, conflict?: boolean },
   ): Promise<{ status: number, body: unknown }> {
     const search = Object.entries(options.query ?? {})
       .map(([name, value]) => `${encodeURIComponent(name)}=${encodeURIComponent(value)}`)
       .join('&')
-    const url = new URL(`${this.#origin}${path}${search === '' ? '' : `?${search}`}`)
-    const payload = options.body === undefined ? '' : JSON.stringify(options.body)
-    const headers: Record<string, string> = { 'content-type': 'application/json' }
-    headers.authorization = authorize(this.#credentials(), {
-      method,
-      url,
-      contentType: headers['content-type']!,
-      payload,
-      timestamp: Math.floor(this.#now() / 1000),
+    const url = `${this.#origin}${path}${search === '' ? '' : `?${search}`}`
+    const payload = options.body === undefined ? undefined : JSON.stringify(options.body)
+    for (let attempt = 0; ; attempt++) {
+      const credentials = this.#credentials()
+      const authorization = 'apiKey' in credentials
+        ? `Bearer ${credentials.apiKey}`
+        : `Bearer ${(await this.#accessToken(credentials)).value}`
+      const response = await this.#fetch(operation, url, method, authorization, payload)
+      // An access token can be revoked or expire early; get a new one once.
+      if (response.status === 401 && !('apiKey' in credentials) && attempt === 0) {
+        this.#token = undefined
+        continue
+      }
+      const { status, body, code, requestId } = response
+      if (status >= 200 && status < 300 && body !== undefined)
+        return { status, body }
+      if (status === 404 && options.notFound !== undefined && code === options.notFound)
+        return { status, body }
+      if (status === 409 && options.conflict)
+        return { status, body }
+      throw new CloudBaseRequestError(operation, status, code, requestId)
+    }
+  }
+
+  async #accessToken(credentials: { secretId: string, secretKey: string, sessionToken?: string }): Promise<AccessToken> {
+    const owner = createHash('sha256').update(`${credentials.secretId}\n${credentials.sessionToken ?? ''}`).digest('hex')
+    const current = this.#token
+    if (current !== undefined && current.owner === owner && this.#now() < current.expiresAt - TOKEN_REFRESH_MARGIN_MS)
+      return current
+    this.#tokenLoading ??= this.#fetchAccessToken(credentials, owner).finally(() => {
+      this.#tokenLoading = undefined
     })
+    return await this.#tokenLoading
+  }
+
+  async #fetchAccessToken(credentials: { secretId: string, secretKey: string, sessionToken?: string }, owner: string): Promise<AccessToken> {
+    const url = `${this.#origin}${CLIENT_CREDENTIAL_PATH}`
+    const payload = JSON.stringify({ grant_type: 'client_credentials' })
+    const requestedAt = this.#now()
+    const authorization = signCloudBaseRequest(credentials, {
+      method: 'POST',
+      url: new URL(url),
+      contentType: 'application/json',
+      payload,
+      timestamp: Math.floor(requestedAt / 1000),
+    })
+    const { status, body, code, requestId } = await this.#fetch('access token', url, 'POST', authorization, payload)
+    if (status < 200 || status >= 300)
+      throw new CloudBaseRequestError('access token', status, code, requestId)
+    const { access_token: value, expires_in: expiresIn } = (body ?? {}) as { access_token?: unknown, expires_in?: unknown }
+    if (typeof value !== 'string' || value === '' || typeof expiresIn !== 'number' || !(expiresIn > 0))
+      throw new TypeError('CloudBase access token response is malformed')
+    this.#token = { value, expiresAt: requestedAt + expiresIn * 1000, owner }
+    return this.#token
+  }
+
+  async #fetch(
+    operation: string,
+    url: string,
+    method: string,
+    authorization: string,
+    payload: string | undefined,
+  ): Promise<{ status: number, body: unknown, code?: string, requestId?: string }> {
     let response: Response
     try {
       response = await fetch(url, {
         method,
-        headers,
-        body: method === 'GET' ? undefined : payload,
+        headers: { 'content-type': 'application/json', 'authorization': authorization },
+        body: payload,
         signal: AbortSignal.timeout(this.#timeoutMs),
         redirect: 'error',
       })
@@ -222,15 +308,15 @@ export class CloudBaseDocumentBackend implements DocumentBackend {
     catch {
       body = undefined
     }
-    if (response.ok && body !== undefined)
-      return { status: response.status, body }
-    const error = (body ?? {}) as { code?: unknown, request_id?: unknown }
-    const code = typeof error.code === 'string' ? error.code : undefined
-    if (response.status === 404 && options.notFound !== undefined && code === options.notFound)
-      return { status: 404, body }
-    if (response.status === 409 && options.conflict !== undefined && code === options.conflict)
-      return { status: 409, body }
-    throw new CloudBaseRequestError(operation, response.status, code, typeof error.request_id === 'string' ? error.request_id : undefined)
+    // Database errors carry { code, request_id }; authentication errors { error }.
+    const error = (body ?? {}) as { code?: unknown, error?: unknown, request_id?: unknown }
+    const code = typeof error.code === 'string' ? error.code : typeof error.error === 'string' ? error.error : undefined
+    return {
+      status: response.status,
+      body,
+      ...(code === undefined ? {} : { code }),
+      ...(typeof error.request_id === 'string' ? { requestId: error.request_id } : {}),
+    }
   }
 }
 
@@ -258,8 +344,10 @@ export interface CloudBaseSignatureInput {
  * This is Tencent Cloud signature v3 with service `tcb`, except that the
  * canonical URI is the request path instead of `/` and the timestamp (and the
  * session token of temporary keys) are appended to the header, as the
- * CloudBase HTTP API documentation describes. The signed headers are
- * `content-type` and `host`; the canonical query string is the query as sent.
+ * CloudBase HTTP API documentation describes and `@cloudbase/node-sdk` does
+ * (through `@cloudbase/signature-nodejs` with `isCloudApi`). The signed
+ * headers are `content-type` and `host`; the canonical query string is the
+ * query as sent and the payload hash covers the body as sent.
  */
 export function signCloudBaseRequest(
   credentials: { secretId: string, secretKey: string, sessionToken?: string },
@@ -291,10 +379,6 @@ export function signCloudBaseRequest(
   if (credentials.sessionToken !== undefined)
     parts.push(`Token=${credentials.sessionToken}`)
   return parts.join(', ')
-}
-
-function authorize(credentials: CloudBaseCredentials, input: CloudBaseSignatureInput): string {
-  return 'apiKey' in credentials ? `Bearer ${credentials.apiKey}` : signCloudBaseRequest(credentials, input)
 }
 
 function hmac(key: string | Buffer, value: string): Buffer {

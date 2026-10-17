@@ -38,22 +38,30 @@ git-lfs ──HTTPS──▶ CloudBase 入口（TLS 终止，自定义域名）�
 | 项目 | 结论 | 来源 |
 |---|---|---|
 | 地址 | `https://<环境 ID>.api.tcloudbasegateway.com/v1/database/instances/(default)/databases/(default)/`，国际站是 `api.intl.tcloudbasegateway.com` | [NoSQL RESTful API](https://docs.cloudbase.net/http-api/nosql/nosql-restful-api) |
-| 鉴权 | 服务端可以用腾讯云签名 V3（TC3-HMAC-SHA256，服务名 `tcb`），和标准做法的区别是 CanonicalURI 填实际请求路径，签名串后面拼 `Timestamp=`，用临时密钥时再拼 `Token=`；也可以用 `Authorization: Bearer <API Key>`，API Key 是管理员权限、长期有效 | [腾讯云签名 V3 认证](https://docs.cloudbase.net/http-api/basic/tc3-auth)、[AccessToken](https://docs.cloudbase.net/http-api/basic/access-token) |
+| 鉴权 | 文档数据库接口要求 `Authorization: Bearer <AccessToken>`。HTTP API 支持腾讯云签名 V3（TC3-HMAC-SHA256，服务名 `tcb`，CanonicalURI 填实际请求路径，签名串后面拼 `Timestamp=`，临时密钥再拼 `Token=`）；也可以直接用长期有效、管理员权限的 API Key 作 Bearer | [NoSQL RESTful API](https://docs.cloudbase.net/http-api/nosql/nosql-restful-api)、[腾讯云签名 V3 认证](https://docs.cloudbase.net/http-api/basic/tc3-auth)、[AccessToken](https://docs.cloudbase.net/http-api/basic/access-token) |
+| 服务端换取 AccessToken | 官方 `@cloudbase/node-sdk`（3.18.3）在服务端用密钥访问 HTTP API 时，先对 `POST /auth/v1/token/clientCredential`（请求体 `{"grant_type":"client_credentials"}`）做 TC3 签名（`@cloudbase/signature-nodejs`，`isCloudApi: true`），临时密钥同样拼 `Token=`；拿到 `access_token` 后，数据接口都用 `Bearer <access_token>`。返回格式 `{ token_type, access_token, expires_in }` | SDK 源码 `src/auth/index.ts`（`getClientCredential`）、`src/utils/tcbopenapicommonrequester.ts`；[获取或刷新 token](https://docs.cloudbase.net/http-api/auth/auth-grant-token) |
 | 用到的接口 | 插入 `POST .../collections/<集合>/documents`（`{ data: [...] }`）、按 id 查询 `GET .../documents/<id>`、条件查询 `GET .../documents?query=&offset=&limit=&order=`、条件更新 `PATCH .../documents`（`{ query, data: { $set }, multi, upsert }`，返回 `matched`）、条件删除 `POST .../documents/remove`（`{ query, multi }`，返回 `deleted`） | 文档页面附带的 OpenAPI 定义 |
 | 数据格式 | 请求体可以是普通 JSON（Relaxed EJSON），响应一律是 Strict EJSON（数字会变成 `{"$numberInt":"1"}`），服务端会转换回来 | 同上 |
 | 错误码 | 唯一索引冲突 `409 DATABASE_DUPLICATE_WRITE`，集合不存在 `404 DATABASE_COLLECTION_NOT_EXIST`，单个文档不存在 `404 DOCUMENT_NOT_FOUND` | 同上 |
 | 非管理员 | 条件删除对非管理员会自动加上 `_openid` 条件 | 同上 |
 
-服务端的用法：文档 `_id` 用 token id、用户名、锁路径的哈希或审计事件 id，靠插入时 `_id` 冲突实现「不存在才创建」（锁就是这样保证同一路径只有一把）；每个文档带一个随机 `etag` 字段，修改和删除都以 `{ _id, etag }` 为条件，按 `matched` / `deleted` 判断是否成功，没成功就重读重试。
+服务端照搬 SDK 的鉴权方式：用 `TENCENTCLOUD_*` 密钥签名换取 AccessToken，缓存到过期前 5 分钟，密钥轮换（`SecretId` 或 `SessionToken` 变化）时重新换取，数据接口返回 401 时重新换取一次再重试。签名的部分只有这一个请求，形式和 SDK 完全一致：测试替身用官方 `@cloudbase/signature-nodejs` 重新计算签名，服务端算出的 `Authorization` 必须逐字相同。设置了 `YUNBOX_CLOUDBASE_API_KEY` 时直接用它作 Bearer，不换取 token。
 
-以下几点文档里没有写清，**未核实**，阶段 0 时用 `metadata-live.test.ts`（见[手动运行元数据测试](#手动运行-cloudbase-元数据测试)）在真实环境里确认：
+文档 `_id` 用 token id、用户名、锁路径的哈希或审计事件 id，靠插入时 `_id` 冲突实现「不存在才创建」（锁就是这样保证同一路径只有一把）；每个文档带一个随机 `etag` 字段，修改和删除都以 `{ _id, etag }` 为条件，按 `matched` / `deleted` 判断是否成功，没成功就重读重试。
 
-- TC3 签名的细节：示例里的 `SignedHeaders` 是 `content-type;host;x-tc-action`，HTTP API 用不到 `X-TC-Action`，服务端只签 `content-type;host`；GET 请求的 CanonicalQueryString 是否就是发出的查询串；路径里的 `(default)` 是否原样参与签名。签名不通过时返回 401，测试会直接失败。
-- 运行角色的临时密钥能否通过 TC3 调用 HTTP API，以及需要哪些 CAM 权限（见[第 4 步](#4-cam-最小权限)）。如果不行，临时改用 `YUNBOX_CLOUDBASE_API_KEY`（长期有效的服务端 API Key，要定期轮换）。
-- 插入时能否自己指定字符串 `_id`，`_id` 重复时是否返回 `409 DATABASE_DUPLICATE_WRITE`。文档只说 409 是「唯一索引冲突」。如果不是，锁的原子性需要改成在单独字段上建唯一索引。
-- 用 TC3 签名时是否按管理员处理（不受集合安全规则限制、不自动加 `_openid` 条件）。
-- 查询每页最多返回多少条。服务端每页请求 100 条，按实际返回的条数翻页，直到返回空页。
-- 写入后立刻查询是否一定能读到（强一致）。吊销时限依赖这一点。
+已经解决或不再依赖的几点（2026-10-17）：
+
+- **签名细节**：只有换取 token 的 POST 需要签名，没有 GET 查询串、路径编码和 `X-TC-Action` 的问题；签名和官方签名库逐字一致（见上）。
+- **临时密钥**：官方 SDK 用临时密钥换取 token 时就是拼 `Token=<SessionToken>`，服务端做法相同。
+- **自定义 `_id` 和重复错误码**：插入后核对返回的 `insertedIds` 是不是我们给的 `_id`，不是就报错（fail closed）；插入返回任何 409 时都重新读取这个 `_id`，存在就当作「已存在」，不依赖 `DATABASE_DUPLICATE_WRITE` 这个错误码。测试替身覆盖了换一个重复错误码、以及数据库不保留 `_id` 两种情况。
+- **每页上限**：服务端按实际返回的条数翻页，直到返回空页，和服务端的每页上限无关。
+
+仍然**未核实**，只能在真实环境里确认（阶段 0 用 `metadata-live.test.ts`，见[手动运行元数据测试](#手动运行-cloudbase-元数据测试)）：
+
+- 运行角色需要哪些 CAM 权限才能换取 token 和读写数据库，能否限定到单个环境（见[第 4 步](#4-cam-最小权限)）。如果运行角色不行，临时改用 `YUNBOX_CLOUDBASE_API_KEY`（长期有效的服务端 API Key，要定期轮换）。
+- 用密钥换取的 token 是否按管理员处理（不受集合安全规则限制、条件删除不自动加 `_openid`）。SDK 在服务端也用这个 token 访问数据模型和 MySQL，大概率是；如果不是，条件更新和删除会匹配不到文档，表现为 `token revoke` 报「no token matches」或授权修改报冲突，契约测试会失败。
+- 插入时能否自己指定字符串 `_id`。不能时插入会直接报错（服务端不会静默生成别的 id），锁就要改成在单独字段上建唯一索引。
+- 写入后立刻查询是否一定能读到（强一致）。如果有延迟 L，吊销时限变成 5 分钟加 L。
 
 **未核实**：服务绑定运行角色后，平台是否把临时密钥注入为 `TENCENTCLOUD_SECRETID`、`TENCENTCLOUD_SECRETKEY`、`TENCENTCLOUD_SESSIONTOKEN` 环境变量。云函数（SCF）是这样做的，云托管的文档里没有找到。没有注入时的做法见[运行角色与密钥](#5-运行角色与密钥)。
 
@@ -123,7 +131,7 @@ curl -s http://127.0.0.1:8080/_health
 在云托管所在的 CloudBase 环境里（控制台「文档型数据库」，字段名**未核实**）：
 
 1. 新建四个集合：`yunbox_tokens`、`yunbox_grants`、`yunbox_locks`、`yunbox_audit`（改了 `YUNBOX_CLOUDBASE_COLLECTION_PREFIX` 就用对应前缀）。服务端不会自动建集合，集合不存在时请求报 `DATABASE_COLLECTION_NOT_EXIST`。
-2. 集合权限设为最严格的一档（客户端不可读写）。只有服务端和管理命令访问这些集合，网页和小程序都不应该能读到 token 哈希。用 TC3 签名或 API Key 访问时是否绕过这些权限规则**未核实**，部署后用 `token list` 确认能读到数据。
+2. 集合权限设为最严格的一档（客户端不可读写）。只有服务端和管理命令访问这些集合，网页和小程序都不应该能读到 token 哈希。用密钥换取的 token 或 API Key 访问时是否绕过这些权限规则**未核实**，部署后用 `token list` 确认能读到数据。
 3. 开启数据库的自动备份（G2 阶段 5 会演练恢复；备份能力**未核实**）。
 4. 测试用另外四个集合（默认前缀 `yunbox_e2e_`），见[手动运行元数据测试](#手动运行-cloudbase-元数据测试)。
 
@@ -160,7 +168,7 @@ curl -s http://127.0.0.1:8080/_health
 
 - 把地域、APPID、bucket 和前缀换成自己的。不要授予 `GetBucket`（列出对象）、`PutBucketACL`、`PutObjectACL` 或 `cos:*`。
 - 预签名地址用服务端当时的密钥签名，所以 git-lfs 直传的权限也受这个策略限制。
-- 访问文档数据库还需要云开发的权限。TC3 签名调用 CloudBase HTTP API 需要哪个 CAM 动作、能否限定到单个环境，文档里没有找到，**未核实**。先用预设策略确认能跑通，再收窄到只允许这个环境的数据库读写，结论写回本文。不要授予管理环境、云函数或云托管本身的权限。
+- 访问文档数据库还需要云开发的权限。用密钥换取 AccessToken、再访问数据库需要哪个 CAM 动作、能否限定到单个环境，文档里没有找到，**未核实**。先用预设策略确认能跑通，再收窄到只允许这个环境的数据库读写，结论写回本文。不要授予管理环境、云函数或云托管本身的权限。
 
 ### 5. 运行角色与密钥
 

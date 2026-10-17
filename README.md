@@ -44,7 +44,7 @@ pnpm test
 
 命令行的测试位于 `packages/cli/test/`：用真实的 `git` 和 `git-lfs` 在临时目录里检查 `init` 生成的配置和幂等性，并对本仓库的服务端（本地存储加 token）检查 `doctor` 在通过、缺少凭据、只读 token、无效 token 等情况下的输出和退出码。测试使用独立的 HOME 和 `credential.helper store`，不会碰到本机的钥匙串。
 
-端到端测试位于 `packages/server/test/`：`e2e.test.ts` 分别用「本地存储 + 本地元数据」和「COS 测试替身（`packages/core/test/fake-cos-server.ts`，用官方 SDK 重新核对每个签名）+ CloudBase 文档数据库测试替身（`fake-cloudbase-server.ts`，独立重算每个请求的 TC3 签名）」跑同一套 git-lfs 流程（`lfs-workflow.ts`），不需要任何云端凭据。流程通过 `credential.helper store` 把 token 交给 git-lfs，并覆盖只读 token 不能 push、无权限的仓库被拒、过期 token、未提供凭据和吊销后被拒。`metadata.test.ts` 对本地文件版和 CloudBase 版跑同一套元数据契约测试（`metadata-contract.ts`，包括跨实例的并发签发、吊销、授权修改和抢锁）。`cos-live.test.ts` 和 `metadata-live.test.ts` 分别对真实 COS 和真实 CloudBase 运行，默认跳过。
+端到端测试位于 `packages/server/test/`：`e2e.test.ts` 分别用「本地存储 + 本地元数据」和「COS 测试替身（`packages/core/test/fake-cos-server.ts`，用官方 SDK 重新核对每个签名）+ CloudBase 文档数据库测试替身（`fake-cloudbase-server.ts`，用官方签名库 `@cloudbase/signature-nodejs` 重新核对换取 token 的签名，数据请求只认它签发的 token）」跑同一套 git-lfs 流程（`lfs-workflow.ts`），不需要任何云端凭据。流程通过 `credential.helper store` 把 token 交给 git-lfs，并覆盖只读 token 不能 push、无权限的仓库被拒、过期 token、未提供凭据和吊销后被拒。`metadata.test.ts` 对本地文件版和 CloudBase 版跑同一套元数据契约测试（`metadata-contract.ts`，包括跨实例的并发签发、吊销、授权修改和抢锁）。`cos-live.test.ts` 和 `metadata-live.test.ts` 分别对真实 COS 和真实 CloudBase 运行，默认跳过。
 
 ## 启动本地服务
 

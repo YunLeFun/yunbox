@@ -232,7 +232,8 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **两个实现共用一层**：`DocumentMetadataStore` 建在一个很小的文档库接口 `DocumentBackend` 上（`get`、`list`（按字段相等过滤）、`create`（id 已存在就失败）、`update` / `delete`（以 etag 为条件））。每个文档带一个随机 `etag`，每次写入都换新值，条件写入失败就重读重试（带随机退避，最多 16 次）。用随机 etag 而不是递增版本号，是因为锁被删除后同一路径会重新创建，递增版本号会从头开始，旧的解锁请求可能误删新锁。
   - **本地文件版**（`metadata-local.ts`）：每个文档一个 JSON 文件，目录 `0700`、文件 `0600`。创建用 `link`（目标存在就失败，原子）；条件更新和删除持有一个文档级的锁文件（`open(..., 'wx')`），在锁内比较 etag，再用临时文件加 `rename` 原子替换。锁文件超过 10 秒视为崩溃残留，直接删除。文件名对大写字母等字符做百分号编码，`Alice` 和 `alice` 在不区分大小写的文件系统上也不会冲突。
   - **CloudBase 版**（`metadata-cloudbase.ts`）：不用 SDK，直接调用文档数据库的 HTTP API（官方文档的 OpenAPI 定义）。文档存为 `{ _id, etag, ...字段 }`；创建是带 `_id` 的插入，`409 DATABASE_DUPLICATE_WRITE` 表示已存在；条件更新是 `PATCH .../documents` 加 `query: { _id, etag }`、`$set`、`upsert: false`，看 `matched`；条件删除是 `POST .../documents/remove`，看 `deleted`。响应的 Strict EJSON 转回普通值。翻页按实际返回的条数推进，直到空页，不依赖服务端的每页上限。错误信息只含操作名、HTTP 状态、错误码和 request id，不含地址和密钥。
-  - **鉴权**：默认用 TC3-HMAC-SHA256 签名，密钥和 COS 一样每次请求前从 `TENCENTCLOUD_*` 读取，所以运行角色的临时密钥可以同时用于 COS 和数据库，不需要新的长期密钥。官方文档说明了 HTTP API 支持签名 V3 和临时密钥（签名串后面拼 `Timestamp=`、`Token=`）。`YUNBOX_CLOUDBASE_API_KEY` 作为备用（Bearer，长期密钥），只在运行角色不能访问数据库时临时使用。
+  - **鉴权**：照搬官方 `@cloudbase/node-sdk` 的做法：用 `TENCENTCLOUD_*` 密钥对 `POST /auth/v1/token/clientCredential` 做 TC3-HMAC-SHA256 签名换取 AccessToken，数据接口都用 `Bearer <access_token>`（文档数据库接口本来就要求 AccessToken）。token 缓存到过期前 5 分钟，`SecretId` 或 `SessionToken` 变化时重新换取，数据接口返回 401 时重新换取一次。运行角色的临时密钥可以同时用于 COS 和数据库，不需要新的长期密钥。最初的实现对每个数据请求单独签名，GET 查询串、路径编码等细节都没有依据；改成换 token 后只剩一个签名请求，形式和 SDK 逐字一致：`@cloudbase/signature-nodejs`（SDK 用的签名库）作为开发依赖，测试替身用它重算签名并要求 `Authorization` 完全相同，和 G1 用官方 COS SDK 核对签名是同一个做法。`YUNBOX_CLOUDBASE_API_KEY` 作为备用（Bearer，长期密钥），只在运行角色不能访问数据库时临时使用。
+  - **不依赖未核实的插入行为**：插入后核对返回的 `insertedIds` 是不是给定的 `_id`，不是就报错；插入返回任何 409 都重新读取这个 `_id` 判断是否已存在，不依赖 `DATABASE_DUPLICATE_WRITE` 这个错误码。
   - **授权以列表存储**：一个用户的授权存成 `[{ pattern, permission }]` 而不是以仓库名为键的对象，因为仓库名可以含 `.`，文档数据库会把字段名里的 `.` 当成路径。
 - **token 和授权分开**：token 新增 `user`、`expiresAt`、`lastUsedAt`，权限不再写在 token 上，而是来自这个用户的 `RepositoryGrant`（每个用户一个文档）。同一个人的多个 token 权限相同，为阶段 3「管理员按用户授权、用户自助签发 token」做准备。`token create --read/--write` 只增不减地合并进用户授权，收回权限用新增的 `grant set`。token 格式、哈希方式和 `timingSafeEqual` 逐个比较都不变。
 - **过期**：默认 90 天，`--expires-in` 指定（`90d`、`12h`、`30m`，最长 3650 天）。过期在每个请求时按当前时间判断，不受 30 秒缓存影响，过期后和无效 token 一样返回 401。签发的上传、下载地址的过期时间取「快照时间 + 5 分钟」和 token 过期时间中较早的一个，地址不会比 token 活得更久。
@@ -240,7 +241,7 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **吊销时限不变**：服务端每 30 秒重新读取 token 和授权；地址的过期时间仍从授权所用快照的读取时间算起，所以吊销和收回授权最迟 5 分钟完全生效，新增单元测试按时间轴核对了这个上界。
 - **迁移**：`yunbox-server token migrate` 从旧的 `tokens.json`（本地或 COS）读取，每个旧 token 变成同 id、同名、同哈希的 token，用户名等于 token 名，旧 token 的仓库权限合并进这个用户的授权；旧 token 没有过期时间，统一设为迁移后 90 天。每迁移一个 token 在审计日志追加一条 `token.migrate`（actor 为 `migration`），重复执行时跳过已有标记的 token，所以迁移后被吊销的 token 不会被重新导入；中途中断时，授权合并和 token 创建都是幂等的，下次执行会补上标记。旧文件不删除。服务端启动时如果新存储里没有 token、旧文件还在，日志提示执行迁移。
 - **配置**：新增 `--metadata`（`local` / `cloudbase`，COS 存储时默认 `cloudbase`，否则 `local`）和 `--metadata-dir`，以及 `YUNBOX_CLOUDBASE_ENV`、`YUNBOX_CLOUDBASE_ENDPOINT`、`YUNBOX_CLOUDBASE_COLLECTION_PREFIX`、`YUNBOX_CLOUDBASE_API_KEY`。配置自检同样只报变量名，不报值。集合由管理员事先建好，服务端不自动建。
-- **测试**：`metadata-contract.ts` 是一套契约测试，同时用于本地文件版、CloudBase 测试替身和真实 CloudBase（`metadata-live.test.ts`，默认跳过）。并发用例把写入分给两个互不共享内存状态的实例（相当于两个进程）：并发签发和吊销、同一用户的并发授权修改、10 个请求争同一路径的锁（恰好一个成功）、旧锁 id 不能删掉新锁。把本地版的创建改成「先检查再写入」后，抢锁用例会失败。CloudBase 测试替身按官方 OpenAPI 的格式返回 Strict EJSON 和错误码，独立重算每个请求的 TC3 签名，每页最多返回 7 条以覆盖翻页。`e2e.test.ts` 的 COS 用例改为「COS 测试替身 + CloudBase 测试替身」，就是生产的组合；git-lfs 流程增加了过期 token 被拒。命令行测试覆盖了几个管理员（每条命令各自打开存储）同时签发和吊销。
+- **测试**：`metadata-contract.ts` 是一套契约测试，同时用于本地文件版、CloudBase 测试替身和真实 CloudBase（`metadata-live.test.ts`，默认跳过）。并发用例把写入分给两个互不共享内存状态的实例（相当于两个进程）：并发签发和吊销、同一用户的并发授权修改、10 个请求争同一路径的锁（恰好一个成功）、旧锁 id 不能删掉新锁。把本地版的创建改成「先检查再写入」后，抢锁用例会失败。CloudBase 测试替身按官方 OpenAPI 的格式返回 Strict EJSON 和错误码，用官方签名库核对换取 token 的签名，数据请求只认它签发且未过期的 token，每页最多返回 7 条以覆盖翻页；另有开关模拟「重复 `_id` 换一个错误码」和「数据库不保留给定的 `_id`」。`e2e.test.ts` 的 COS 用例改为「COS 测试替身 + CloudBase 测试替身」，就是生产的组合；git-lfs 流程增加了过期 token 被拒。命令行测试覆盖了几个管理员（每条命令各自打开存储）同时签发和吊销。
 
 ### 后续风险
 
@@ -265,7 +266,7 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - 凭据只按 `protocol` + `host` 保存。用户设置了 `credential.useHttpPath=true` 时，git-lfs 查询凭据会带上路径，可能找不到 `init` 存的凭据；`doctor` 也按 host 查询，所以这种情况下 `doctor` 通过而 push 仍会提示输入。
 - Locks API 需要持久化存储：G2 阶段 1 已提供 `LockRepository`（原子创建、按 id 删除），锁不过期、强制解锁只允许管理员已在 goal-g2.md 定下，接口在阶段 2 实现。
 - 对象清理需要扫描仓库历史，确认对象已经没有任何提交引用，第一版不做。
-- **G2 阶段 1 新增**：CloudBase 文档数据库 HTTP API 的几处细节**未核实**，都只在按官方 OpenAPI 写的测试替身上验证过：TC3 签名只签 `content-type;host` 是否被接受、GET 的查询串和路径里的 `(default)` 是否原样参与签名；插入时能否自己指定字符串 `_id`、`_id` 重复是否返回 `409 DATABASE_DUPLICATE_WRITE`（锁的原子性依赖这一点，不行就要改成在单独字段上建唯一索引）；TC3 签名是否按管理员处理、需要哪些 CAM 权限、能否限定到单个环境；查询每页上限。阶段 0 用 `metadata-live.test.ts` 在真实环境确认。
+- **G2 阶段 1 新增**：CloudBase 文档数据库还有几处**未核实**，只能在真实环境确认（阶段 0 用 `metadata-live.test.ts`）：需要哪些 CAM 权限、能否限定到单个环境；用密钥换取的 token 是否按管理员处理（否则条件更新和删除匹配不到文档，契约测试会失败）；插入时能否自己指定字符串 `_id`（不能时插入直接报错，锁要改成在单独字段上建唯一索引）。签名细节、重复错误码、每页上限已经不再依赖（见上面的结论）。
 - **G2 阶段 1 新增**：运行角色的临时密钥能否用于 CloudBase HTTP API **未核实**。不行时只能临时改用 `YUNBOX_CLOUDBASE_API_KEY`，这是长期有效的管理员密钥，违背「运行时不使用长期密钥」，要在阶段 6 安全复查前解决。
 - **G2 阶段 1 新增**：token 名称的唯一性只是签发前查一次，不是原子的；两个管理员同时用同一个名称签发会得到两个同名 token，这时 `token revoke <名称>` 会拒绝并列出 id。用户名（授权文档的 id）是原子唯一的。
 - **G2 阶段 1 新增**：翻页用 offset，查询期间有文档被删除时可能漏掉一条。服务端每 30 秒全量读取一次 token 和授权，被漏掉的 token 会在这 30 秒内返回 401（git-lfs 会删除这条凭据）。30 人规模下 token 总数远小于一页（100 条），基本不会翻页；token 多到需要翻页时，再改成按 `_id` 游标翻页。

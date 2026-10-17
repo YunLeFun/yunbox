@@ -1,8 +1,9 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { Buffer } from 'node:buffer'
-import { createHash, createHmac } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import { createServer } from 'node:http'
+import { sign } from '@cloudbase/signature-nodejs'
 
 /** Credentials the fake accepts: a Tencent Cloud key pair, or a server API key. */
 export interface FakeCloudBaseCredentials {
@@ -27,20 +28,24 @@ const BASE = '/v1/database/instances/(default)/databases/(default)/collections/'
 /**
  * Minimal double of the CloudBase document database HTTP API, covering the
  * calls YunBox makes: insert, get by id, query with equality filters,
- * conditional update and conditional remove.
+ * conditional update and conditional remove, plus the access token exchange
+ * at `/auth/v1/token/clientCredential`.
  *
  * It follows the official OpenAPI description: responses are Strict EJSON
  * (numbers become `{ "$numberInt": "1" }`), a duplicate `_id` is `409
  * DATABASE_DUPLICATE_WRITE`, a missing collection `404
  * DATABASE_COLLECTION_NOT_EXIST`. It returns at most `pageLimit` documents per
- * query whatever the client asks, to exercise paging. Every request must be
- * signed with TC3-HMAC-SHA256 (recomputed here independently of the client)
- * or carry the configured API key.
+ * query whatever the client asks, to exercise paging. The token exchange
+ * must be signed with TC3-HMAC-SHA256 (recomputed here independently of the
+ * client, the way `@cloudbase/signature-nodejs` builds it); database requests
+ * must carry an unexpired access token it issued, or the configured API key.
+ * Switches simulate the API behaviour the documentation leaves open.
  */
 export class FakeCloudBaseServer {
   readonly collections = new Map<string, Map<string, Document>>()
   readonly requests: FakeCloudBaseRequest[] = []
-  readonly #credentials: FakeCloudBaseCredentials
+  /** Credentials it accepts; replace to simulate rotated keys. */
+  credentials: FakeCloudBaseCredentials
   readonly #server = createServer((request, response) => {
     void this.#handle(request, response).catch(() => {
       if (!response.headersSent)
@@ -52,12 +57,20 @@ export class FakeCloudBaseServer {
 
   /** Most documents returned by one query. */
   pageLimit = 7
-  /** Make the next requests fail with this status and code. */
+  /** Make the next database requests fail with this status and code. */
   failures: Array<{ status: number, code: string }> = []
+  /** Lifetime of issued access tokens, in seconds. */
+  tokenLifetimeSeconds = 7200
+  /** Access tokens issued so far, with their expiry in milliseconds. */
+  readonly accessTokens = new Map<string, number>()
+  /** Error code returned for a duplicate `_id` (the documented one by default). */
+  duplicateCode = 'DATABASE_DUPLICATE_WRITE'
+  /** When false, inserts ignore the given `_id` and generate one, as some document databases do. */
+  keepsInsertedIds = true
   origin = ''
 
   constructor(credentials: FakeCloudBaseCredentials, collections: string[]) {
-    this.#credentials = credentials
+    this.credentials = credentials
     for (const name of collections)
       this.collections.set(name, new Map())
   }
@@ -81,8 +94,18 @@ export class FakeCloudBaseServer {
     const rawUrl = request.url ?? '/'
     const [path = '/', query = ''] = rawUrl.split('?', 2)
 
-    if (!this.#authorized(request, path, query, body)) {
-      this.#send(request, response, 401, { code: 'INVALID_ACCESS_TOKEN', message: 'signature mismatch' })
+    if (path === '/auth/v1/token/clientCredential') {
+      if (request.method !== 'POST' || !this.#signed(request, path, query, body) || body !== '{"grant_type":"client_credentials"}') {
+        this.#send(request, response, 401, { error: 'invalid_client', error_code: 2, error_description: 'signature mismatch' }, false)
+        return
+      }
+      const token = randomBytes(24).toString('base64url')
+      this.accessTokens.set(token, Date.now() + this.tokenLifetimeSeconds * 1000)
+      this.#send(request, response, 200, { token_type: 'Bearer', access_token: token, expires_in: this.tokenLifetimeSeconds }, false)
+      return
+    }
+    if (!this.#bearer(request)) {
+      this.#send(request, response, 401, { code: 'INVALID_ACCESS_TOKEN', message: 'token is missing, invalid or expired' })
       return
     }
     const failure = this.failures.shift()
@@ -138,14 +161,16 @@ export class FakeCloudBaseServer {
     if (request.method === 'POST' && documentId === undefined) {
       const inserted = json.data as Document[]
       for (const document of inserted) {
+        if (!this.keepsInsertedIds)
+          document._id = randomBytes(12).toString('hex')
         if (collection.has(String(document._id))) {
-          this.#send(request, response, 409, { code: 'DATABASE_DUPLICATE_WRITE', message: 'duplicate key', request_id: 'req-dup' })
+          this.#send(request, response, 409, { code: this.duplicateCode, message: 'duplicate key', request_id: 'req-dup' })
           return
         }
       }
       for (const document of inserted)
         collection.set(String(document._id), structuredClone(document))
-      this.#send(request, response, 201, { insertedIds: inserted.map(document => document._id) })
+      this.#send(request, response, 201, { insertedIds: inserted.map(document => this.keepsInsertedIds ? document._id : { $oid: document._id }) })
       return
     }
     if (request.method === 'PATCH' && documentId === undefined) {
@@ -162,41 +187,42 @@ export class FakeCloudBaseServer {
     this.#send(request, response, 404, { code: 'NOT_FOUND', message: 'route' })
   }
 
-  #authorized(request: IncomingMessage, path: string, query: string, body: string): boolean {
+  #bearer(request: IncomingMessage): boolean {
     const header = request.headers.authorization ?? ''
-    const credentials = this.#credentials
-    if (credentials.apiKey !== undefined)
-      return header === `Bearer ${credentials.apiKey}`
-    const fields = new Map<string, string>()
-    const [algorithm, ...rest] = header.split(' ')
-    if (algorithm !== 'TC3-HMAC-SHA256')
-      return false
-    for (const part of rest.join(' ').split(', ')) {
-      const separator = part.indexOf('=')
-      fields.set(part.slice(0, separator), part.slice(separator + 1))
-    }
-    const timestamp = Number(fields.get('Timestamp'))
-    if (!Number.isInteger(timestamp) || Math.abs(Date.now() / 1000 - timestamp) > 300)
-      return false
-    if (fields.get('Token') !== credentials.sessionToken)
-      return false
-    const date = new Date(timestamp * 1000).toISOString().slice(0, 10)
-    if (fields.get('Credential') !== `${credentials.secretId}/${date}/tcb/tc3_request` || fields.get('SignedHeaders') !== 'content-type;host')
-      return false
-    const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex')
-    const canonical = `${request.method}\n${path}\n${query}\ncontent-type:${request.headers['content-type']}\nhost:${request.headers.host}\n\ncontent-type;host\n${sha256(body)}`
-    const stringToSign = `TC3-HMAC-SHA256\n${timestamp}\n${date}/tcb/tc3_request\n${sha256(canonical)}`
-    let key: Buffer = createHmac('sha256', `TC3${credentials.secretKey}`).update(date).digest()
-    key = createHmac('sha256', key).update('tcb').digest()
-    key = createHmac('sha256', key).update('tc3_request').digest()
-    return fields.get('Signature') === createHmac('sha256', key).update(stringToSign).digest('hex')
+    if (this.credentials.apiKey !== undefined)
+      return header === `Bearer ${this.credentials.apiKey}`
+    const expiresAt = this.accessTokens.get(header.slice('Bearer '.length))
+    return header.startsWith('Bearer ') && expiresAt !== undefined && Date.now() < expiresAt
   }
 
-  #send(request: IncomingMessage, response: ServerResponse, status: number, body: unknown): void {
-    const code = typeof body === 'object' && body !== null && 'code' in body ? String(body.code) : undefined
+  /** Check a TC3 signature by recomputing it with the official `@cloudbase/signature-nodejs`, as `@cloudbase/node-sdk` builds it. */
+  #signed(request: IncomingMessage, path: string, query: string, body: string): boolean {
+    const header = request.headers.authorization ?? ''
+    const { secretId, secretKey, sessionToken } = this.credentials
+    const timestamp = Number(/, Timestamp=(\d+)/.exec(header)?.[1])
+    if (secretId === undefined || secretKey === undefined || !Number.isInteger(timestamp) || Math.abs(Date.now() / 1000 - timestamp) > 300)
+      return false
+    const host = request.headers.host ?? ''
+    const { authorization } = sign({
+      secretId,
+      secretKey,
+      method: request.method ?? '',
+      url: `http://${host}${path}${query === '' ? '' : `?${query}`}`,
+      headers: { 'content-type': request.headers['content-type'] ?? '', host },
+      params: JSON.parse(body) as Record<string, unknown>,
+      timestamp,
+      isCloudApi: true,
+    })
+    return header === `${authorization}, Timestamp=${timestamp}${sessionToken === undefined ? '' : `, Token=${sessionToken}`}`
+  }
+
+  /** Database responses are Strict EJSON; the authentication API answers plain JSON. */
+  #send(request: IncomingMessage, response: ServerResponse, status: number, body: unknown, ejson = true): void {
+    const record = (typeof body === 'object' && body !== null ? body : {}) as { code?: unknown, error?: unknown }
+    const code = record.code !== undefined ? String(record.code) : record.error !== undefined ? String(record.error) : undefined
     this.requests.push({ method: request.method ?? '', path: (request.url ?? '').split('?')[0]!, status, ...(code === undefined ? {} : { code }) })
     response.writeHead(status, { 'content-type': 'application/json' })
-    response.end(JSON.stringify(toStrictEjson(body)))
+    response.end(JSON.stringify(ejson ? toStrictEjson(body) : body))
   }
 }
 

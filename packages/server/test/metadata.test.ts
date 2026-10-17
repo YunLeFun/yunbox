@@ -119,14 +119,67 @@ describe('cloudBase metadata over HTTP', () => {
 
     const wrongKey = new CloudBaseMetadataStore({ envId: 'yunbox-test-1a2b3c', endpoint: server.origin, credentials: () => ({ ...credentials, secretKey: 'wrong' }) })
     const rejected = await wrongKey.tokens.list().then(() => undefined, (error: unknown) => error as Error)
-    expect(rejected?.message).toMatch(/HTTP 401/)
+    expect(rejected?.message).toBe('CloudBase access token failed with HTTP 401 (invalid_client)')
     for (const error of [missing, failed, rejected]) {
       for (const secret of [credentials.secretId, credentials.secretKey, credentials.sessionToken, server.origin, '127.0.0.1'])
         expect(error!.message).not.toContain(secret)
     }
 
     const unreachable = new CloudBaseMetadataStore({ envId: 'yunbox-test-1a2b3c', endpoint: 'http://127.0.0.1:1', credentials: () => credentials })
-    await expect(unreachable.tokens.list()).rejects.toThrow(/^CloudBase list request failed: TypeError$/)
+    await expect(unreachable.tokens.list()).rejects.toThrow(/^CloudBase access token request failed: TypeError$/)
+  })
+
+  it('exchanges the key pair for an access token once, and renews it when needed', async () => {
+    server = await new FakeCloudBaseServer(credentials, collections).start()
+    let now = Date.now()
+    let current = credentials
+    const store = new CloudBaseMetadataStore({ envId: 'yunbox-test-1a2b3c', endpoint: server.origin, credentials: () => current, now: () => now })
+    const tokenRequests = (): number => server.requests.filter(request => request.path === '/auth/v1/token/clientCredential').length
+
+    await Promise.all(Array.from({ length: 5 }, () => store.tokens.list()))
+    await store.grants.list()
+    expect(tokenRequests()).toBe(1)
+    // Only the token exchange is signed; database requests carry the token.
+    expect(server.requests.filter(request => request.status === 401)).toEqual([])
+
+    // Rotated temporary keys get their own token.
+    current = { ...credentials, sessionToken: 'rotated-session-token' }
+    server.credentials = current
+    await store.tokens.list()
+    expect(tokenRequests()).toBe(2)
+
+    // A token rejected early is replaced once, transparently.
+    server.accessTokens.clear()
+    await store.tokens.list()
+    expect(tokenRequests()).toBe(3)
+    expect(server.requests.filter(request => request.status === 401)).toHaveLength(1)
+
+    // Renewed 5 minutes before it expires.
+    server.tokenLifetimeSeconds = 360
+    const renewing = new CloudBaseMetadataStore({ envId: 'yunbox-test-1a2b3c', endpoint: server.origin, credentials: () => current, now: () => now })
+    await renewing.tokens.list()
+    expect(tokenRequests()).toBe(4)
+    now += 60_000 - 1
+    await renewing.tokens.list()
+    expect(tokenRequests()).toBe(4)
+    now += 1
+    await renewing.tokens.list()
+    expect(tokenRequests()).toBe(5)
+  })
+
+  it('does not depend on the exact duplicate error code, and fails closed if ids are not kept', async () => {
+    server = await new FakeCloudBaseServer(credentials, collections).start()
+    server.duplicateCode = 'SOME_OTHER_DUPLICATE_CODE'
+    const store = new CloudBaseMetadataStore({ envId: 'yunbox-test-1a2b3c', endpoint: server.origin, credentials: () => credentials })
+    const repository = { owner: 'team', repo: 'assets' }
+    const attempts = await Promise.all(Array.from({ length: 6 }, () => store.locks.create({ repository, path: 'a.psd', owner: 'alice' })))
+    expect(attempts.filter(result => result.created)).toHaveLength(1)
+    const token = sampleToken()
+    expect(await store.tokens.create(token)).toBe(true)
+    expect(await store.tokens.create(token)).toBe(false)
+
+    server.keepsInsertedIds = false
+    await expect(store.tokens.create(sampleToken())).rejects.toThrow('CloudBase did not keep the document id given on insert')
   })
 
   it('pages through query results larger than the server page size', async () => {
