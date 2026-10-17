@@ -288,7 +288,9 @@ describe('server limits, error format and logging', () => {
     await expectLfsError(failure, 500, /^Internal server error$/)
 
     await waitFor(() => logs.length >= 7, 1000)
-    expect(logs.map(entry => entry.status)).toEqual([200, 200, 200, 200, 200, 401, 500])
+    // Entries are written when a response closes, so the download, which ends
+    // only after the file stream does, may be logged after the next request.
+    expect(logs.map(entry => entry.status).sort()).toEqual([200, 200, 200, 200, 200, 401, 500])
     expect(logs.every(entry => !entry.path.includes('?'))).toBe(true)
     expect(logs.filter(entry => entry.status === 200).every(entry => entry.tokenId?.startsWith('tok_'))).toBe(true)
     expect(logs.at(-1)?.error).toContain('[url]')
