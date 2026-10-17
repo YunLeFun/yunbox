@@ -19,7 +19,11 @@
 
 模板里用不到的部分（`pkg-placeholder`、`apps/web` 示例等）删掉，M3 时再按需加回来。端到端测试放在 `packages/server/test/` 或根目录 `test/e2e/`，二选一并在 README 说明。
 
-## 当前目标：M1 协议验证版
+## 当前目标：G1 真实可用版
+
+见 [docs/goal.md](./docs/goal.md)。其中的范围取代下面 M1 一节的限制；M1 一节的代码约定（ESM、`catalog:`、tsdown、JSDoc、日志脱敏等）继续有效。
+
+## 已完成：M1 协议验证版（2026-10-15）
 
 只做 `docs/plan.md` 第 6 节 M1 的范围，第 7 节「第一版暂缓」中的内容一律不做。
 
