@@ -58,6 +58,8 @@
 
 ### 阶段 3：部署
 
+> 进度（2026-10-17）：不需要云账号的部分已完成：Dockerfile（非 root、只含生产依赖）、`GET /_health`、全部配置来自环境变量（命令行参数优先）、启动时的配置自检、部署文档 [deploy.md](./deploy.md)，并在本地用 Docker 和本地存储做了冒烟测试。**真实部署还要等你提供 CloudBase 环境**（以及 COS bucket、CAM 角色）；部署文档里标「未核实」的平台细节要在控制台逐项确认。结论和新风险见 plan.md 第 12 节。
+
 - 新增 Dockerfile 和部署文档：运行角色的 CAM 权限只授予 `PutObject`、`GetObject`、`HeadObject`、`DeleteObject`（删除只用于标记对象），bucket 私有读写，开启费用告警。
 - 配置全部来自环境变量，`.lfsconfig` 只写 `lfs.url`。
 - 健康检查接口，以及启动时的配置自检（缺少什么就明确报错）。

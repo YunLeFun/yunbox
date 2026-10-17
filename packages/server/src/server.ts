@@ -11,8 +11,10 @@ import { createRequestHandler } from './request-handler.ts'
 import { SignedActionFactory } from './signed-actions.ts'
 import { TokenAuthenticator } from './tokens.ts'
 
-const DEFAULT_HOST = '127.0.0.1'
-const DEFAULT_PORT = 8080
+/** Default listen address. */
+export const DEFAULT_HOST = '127.0.0.1'
+/** Default port when none is configured. */
+export const DEFAULT_PORT = 8080
 const DEFAULT_MAX_CONCURRENT_REQUESTS = 32
 const DEFAULT_MAX_CONCURRENT_TRANSFERS = 4
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
@@ -135,7 +137,14 @@ export function isLoopbackHost(host: string): boolean {
   return isIP(host) === 4 && host.startsWith('127.')
 }
 
-function resolvePublicUrl(host: string, value: string | undefined): string | undefined {
+/**
+ * Validate the external origin for a listen host and normalize it.
+ *
+ * @returns The origin, or `undefined` when none is configured on a loopback host.
+ * @throws {TypeError} when it is missing on a non-loopback host, not https
+ * there, or not a bare origin.
+ */
+export function resolvePublicUrl(host: string, value: string | undefined): string | undefined {
   const loopback = isLoopbackHost(host)
   if (value === undefined) {
     if (!loopback)
