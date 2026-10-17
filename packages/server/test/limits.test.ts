@@ -12,7 +12,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { LFS_JSON_MEDIA_TYPE, LocalFileObjectStorage } from '@yunbox/core'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { describeErrorForLog, redactLogText } from '../src/logging.ts'
-import { MAX_JSON_BODY_BYTES } from '../src/request-handler.ts'
+import { LINGER_TIMEOUT_MS, MAX_DISCARDED_BODY_BYTES, MAX_JSON_BODY_BYTES } from '../src/request-handler.ts'
 import { startYunBoxServer } from '../src/server.ts'
 import { createToken } from '../src/tokens.ts'
 import { basicAuth, batch, batchRequest, expectLfsError, getAction, postJson } from './http-helpers.ts'
@@ -167,6 +167,78 @@ describe('server limits, error format and logging', () => {
     expect(chunked).toMatchObject({ status: 413 })
     expect(JSON.parse((chunked as { body: string }).body)).toMatchObject({ message: expect.stringContaining('larger than the size') })
     expect(await new LocalFileObjectStorage(directory).inspectObject(repository, oid)).toBeUndefined()
+  })
+
+  it('keeps the connection open after an early 401 until the client stops uploading', async () => {
+    const server = await start()
+    const socket = connect(Number(new URL(server.url).port), '127.0.0.1')
+    pending.push(socket)
+    const declaredBytes = 256 * 1024 * 1024
+    let writtenBytes = 0
+    let closedAt: number | undefined
+    let failure: Error | undefined
+    const chunk = Buffer.alloc(64 * 1024, 0x11)
+    const pump = (): void => {
+      while (writtenBytes < declaredBytes && socket.write(chunk))
+        writtenBytes += chunk.byteLength
+    }
+    socket.on('drain', () => {
+      writtenBytes += chunk.byteLength
+      pump()
+    })
+    socket.on('error', (error) => {
+      failure = error
+    })
+    socket.on('close', () => {
+      closedAt = Date.now()
+    })
+    const received: Buffer[] = []
+    const response = new Promise<string>((resolve) => {
+      socket.on('data', (data: Buffer) => {
+        received.push(data)
+        const text = Buffer.concat(received).toString()
+        const headerEnd = text.indexOf('\r\n\r\n')
+        const length = /content-length: (\d+)/i.exec(text)
+        if (headerEnd !== -1 && length !== null && text.length >= headerEnd + 4 + Number(length[1]))
+          resolve(text)
+      })
+    })
+    socket.write(`PUT /team/assets/objects/${'e'.repeat(64)}?size=${declaredBytes} HTTP/1.1\r\nHost: localhost\r\nContent-Length: ${declaredBytes}\r\n\r\n`)
+    pump()
+
+    const raw = await response
+    const respondedAt = Date.now()
+    expect(raw).toMatch(/^HTTP\/1\.1 401 /)
+    expect(raw).toContain(`Content-Type: ${LFS_JSON_MEDIA_TYPE}`)
+    // Closing now would reset a client that is still writing before it reads the 401.
+    await delay(300)
+    expect(failure).toBeUndefined()
+    expect(closedAt).toBeUndefined()
+
+    // A client that never stops is cut off after the linger timeout, having
+    // pushed little more than the discard limit and the socket buffers.
+    await waitFor(() => closedAt !== undefined, LINGER_TIMEOUT_MS + 3000)
+    expect(closedAt! - respondedAt).toBeGreaterThanOrEqual(LINGER_TIMEOUT_MS - 500)
+    expect(writtenBytes).toBeLessThan(MAX_DISCARDED_BODY_BYTES + 32 * 1024 * 1024)
+    expect(logs.find(entry => entry.status === 401)).toMatchObject({ method: 'PUT' })
+  }, 20_000)
+
+  it('discards a small unauthenticated body and keeps the connection reusable', async () => {
+    const server = await start()
+    const socket = connect(Number(new URL(server.url).port), '127.0.0.1')
+    pending.push(socket)
+    const received: Buffer[] = []
+    socket.on('data', (data: Buffer) => received.push(data))
+    const responses = async (count: number): Promise<string> => {
+      await waitFor(() => (Buffer.concat(received).toString().match(/HTTP\/1\.1 \d{3} /g)?.length ?? 0) >= count, 5000)
+      return Buffer.concat(received).toString()
+    }
+    const body = JSON.stringify({ operation: 'download', objects: [{ oid: 'f'.repeat(64), size: 1 }] })
+    socket.write(`POST /team/assets/objects/batch HTTP/1.1\r\nHost: localhost\r\nContent-Type: ${LFS_JSON_MEDIA_TYPE}\r\nContent-Length: ${body.length}\r\n\r\n`)
+    expect(await responses(1)).toMatch(/^HTTP\/1\.1 401 /)
+    socket.write(body)
+    socket.write('GET /_health HTTP/1.1\r\nHost: localhost\r\n\r\n')
+    expect(await responses(2)).toMatch(/HTTP\/1\.1 200 OK[\s\S]*\{"status":"ok"\}$/)
   })
 
   it('uses the LFS JSON error format for routing, method, body and malformed HTTP errors', async () => {

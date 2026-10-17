@@ -35,6 +35,15 @@ import { permits, resolvePermission, TokenStoreUnavailableError } from './tokens
 export const MAX_JSON_BODY_BYTES = 1024 * 1024
 
 /**
+ * Most bytes of an unread request body discarded after an early error
+ * response; a body that fits keeps the connection reusable.
+ */
+export const MAX_DISCARDED_BODY_BYTES = MAX_JSON_BODY_BYTES
+
+/** How long a connection stays open after an early error response, for the client to read it. */
+export const LINGER_TIMEOUT_MS = 5000
+
+/**
  * Unauthenticated liveness endpoint for container platforms. It answers
  * `GET` / `HEAD` with `{"status":"ok"}` and never touches storage or reveals
  * configuration. Repository owners must start with a letter or digit, so the
@@ -483,9 +492,52 @@ function sendError(request: IncomingMessage, response: ServerResponse, context: 
   const { status, message, headers } = toHttpError(error)
   if (status >= 500)
     context.error ??= describeErrorForLog(error)
-  // Stop reading an unconsumed upload instead of draining it into the void.
-  const connection: Record<string, string> = request.complete ? {} : { Connection: 'close' }
-  sendJson(response, status, { message, request_id: context.id }, { ...headers, ...connection })
+  const body = { message, request_id: context.id }
+  if (request.complete || request.destroyed) {
+    sendJson(response, status, body, headers)
+    return
+  }
+  if (request.readableFlowing === null) {
+    // Nothing of the body has been read yet, typically the 401 for git-lfs's
+    // first upload, which it sends without credentials.
+    lingerAfterEarlyResponse(request)
+    sendJson(response, status, body, headers)
+    return
+  }
+  // A partly read body is not drained into the void.
+  sendJson(response, status, body, { ...headers, Connection: 'close' })
+}
+
+/**
+ * Keep a connection open after an error response that was sent before its
+ * request body was read: discard up to {@link MAX_DISCARDED_BODY_BYTES} of the
+ * body, then stop reading. A body that ends within the limit leaves the
+ * connection usable; otherwise it is closed after {@link LINGER_TIMEOUT_MS}
+ * unless the client hangs up first.
+ *
+ * Closing a socket that still has unread data makes the kernel answer with a
+ * reset. A client that is still writing the body (git-lfs sends the first
+ * upload of a fresh repository without credentials) can then fail with EPIPE
+ * or ECONNRESET before it reads the 401, and never retries with credentials.
+ * Once reading stops, TCP flow control holds the client back, so nothing is
+ * buffered beyond the socket's own buffers.
+ */
+function lingerAfterEarlyResponse(request: IncomingMessage): void {
+  const { socket } = request
+  let discardedBytes = 0
+  const timer = setTimeout(() => socket.destroy(), LINGER_TIMEOUT_MS)
+  const stop = (): void => {
+    clearTimeout(timer)
+    socket.off('close', stop)
+  }
+  socket.once('close', stop)
+  // A fully discarded body leaves the connection usable for the next request.
+  request.once('end', stop)
+  request.on('data', (chunk: Buffer) => {
+    discardedBytes += chunk.byteLength
+    if (discardedBytes > MAX_DISCARDED_BODY_BYTES)
+      request.pause()
+  })
 }
 
 function toHttpError(error: unknown): HttpError {
