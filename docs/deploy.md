@@ -35,7 +35,8 @@ git-lfs ──HTTPS──▶ CloudBase 入口（TLS 终止，自定义域名）�
 仓库根目录的 [Dockerfile](../Dockerfile) 是多阶段构建：
 
 - 构建阶段按 `package.json#packageManager` 安装 pnpm，用锁文件安装依赖、构建 `@yunbox/core` 和 `@yunbox/server`，再用 `pnpm deploy --prod` 生成只含生产依赖的目录（目前只有构建产物和 `@yunbox/core`，没有第三方运行时依赖）。
-- 运行阶段基于 `node:24-bookworm-slim`，以内置的非 root 用户 `node` 运行，应用文件归 root 所有、服务用户不能修改。
+- 基础镜像固定为 `node:24.22.0-bookworm-slim` 的摘要（多架构，含 amd64 和 arm64），Dependabot 每周检查更新。
+- 运行阶段以内置的非 root 用户 `node` 运行，应用文件归 root 所有、服务用户不能修改。
 - 默认环境变量：`YUNBOX_HOST=0.0.0.0`、`YUNBOX_STORAGE=cos`、`YUNBOX_STORAGE_DIR=/data`（只在本地测试用 `local` 存储时使用）。
 - 入口是 `node /app/dist/cli.mjs`，默认参数 `serve`，所以 `docker run <镜像> token list` 可以直接运行管理命令。
 - Docker `HEALTHCHECK` 请求 `GET /_health`。CloudBase 是否使用镜像里的 `HEALTHCHECK` **未核实**，以控制台的健康检查配置为准。

@@ -7,6 +7,11 @@ shellEmulator: true
 packages:
   - packages/*
 
+# Dev-only: @antfu/eslint-config -> @eslint/markdown -> micromark-extension-math
+# pins katex ^0.16, which has a prototype pollution advisory fixed in 0.18.2.
+overrides:
+  katex: ^0.18.2
+
 allowBuilds:
   esbuild: true
 

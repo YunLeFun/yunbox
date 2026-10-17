@@ -69,7 +69,7 @@ git-lfs 客户端（原版） ──Batch API / Verify / Locks──▶ YunBox �
 - **按仓库区分读写权限**；越权访问一律拒绝，不能靠猜 oid 读到其他仓库的对象（由按仓库隔离保证）。
 - **共享 token 只能用于本地或协议测试，不能作为团队正式方案。** 正式方案是每人一个 token、可以单独吊销，由 Git 凭据管理器保存，以后接入统一账号体系。
 - 部署时**必须用 HTTPS**（因为 Basic 认证的内容是明文）。
-- **服务端不保存长期密钥**：云函数绑定运行角色，平台自动注入临时密钥；CAM 权限只授予对应 bucket 下的 `PutObject`、`GetObject`、`HeadObject`。
+- **服务端不保存长期密钥**：服务绑定运行角色，由平台注入临时密钥（CloudBase 云托管的注入方式未核实，见 [deploy.md](./deploy.md)）；CAM 权限只授予对应 bucket 前缀下的 `PutObject`、`GetObject`、`HeadObject`、`DeleteObject`（删除只用于已校验标记）。
 - bucket 设为私有读写，并开启费用告警。
 - 地址的有效期要短；**日志脱敏**：不记录预签名地址、token、Authorization 头。
 - 加上大小限制（第一版单个文件上限 2 GB）、请求超时、并发上限，并统一错误处理。
@@ -225,7 +225,7 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - 服务端看不到客户端用的是 http 还是 https（不读 `X-Forwarded-Proto`），明文 HTTP 能否到达服务完全取决于 CloudBase 入口。部署时要按 deploy.md 用 `curl http://...` 确认会跳转或被拒绝；如果入口会转发明文 HTTP，就只能靠所有人的 `lfs.url` 写 https。
 - CloudBase 路由的网关鉴权如果开启，可能会占用 `Authorization` 头，导致 git-lfs 的 Basic 认证失效，必须保持关闭（**未核实**）。
 - CloudBase 健康检查的探测方式和路径文档里没有写。如果只有 TCP 探测，事件循环卡死时实例不会被重启；镜像里的 Docker `HEALTHCHECK` 是否被平台使用也**未核实**。
-- 基础镜像只固定到 `node:24-bookworm-slim` 标签，没有固定摘要，重新构建可能拿到不同的 Node 24 补丁版本。试点稳定后可以改成固定摘要，并定期更新。
+- 基础镜像固定到 `node:24.22.0-bookworm-slim` 的多架构索引摘要，由 Dependabot 每周提出更新。合并这类更新前要确认 CI 和镜像构建通过；Dependabot 不会自动重新构建已部署的镜像。
 - 真实 COS 尚未实测：预签名签名、`If-Match`、临时密钥和 CAM 最小权限都只在测试替身上验证过，需要用 `COS E2E` 工作流在真实 bucket 上跑一遍。这个工作流现在也会在随机前缀下写入并删除 `_yunbox/tokens.json`。
 - token 文档没有并发保护：两个管理员同时执行 `token create` / `revoke` 时，后写入的会覆盖先写入的。COS 的普通 PUT 不支持按 ETag 条件写入，G1 只有一两个管理员，先在文档里约定同一时间只有一人管理 token；以后可以改成写入后读回核对，或者换成每个 token 一个对象。
 - token 文档和对象放在同一个 bucket 里，运行角色本来就有这个前缀的读写权限，所以服务端被攻破时 token 哈希也会暴露（但哈希不能反推出 token）。如果需要更强的隔离，可以把 token 文档放到单独的前缀，并给管理命令和服务端分配不同的 CAM 权限。
