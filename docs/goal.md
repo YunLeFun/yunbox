@@ -65,6 +65,8 @@
 
 ### 阶段 4：命令行（M3 的最小部分）
 
+> 进度（2026-10-17）：已完成，用真实 git 和 git-lfs 测了 `init` 的幂等性和生成的配置，并对本地服务端测了 `doctor` 在通过、缺少凭据、只读 token、无效 token、无权限、服务不可达等情况下的输出和退出码。`yunbox` 和 `git-yunbox` 指向同一个入口，在 macOS 上通过 `pnpm pack` 加 `npm install -g` 实测可用；Windows 上的 shim 还没实测（留到阶段 5）。实现时补充了 `doctor --read-only`（只需要拉取的人不要求写权限）和 `init --types`，结论和新风险见 plan.md 第 12 节。
+
 - 新建 `packages/cli`，一个包同时注册 `yunbox` 和 `git-yunbox`。
 - `git yunbox init --url <服务地址>`：检查 git-lfs → `git lfs install` → 按素材类型生成 `.gitattributes` → 写入 `.lfsconfig` 的 `lfs.url` → 设置 `lfs.locksverify=false` 并说明原因 → 引导把 token 存进凭据管理器。
 - `yunbox doctor`：检查 git、git-lfs 版本、`lfs.url`、HTTPS、凭据、连通性、读写权限，每个失败项都附修复命令。

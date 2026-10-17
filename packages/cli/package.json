@@ -1,0 +1,34 @@
+{
+  "name": "yunbox",
+  "type": "module",
+  "version": "0.0.0",
+  "private": true,
+  "description": "YunBox 命令行：git yunbox init、yunbox doctor、yunbox status",
+  "license": "MIT",
+  "sideEffects": false,
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./cli": "./dist/cli.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "bin": {
+    "git-yunbox": "./dist/cli.mjs",
+    "yunbox": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": "^22.18.0 || ^24.11.0 || >=26.0.0"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "start": "tsx src/cli.ts"
+  },
+  "devDependencies": {
+    "@yunbox/core": "workspace:*",
+    "@yunbox/server": "workspace:*"
+  }
+}

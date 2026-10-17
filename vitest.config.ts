@@ -5,6 +5,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@yunbox/core': fileURLToPath(new URL('./packages/core/src/index.ts', import.meta.url)),
+      '@yunbox/server': fileURLToPath(new URL('./packages/server/src/index.ts', import.meta.url)),
     },
   },
   test: {

@@ -66,6 +66,15 @@ importers:
         specifier: 'catalog:'
         version: 5.0.4(@types/node@24.19.2)(vite@8.3.4(@types/node@24.19.2)(esbuild@0.28.2)(tsx@4.23.15)(yaml@2.9.1))
 
+  packages/cli:
+    devDependencies:
+      '@yunbox/core':
+        specifier: workspace:*
+        version: link:../core
+      '@yunbox/server':
+        specifier: workspace:*
+        version: link:../server
+
   packages/core: {}
 
   packages/server:

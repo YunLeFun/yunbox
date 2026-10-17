@@ -195,6 +195,21 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
   - 日志：每个请求一行 JSON，包含请求 id、方法、去掉查询串的路径、状态码、耗时和 token id；5xx 时记录脱敏后的错误名和信息（URL 换成 `[url]`，token、Basic 凭据和签名字段都替换掉）。从不记录请求头、查询串和完整地址。
 - **本地存储的上传大小限制**：原来用 Transform 限制大小，超限时要等客户端断开 pipeline 才会结束，服务端发不出 413。改成在异步迭代里抛错后，超限时能立即返回 413。
 
+### G1 阶段 4 已定结论（2026-10-17）
+
+- **一个包两个命令**：`packages/cli`（包名 `yunbox`，私有）的 `bin` 同时注册 `yunbox` 和 `git-yunbox`，指向同一个 `dist/cli.mjs`，两种写法行为完全一样。tsdown 的 `exports: true` 会按包名把多个 bin 合并成一个（`@yunbox/server` 的 bin 因此被改写成了 `server`），所以 CLI 在 `tsdown.config.ts` 里显式列出两个 bin，并有测试核对 `package.json`。根目录的私有包原来也叫 `yunbox`，和 CLI 重名会让 `pnpm --filter yunbox` 选错包，已改名为 `yunbox-monorepo`。
+- **运行时零依赖**：`@yunbox/core` 只作为开发依赖，构建时把用到的校验函数打进 `dist`。所以 `pnpm pack` 出来的包可以直接 `npm install -g`，不需要先发布 `@yunbox/core`。参数解析用 `node:util` 的 `parseArgs`，HTTP 用全局 `fetch`。
+- **输出用中文**：服务端命令（`yunbox-server`）面向管理员，保持英文；协作者用的 CLI 输出和帮助都是中文。
+- **`init` 先校验后修改**：地址、素材类型和 `--token-stdin` 读到的 token 全部校验通过后，才执行 `git lfs install` 和写文件，参数错误时仓库保持原样。
+- **`lfs.url` 的格式**：必须是 `<origin>/<owner>/<repo>`（末尾斜杠会去掉），owner 和 repo 用 `@yunbox/core` 的规则校验；拒绝带用户名、密码、查询参数或 `#` 的地址；除 `localhost`、`127.0.0.0/8`、`[::1]` 以外必须是 https。`.lfsconfig` 里已有不同地址时不覆盖，需要 `--force`。
+- **`.gitattributes` 合并规则**：按扩展名模式（`*.png`）判断，只要已有任何规则（包括不走 LFS 的 `*.wav binary`），就不再添加，并提示哪些扩展名没有走 LFS。已有内容逐字保留，新规则沿用文件原来的换行符（CRLF 或 LF）。再次运行或增加 `--types` 时只追加缺少的规则。
+- **凭据**：用户名固定写 `yunbox`（服务端忽略用户名）。token 只从标准输入或不回显的交互输入读取，命令行参数里出现 `--token` / `--password` 会直接报错。存入前检查格式（`ybx_` 开头、无空白），存入后用 `git credential fill` 读回核对。已有凭据时默认保留；换 token 时先 `reject` 旧凭据再 `approve` 新的，避免同一主机留下两条。没有配置凭据管理器时，`git credential approve` 会静默成功但什么都不保存，所以先用 `git config --get-urlmatch credential.helper` 检查，没有就报错并给出各平台的配置命令。
+- **非交互地读凭据**：`doctor` 和 `init` 查询凭据时设置 `GIT_TERMINAL_PROMPT=0`、清空 `GIT_ASKPASS` / `core.askPass`，并设置 `GCM_INTERACTIVE=never` / `credential.interactive=false`，保证只读取已保存的凭据，不弹终端提示或 Git Credential Manager 的登录窗口。
+- **`doctor` 的权限试探**：对 `<lfs.url>/objects/batch` 发三次请求，对象固定为 `yunbox doctor probe` 的 SHA-256（19 字节）：不带凭据的 download 判断连通性（期望 401 或 200 的 LFS JSON 响应），带 token 的 download 判断读权限，带 token 的 upload 判断写权限。upload batch 只会签发上传地址，不写任何数据，所以对 COS 存储也没有副作用。401 报告「token 无效或已吊销」，403 报告「没有权限」或「只有读权限」，并附上服务端的 message 和 request_id。不跟随重定向，避免把 token 发给其他 origin；`lfs.url` 是非本机的 http 时，跳过所有需要 token 的检查。`doctor` 只诊断，不会像 git-lfs 那样在 401 后删除凭据。
+- **`doctor` 退出码**：任一项 `fail` 时为 1，`warn`（例如 `lfs.locksverify` 没设为 false）不影响退出码。只读 token 默认算失败，因为大多数接入者要推送；只需要拉取的人用 `--read-only`。
+- **`status` 的数据来源**：`git lfs ls-files --json`（git-lfs 3.2.0 引入，所以最低版本定为 3.2.0），按 oid 去重统计对象数量和总大小，`downloaded` 字段给出本地已下载的数量。git 最低版本定为 2.30.0，只是测试过的下限，没有依赖更新版本的特性。
+- **`git yunbox --help`**：Git 会把 `git <命令> --help` 改写成 `git help <命令>` 去找 man 手册，所以 CLI 提供 `help` 子命令，文档里写 `git yunbox help`。
+
 ### 后续风险
 
 - 真实 COS 尚未实测：预签名签名、`If-Match`、临时密钥和 CAM 最小权限都只在测试替身上验证过，需要用 `COS E2E` 工作流在真实 bucket 上跑一遍。这个工作流现在也会在随机前缀下写入并删除 `_yunbox/tokens.json`。
@@ -204,6 +219,11 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - git-lfs 在新仓库里的第一次上传会先不带凭据发送，收到 401 后重试。服务端会在读请求体之前拒绝并断开连接，但客户端可能已经通过网络发出了一部分请求体；大文件的首次 push 会因此多花一点流量。COS 直传模式下上传地址不经过服务端，没有这个问题。
 - Basic 认证的内容是明文，公网部署时 TLS 必须在 CloudBase 的入口终止，服务端只监听容器内部地址。阶段 3 需要确认 CloudBase 云托管不会把 HTTP 请求转发到公网。
 - ETag 在单次 PUT 时是内容的 MD5。有写权限的人理论上可以用 MD5 碰撞构造同样大小、同样 ETag 的不同内容，在地址有效期内覆盖已校验对象；这种情况由客户端下载时的 SHA-256 校验兜底，第一版不做服务端哈希校验。
-- Windows 下 npm 生成的 `git-yunbox` shim 能否被 Git for Windows 识别，需要实测；长期考虑用 Node SEA 或 `bun build --compile` 打成单个可执行文件。
+- Windows 下 npm 生成的 `git-yunbox` shim（`git-yunbox.cmd`、`git-yunbox.ps1` 和无扩展名的 sh 脚本）能否被 Git for Windows 的 `git yunbox` 找到，**仍未实测**；自动测试只在 macOS / Linux 上用 sh shim 验证了 `git yunbox` 和 `yunbox` 输出一致。阶段 5 要在 Windows 上实测，不行就改用 Node SEA 或 `bun build --compile` 打成单个可执行文件。
+- 命令行目前只能从仓库 `pnpm pack` 后 `npm install -g` 安装，协作者需要 Node.js 22.18+。npm 包名和发布方式还没定；如果试点里有人没有 Node.js，就需要单文件可执行程序。
+- `.gitattributes` 只生成小写扩展名的规则（`*.png`）。Linux 和 CI 上 Git 默认区分大小写，`HERO.PNG` 这类文件不会走 LFS，会作为普通文件提交进 Git 历史。macOS 和 Windows 上 `core.ignorecase=true` 时能匹配。如果试点素材里常见大写扩展名，要考虑生成 `*.[pP][nN][gG]` 这种规则，或在 `doctor` 里检查已提交的非 LFS 大文件。
+- `doctor` 在 Windows 上给出的修复命令里有 `printf ... | git credential reject` 和 `curl`，在 PowerShell 和 cmd 里不能直接照做，Git Bash 里可以。Windows 实测时要决定是否按平台输出不同的命令。
+- `init` 的交互输入在 Windows 终端（尤其是 Git Bash 的 mintty）里能否进入 raw 模式、是否会回显，需要实测；不行时可以用 `--token-stdin`。
+- 凭据只按 `protocol` + `host` 保存。用户设置了 `credential.useHttpPath=true` 时，git-lfs 查询凭据会带上路径，可能找不到 `init` 存的凭据；`doctor` 也按 host 查询，所以这种情况下 `doctor` 通过而 push 仍会提示输入。
 - Locks API 需要持久化存储，锁的语义（强制解锁、过期）还要设计。
 - 对象清理需要扫描仓库历史，确认对象已经没有任何提交引用，第一版不做。
