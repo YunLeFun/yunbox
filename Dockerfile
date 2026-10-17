@@ -9,9 +9,10 @@
 # and the TENCENTCLOUD_* credentials are provided. Never bake credentials into
 # the image.
 
-# Both stages use the same base image, pinned to a multi-arch index digest so
-# rebuilds are reproducible. Dependabot (.github/dependabot.yml) proposes
-# updates; it only reads literal FROM lines, so keep the two in sync.
+# Both stages use the same base image: the Node.js LTS line in .node-version,
+# pinned to a multi-arch index digest so rebuilds are reproducible. Dependabot
+# (.github/dependabot.yml) proposes minor and patch updates; it only reads
+# literal FROM lines, so keep the two in sync.
 FROM node:24.22.0-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5 AS build
 WORKDIR /src
 

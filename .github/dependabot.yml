@@ -1,7 +1,14 @@
 version: 2
 updates:
-  # Keeps the digest-pinned base image in the Dockerfile current.
+  # Keeps the digest-pinned base image in the Dockerfile current within the
+  # Node.js LTS line that CI tests (.node-version). Moving to the next LTS is a
+  # manual change to the Dockerfile and .node-version together, made only after
+  # that line enters LTS (Node 26: 2026-10-28).
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: node
+        update-types:
+          - version-update:semver-major
