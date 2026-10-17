@@ -13,9 +13,10 @@ YunBox 是一个 Git LFS 服务端：代码仍托管在 GitHub 等平台，LFS �
 - Git LFS Batch API：upload / download，`transfer: basic`
 - Verify API：核对对象大小并持久化“已校验”状态
 - 仓库隔离的本地文件存储，以及由服务端提供的签名 PUT / GET 地址
+- 腾讯云 COS 存储：服务端只签发预签名地址，素材由 git-lfs 直接上传到 COS、从 COS 下载，不经过服务端
 - 真实 `git` 和 `git-lfs` 端到端测试
 
-M1 没有鉴权，只使用 HTTP，并且服务端固定监听 `127.0.0.1`。它**不可用于生产或团队共享环境**，也不要通过端口转发将其暴露到其他网络。
+目前还没有鉴权，只使用 HTTP，并且服务端固定监听 `127.0.0.1`（鉴权和公网部署见 [docs/goal.md](./docs/goal.md) 阶段 2、3）。它**不可用于生产或团队共享环境**，也不要通过端口转发将其暴露到其他网络。
 
 ## 开发
 
@@ -31,10 +32,10 @@ pnpm test
 
 工作区目前包含两个私有包：
 
-- `packages/core`：LFS 协议类型、输入校验、存储接口和本地文件存储
+- `packages/core`：LFS 协议类型、输入校验、存储接口、本地文件存储和 COS 存储
 - `packages/server`：基于 `node:http` 的 Batch、Verify、PUT 和 GET 服务
 
-端到端测试位于 `packages/server/test/e2e.test.ts`。
+端到端测试位于 `packages/server/test/`：`e2e.test.ts` 分别用本地存储和一个 COS 测试替身（`packages/core/test/fake-cos-server.ts`，用官方 SDK 重新核对每个签名）跑同一套 git-lfs 流程，不需要任何云端凭据。`cos-live.test.ts` 对真实 COS 跑这套流程，默认跳过。
 
 ## 启动本地服务
 
@@ -46,6 +47,30 @@ pnpm --filter @yunbox/server start --port 8080 --storage-dir .yunbox-data
 ```
 
 服务只会监听 `http://127.0.0.1:8080`。`--port 0` 可让系统分配临时端口。
+
+### 使用 COS 存储
+
+```bash
+export YUNBOX_COS_BUCKET=examplebucket-1250000000
+export YUNBOX_COS_REGION=ap-guangzhou
+export YUNBOX_COS_PREFIX=yunbox            # 可选，所有仓库共用的键前缀
+export TENCENTCLOUD_SECRETID=...           # 通过安全渠道注入，不要写进仓库
+export TENCENTCLOUD_SECRETKEY=...
+export TENCENTCLOUD_SESSIONTOKEN=...       # 使用临时密钥时需要
+pnpm --filter @yunbox/server start --storage cos
+```
+
+- bucket 必须是私有读写。服务端需要的权限只有 `PutObject`、`GetObject`、`HeadObject`、`DeleteObject`（删除只用于已校验标记）。
+- 对象键为 `<prefix>/<owner>/<repo>/<oid[0:2]>/<oid[2:4]>/<oid>`，旁边的 `<oid>.verified.json` 是已校验标记。
+- 上传地址的签名包含 `Content-Length`，大小不符的上传会被 COS 直接拒绝。下载地址的签名包含 `If-Match: <ETag>`，对象在校验后被覆盖时 COS 会拒绝下载。
+
+### 用真实 COS 跑端到端测试
+
+```bash
+YUNBOX_COS_E2E=1 pnpm exec vitest run packages/server/test/cos-live.test.ts
+```
+
+需要上面的环境变量。测试写在 `YUNBOX_COS_PREFIX`（默认 `yunbox-e2e`）下的随机子前缀里，结束后会删除写入的对象。GitHub Actions 里也可以手动触发 `COS E2E` 工作流，它从 `cos-e2e` environment 读取凭据和 bucket 配置。
 
 ## 配置测试仓库
 

@@ -168,10 +168,19 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - 本轮 M1 只实现本地文件存储，不接 COS、不引入云 SDK。存储接口除流式读写和 metadata 操作外，还提供可选的 upload/download action 工厂；后续 COS 适配器可直接返回预签名动作，服务端不必代理文件内容。
 - M1 选择无鉴权，只适用于本地协议测试；生产化前必须补齐 HTTPS、按仓库读写权限和可吊销的个人 token。
 
+### G1 阶段 1 已定结论（2026-10-17）
+
+- COS 签名自己实现（XML API v5，HMAC-SHA1），运行时不依赖官方 SDK。官方 SDK 只作为开发依赖，测试里用它交叉核对签名，COS 测试替身也用它独立重算每个请求的签名。
+- 预签名 PUT 的签名只覆盖 `host` 和 `content-length`，不覆盖 Content-Type。真实 git-lfs 3.7.1 发出的请求能通过测试替身的签名校验；签名包含 `content-length`，所以大小不符的上传会被 COS 在上传阶段直接拒绝，比 verify 阶段更早。
+- 「已校验」标记是对象旁的 `<oid>.verified.json` 标记对象，记录 oid、size 和校验时的 ETag。ETag 变化就等于标记失效，所以处理 upload batch 时**不再需要先删除旧标记**，标记也不需要原子替换。verify 在写标记前后各做一次 HEAD，发现对象被替换就删掉标记并返回 409。
+- 下载地址的签名包含 `If-Match: <校验时的 ETag>`。已校验对象在地址有效期内被覆盖时，COS 返回 412，不会下发被替换的内容。
+- 服务端对 COS 的元数据请求限制为最多 16 个并发、单次 15 秒超时；错误信息不包含地址、密钥和对象键。
+- 凭据读取腾讯云标准环境变量 `TENCENTCLOUD_SECRETID`、`TENCENTCLOUD_SECRETKEY`、`TENCENTCLOUD_SESSIONTOKEN`，每次签名前重新读取，以支持运行角色轮换临时密钥。
+
 ### 后续风险
 
-- git-lfs basic 传输方式发出的请求头（如 Content-Type）能否和 COS 预签名 PUT 的签名匹配，需要在接入 COS 的里程碑验证。
+- 真实 COS 尚未实测：预签名签名、`If-Match`、临时密钥和 CAM 最小权限都只在测试替身上验证过，需要用 `COS E2E` 工作流在真实 bucket 上跑一遍。
+- ETag 在单次 PUT 时是内容的 MD5。有写权限的人理论上可以用 MD5 碰撞构造同样大小、同样 ETag 的不同内容，在地址有效期内覆盖已校验对象；这种情况由客户端下载时的 SHA-256 校验兜底，第一版不做服务端哈希校验。
 - Windows 下 npm 生成的 `git-yunbox` shim 能否被 Git for Windows 识别，需要实测；长期考虑用 Node SEA 或 `bun build --compile` 打成单个可执行文件。
-- COS 没有本地文件 mtime 语义；迁移到 COS 时需在对象元数据、单独标记对象或数据库中选择可原子失效的校验标记，并重新验证并发覆盖行为。
 - Locks API 需要持久化存储，锁的语义（强制解锁、过期）还要设计。
 - 对象清理需要扫描仓库历史，确认对象已经没有任何提交引用，第一版不做。

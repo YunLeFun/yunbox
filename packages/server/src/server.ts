@@ -22,6 +22,11 @@ export async function startYunBoxServer(options: YunBoxServerOptions): Promise<R
   assertIntegerInRange(actionTtlSeconds, 1, 3600, 'actionTtlSeconds')
   assertIntegerInRange(maxConcurrentTransfers, 1, 1000, 'maxConcurrentTransfers')
   assertIntegerInRange(requestTimeoutMs, 1000, 10 * 60_000, 'requestTimeoutMs')
+  const { storage } = options
+  if (storage.putObject === undefined && storage.createUploadAction === undefined)
+    throw new TypeError('storage must implement putObject or createUploadAction')
+  if (storage.readObject === undefined && storage.createDownloadAction === undefined)
+    throw new TypeError('storage must implement readObject or createDownloadAction')
 
   let baseUrl = ''
   const actions = new SignedActionFactory(randomBytes(32), actionTtlSeconds)

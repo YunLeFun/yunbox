@@ -38,6 +38,8 @@
 
 ### 阶段 1：COS 存储后端（预签名直传）
 
+> 进度（2026-10-17）：代码和测试替身上的端到端测试已完成，真实 COS 尚未实测。实现时把「处理 upload batch 时先删除旧标记」改成了把标记绑定到 ETag，原因见 plan.md 第 12 节。
+
 - `packages/core` 新增 COS 存储实现：通过已有的 `createUploadAction` / `createDownloadAction` 返回预签名 PUT/GET，`verifyObject` 用 HEAD 核对大小。
 - 「已校验」标记：在对象旁写一个标记对象，记录 size 和 ETag。下载前用 HEAD 核对 ETag，防止已校验的对象在地址有效期内被覆盖。处理 upload 类型的 batch 请求时，如果对象还没校验，就先删除旧标记。
 - 先验证 plan.md 第 12 节的风险：git-lfs basic 传输发出的请求头（如 Content-Type）能否和 COS 预签名的签名匹配。签名只覆盖 host 时，要确认不会影响安全性。

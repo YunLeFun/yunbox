@@ -63,6 +63,8 @@ export interface LfsBatchResponse {
 export interface StoredObjectInfo {
   size: number
   verified: boolean
+  /** Backend identifier of the stored bytes, such as a COS ETag. */
+  version?: string
 }
 
 /** Readable object body and its current byte size. */
@@ -79,6 +81,8 @@ export interface PutObjectOptions {
 /** Options supplied when a backend creates a direct transfer action. */
 export interface CreateStorageActionOptions {
   expiresInSeconds: number
+  /** Result of the `inspectObject` call that authorized this action, when available. */
+  stored?: StoredObjectInfo
 }
 
 /** Result of comparing a stored object with a verify request. */
@@ -91,18 +95,19 @@ export type StorageVerificationResult
 /**
  * Storage contract used by the LFS server.
  *
- * Remote backends can implement the optional action factories to return
- * provider-presigned URLs. Backends without them use server-hosted streaming.
+ * A backend either streams bytes through the server (`putObject` and
+ * `readObject`) or returns provider-presigned URLs (`createUploadAction` and
+ * `createDownloadAction`) so object bytes never pass through the server.
  */
 export interface ObjectStorage {
   inspectObject: (repository: RepositoryId, oid: string) => Promise<StoredObjectInfo | undefined>
-  putObject: (
+  putObject?: (
     repository: RepositoryId,
     oid: string,
     body: AsyncIterable<Uint8Array>,
     options?: PutObjectOptions,
   ) => Promise<StoredObjectInfo>
-  readObject: (repository: RepositoryId, oid: string) => Promise<StoredObjectBody | undefined>
+  readObject?: (repository: RepositoryId, oid: string) => Promise<StoredObjectBody | undefined>
   verifyObject: (repository: RepositoryId, oid: string, expectedSize: number) => Promise<StorageVerificationResult>
   createUploadAction?: (
     repository: RepositoryId,

@@ -7,6 +7,7 @@ import type {
   LfsObjectResponse,
   ObjectStorage,
   RepositoryId,
+  StoredObjectInfo,
 } from '@yunbox/core'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { SignedActionFactory } from './signed-actions.ts'
@@ -83,6 +84,9 @@ async function handleRequest(
   assertOid(route.oid)
   if (request.method !== 'PUT' && request.method !== 'GET')
     throw new HttpError(405, 'Transfer method not allowed', { Allow: 'GET, PUT' })
+  const { putObject, readObject } = options.storage
+  if ((request.method === 'PUT' ? putObject : readObject) === undefined)
+    throw new HttpError(404, 'Route not found')
   const release = slots.acquire()
   if (release === undefined)
     throw new HttpError(503, 'Too many concurrent transfers', { 'Retry-After': '1' })
@@ -114,7 +118,7 @@ async function handleBatch(
         return { ...object }
       return {
         ...object,
-        actions: await createUploadActions(repository, object, options),
+        actions: await createUploadActions(repository, object, stored, options),
       }
     }
 
@@ -135,6 +139,7 @@ async function handleBatch(
         })
       : await options.storage.createDownloadAction(repository, object, {
           expiresInSeconds: options.actionTtlSeconds,
+          stored,
         })
     return {
       ...object,
@@ -151,6 +156,7 @@ async function handleBatch(
 async function createUploadActions(
   repository: RepositoryId,
   object: LfsObject,
+  stored: StoredObjectInfo | undefined,
   options: RequestHandlerOptions,
 ): Promise<{ upload: LfsAction, verify: LfsAction }> {
   const baseUrl = options.getBaseUrl()
@@ -165,6 +171,7 @@ async function createUploadActions(
       })
     : await options.storage.createUploadAction(repository, object, {
         expiresInSeconds: options.actionTtlSeconds,
+        stored,
       })
   return {
     upload,
@@ -220,7 +227,7 @@ async function handleUpload(
       throw new HttpError(413, 'Object body exceeds the service limit')
   }
 
-  await options.storage.putObject(route.repository, route.oid, request, { maxBytes: MAX_OBJECT_SIZE })
+  await options.storage.putObject!(route.repository, route.oid, request, { maxBytes: MAX_OBJECT_SIZE })
   response.writeHead(200, {
     'Content-Length': '0',
     'X-Expected-Object-Size': String(expectedSize),
@@ -242,7 +249,7 @@ async function handleDownload(
   const info = await options.storage.inspectObject(route.repository, route.oid)
   if (!info?.verified || info.size !== expectedSize)
     throw new HttpError(404, 'Object is not available for download')
-  const object = await options.storage.readObject(route.repository, route.oid)
+  const object = await options.storage.readObject!(route.repository, route.oid)
   if (object === undefined || object.size !== expectedSize)
     throw new HttpError(404, 'Object is not available for download')
 

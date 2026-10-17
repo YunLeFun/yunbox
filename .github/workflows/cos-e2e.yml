@@ -1,0 +1,45 @@
+name: COS E2E
+
+# Runs the Git LFS workflow against a real COS bucket. Manual only, so the
+# regular CI never needs cloud credentials. Configure these in the `cos-e2e`
+# environment: secrets TENCENTCLOUD_SECRETID and TENCENTCLOUD_SECRETKEY
+# (a sub-account limited to the test prefix), variables YUNBOX_COS_BUCKET,
+# YUNBOX_COS_REGION and optionally YUNBOX_COS_PREFIX.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cos-e2e:
+    name: Git LFS workflow on real COS
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: cos-e2e
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install git-lfs
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes git-lfs
+          git lfs install --skip-repo
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec vitest run packages/server/test/cos-live.test.ts
+        env:
+          YUNBOX_COS_E2E: '1'
+          YUNBOX_COS_BUCKET: ${{ vars.YUNBOX_COS_BUCKET }}
+          YUNBOX_COS_REGION: ${{ vars.YUNBOX_COS_REGION }}
+          YUNBOX_COS_PREFIX: ${{ vars.YUNBOX_COS_PREFIX || 'yunbox-e2e' }}
+          TENCENTCLOUD_SECRETID: ${{ secrets.TENCENTCLOUD_SECRETID }}
+          TENCENTCLOUD_SECRETKEY: ${{ secrets.TENCENTCLOUD_SECRETKEY }}

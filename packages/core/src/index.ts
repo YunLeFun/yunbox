@@ -1,4 +1,6 @@
 export * from './constants.ts'
+export * from './cos-object-storage.ts'
+export * from './cos-signature.ts'
 export * from './local-file-storage.ts'
 export * from './types.ts'
 export * from './validation.ts'
