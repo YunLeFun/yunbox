@@ -24,7 +24,8 @@ export async function createSandbox(options: { credentialHelper?: boolean } = {}
   const credentialsFile = join(home, 'git-credentials')
   const globalConfig = join(home, '.gitconfig')
   // An empty helper value clears any inherited helper list.
-  const helper = options.credentialHelper === false ? '' : `store --file='${credentialsFile}'`
+  // Git config treats backslashes as escapes; Git for Windows accepts forward slashes.
+  const helper = options.credentialHelper === false ? '' : `store --file='${credentialsFile.replaceAll('\\', '/')}'`
   await writeFile(globalConfig, `[credential]\n\thelper =\n${helper === '' ? '' : `\thelper = ${helper}\n`}[init]\n\tdefaultBranch = main\n`)
   const env: NodeJS.ProcessEnv = {
     ...process.env,
