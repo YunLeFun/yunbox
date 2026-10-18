@@ -1,6 +1,8 @@
 import type { CliContext } from './context.ts'
 import { runDoctor } from './commands/doctor.ts'
+import { runHook } from './commands/hook.ts'
 import { runInit } from './commands/init.ts'
+import { runInspect } from './commands/inspect.ts'
 import { runStatus } from './commands/status.ts'
 import { CliError, printError, USAGE_EXIT_CODE } from './context.ts'
 
@@ -17,6 +19,8 @@ export const mainHelp = `云匣 YunBox 命令行（版本 ${CLI_VERSION}）
   init     在当前仓库接入 YunBox：.gitattributes、.lfsconfig、凭据
   doctor   检查配置、连通性和读写权限，并给出修复命令
   status   列出当前仓库 LFS 对象的数量和总大小
+  inspect  推送前分别检查 Git/LFS 大小、超限文件和 JSON 明细
+  hook     安装/撤销检查通过后才执行原钩子的 pre-push 包装层
   help     显示帮助；help <命令> 显示该命令的帮助
 
 两种写法完全一样。注意 git yunbox --help 会被 Git 当成 git help yunbox，
@@ -27,6 +31,8 @@ const COMMANDS: Record<string, (context: CliContext, args: string[]) => Promise<
   init: runInit,
   doctor: runDoctor,
   status: runStatus,
+  inspect: runInspect,
+  hook: runHook,
 }
 
 /**

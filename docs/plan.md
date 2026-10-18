@@ -243,6 +243,14 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **配置**：新增 `--metadata`（`local` / `cloudbase`，COS 存储时默认 `cloudbase`，否则 `local`）和 `--metadata-dir`，以及 `YUNBOX_CLOUDBASE_ENV`、`YUNBOX_CLOUDBASE_ENDPOINT`、`YUNBOX_CLOUDBASE_COLLECTION_PREFIX`、`YUNBOX_CLOUDBASE_API_KEY`。配置自检同样只报变量名，不报值。集合由管理员事先建好，服务端不自动建。
 - **测试**：`metadata-contract.ts` 是一套契约测试，同时用于本地文件版、CloudBase 测试替身和真实 CloudBase（`metadata-live.test.ts`，默认跳过）。并发用例把写入分给两个互不共享内存状态的实例（相当于两个进程）：并发签发和吊销、同一用户的并发授权修改、10 个请求争同一路径的锁（恰好一个成功）、旧锁 id 不能删掉新锁。把本地版的创建改成「先检查再写入」后，抢锁用例会失败。CloudBase 测试替身按官方 OpenAPI 的格式返回 Strict EJSON 和错误码，用官方签名库核对换取 token 的签名，数据请求只认它签发且未过期的 token，每页最多返回 7 条以覆盖翻页；另有开关模拟「重复 `_id` 换一个错误码」和「数据库不保留给定的 `_id`」。`e2e.test.ts` 的 COS 用例改为「COS 测试替身 + CloudBase 测试替身」，就是生产的组合；git-lfs 流程增加了过期 token 被拒。命令行测试覆盖了几个管理员（每条命令各自打开存储）同时签发和吊销。
 
+### 本地推送检查已定结论（2026-10-18）
+
+- 检查能力放在 YunBox CLI：Git thin-pack、普通文件和 LFS 候选分别统计，文件原始大小按对象去重并覆盖历史；`--json` 提供版本化接口。Workstation 仅负责 GitHub 范围和交互确认，Craft Hub 界面后续接入。
+- 不查询 LFS 服务，`uploadBytes=null` 明确实际上传量未知。新分支 LFS 候选可能包含远端已有素材；用户可调整本地预算，后续可增加 Batch 存在性检查。
+- 多个独立 Git 钩子不会在首个失败后自动停止。新增可安装、可撤销的仓库包装层，检查通过后才执行保存的原钩子；不覆盖自定义 hooksPath。其他独立上传钩子仍需各自串联。
+- 限制：统计已提交内容，不扫描未提交构建目录；超出 pack 估算上限只返回下界。首次扫描大型历史可能较慢，Git 子进程有 60 秒超时、分析输出 64 MiB 上限，失败时明确阻止推送。
+- 验证使用隔离 HOME 的本地 Git / git-lfs；没有访问云存储或改变 G2 的生产验收状态。使用和 JSON 字段见 [inspect.md](./inspect.md)。
+
 ### 后续风险
 
 - CloudBase 云托管绑定运行角色后是否以 `TENCENTCLOUD_*` 环境变量注入临时密钥**未核实**（云函数是这样做的）。如果不是，需要在服务端增加从平台元数据接口获取密钥的代码，或者临时改用只挂最小权限策略的子账号长期密钥。

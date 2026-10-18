@@ -21,6 +21,7 @@ YunBox 是一个 Git LFS 服务端：代码仍托管在 GitHub 等平台，LFS �
 - 真实 `git` 和 `git-lfs` 端到端测试（通过 Git 凭据管理器提供 token）
 - Docker 镜像、免鉴权的健康检查 `GET /_health`、全部来自环境变量的配置和启动时的配置自检
 - 命令行 `git yunbox init` / `yunbox doctor` / `yunbox status`：一条命令接入仓库，自检配置、凭据和读写权限
+- [推送体积检查](./docs/inspect.md)：`yunbox inspect --push` 分别统计 Git pack 和 LFS 候选量，列出超限文件，支持 JSON；`yunbox hook install` 在原有上传钩子前串行执行检查
 
 默认只监听 `127.0.0.1`。监听其他地址时必须用 `--public-url` 配置 https 地址，否则拒绝启动；Basic 认证的内容是明文，**公网部署必须经过 HTTPS**。部署方式见 [docs/deploy.md](./docs/deploy.md)，按其中的检查清单确认之前不要把服务暴露到其他网络。
 
