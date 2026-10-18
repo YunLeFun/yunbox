@@ -1,0 +1,53 @@
+name: Release
+
+# Publishes the `yunbox` CLI to npm when a v* tag is pushed ("pnpm release"
+# bumps packages/cli/package.json, commits, tags and pushes). Needs the
+# NPM_TOKEN secret: an npm automation token allowed to publish `yunbox`.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  id-token: write # npm provenance
+
+jobs:
+  publish:
+    name: Publish yunbox to npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Tag must match the CLI version
+        run: |
+          version=$(node -p "require('./packages/cli/package.json').version")
+          test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME does not match packages/cli version $version"; exit 1; }
+
+      - name: Install git-lfs
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes git-lfs
+          git lfs install --skip-repo
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+      - name: Publish
+        run: pnpm --filter yunbox publish --access public --provenance --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

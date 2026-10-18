@@ -19,6 +19,7 @@
     "icons:check": "node script/sync-app-icon.mjs --check",
     "icons:sync": "node script/sync-app-icon.mjs",
     "lint": "eslint --cache .",
+    "release": "bumpp packages/cli/package.json",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit"
@@ -28,6 +29,7 @@
     "@antfu/ni": "catalog:",
     "@cloudbase/signature-nodejs": "catalog:",
     "@types/node": "catalog:",
+    "bumpp": "catalog:",
     "cos-nodejs-sdk-v5": "catalog:",
     "eslint": "catalog:",
     "tsdown": "catalog:",

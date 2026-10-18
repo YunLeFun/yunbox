@@ -5,6 +5,7 @@ import { delimiter, join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
+import { CLI_VERSION } from '../src/run.ts'
 import { createRepository, createSandbox, runYunBox } from './helpers.ts'
 
 const workspaceRoot = fileURLToPath(new URL('../../..', import.meta.url))
@@ -28,6 +29,16 @@ describe('package bins', () => {
   it('registers yunbox and git-yunbox for the same entry', async () => {
     const manifest = JSON.parse(await readFile(join(workspaceRoot, 'packages', 'cli', 'package.json'), 'utf8')) as { bin: Record<string, string> }
     expect(manifest.bin).toEqual({ 'git-yunbox': './dist/cli.mjs', 'yunbox': './dist/cli.mjs' })
+  })
+
+  it('is publishable to npm with no runtime dependencies', async () => {
+    const manifest = JSON.parse(await readFile(join(workspaceRoot, 'packages', 'cli', 'package.json'), 'utf8')) as Record<string, unknown>
+    expect(manifest.private).toBeUndefined()
+    expect(manifest.files).toEqual(['dist'])
+    expect(manifest.publishConfig).toEqual({ access: 'public', provenance: true })
+    // @yunbox/core is bundled into dist, so installing the CLI needs nothing else.
+    expect(manifest.dependencies).toBeUndefined()
+    expect(manifest.version).toBe(CLI_VERSION)
   })
 })
 

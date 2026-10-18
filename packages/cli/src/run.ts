@@ -1,4 +1,5 @@
 import type { CliContext } from './context.ts'
+import packageJson from '../package.json' with { type: 'json' }
 import { runBuckets } from './commands/buckets.ts'
 import { runClone } from './commands/clone.ts'
 import { runDoctor } from './commands/doctor.ts'
@@ -12,7 +13,7 @@ import { runStatus } from './commands/status.ts'
 import { CliError, printError, USAGE_EXIT_CODE } from './context.ts'
 
 /** Version reported by `yunbox --version`. */
-export const CLI_VERSION = '0.0.0'
+export const CLI_VERSION: string = packageJson.version
 
 export const mainHelp = `云匣 YunBox 命令行（版本 ${CLI_VERSION}）
 
