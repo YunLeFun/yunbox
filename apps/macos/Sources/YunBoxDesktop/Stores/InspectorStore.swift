@@ -5,8 +5,10 @@ import YunBoxKit
 @MainActor @Observable
 final class InspectorStore {
     var repository: URL?
-    var recentPaths: [String]
+    var recents: RecentRepositories
     var result: InspectionResult?
+    /// True while `result` comes from the on-disk cache and a fresh inspection has not replaced it.
+    var isShowingCache = false
     var rows: [FileRow] = []
     var isInspecting = false
     var error: String?
@@ -20,16 +22,26 @@ final class InspectorStore {
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var copyFeedback: Task<Void, Never>?
     @ObservationIgnored private var requestID = UUID()
+    @ObservationIgnored private let cache = InspectionCache.standard()
+    /// Repository path the current `result` belongs to.
+    @ObservationIgnored private var resultPath: String?
 
     init() {
-        recentPaths = UserDefaults.standard.stringArray(forKey: "recentRepositories") ?? []
+        // Normalize like `select` does (e.g. /private/tmp → /tmp) so a stored path and a reopened one match.
+        let stored = UserDefaults.standard.stringArray(forKey: "recentRepositories") ?? []
+        recents = RecentRepositories(paths: stored.map { URL(fileURLWithPath: $0).standardizedFileURL.path })
+        if recents.paths != stored { UserDefaults.standard.set(recents.paths, forKey: "recentRepositories") }
+        cache?.prune(keeping: recents.paths)
         let args = ProcessInfo.processInfo.arguments
         if let index = args.firstIndex(of: "--repository"), args.indices.contains(index + 1) {
-            repository = URL(fileURLWithPath: args[index + 1])
-        } else if let first = recentPaths.first {
+            repository = URL(fileURLWithPath: args[index + 1]).standardizedFileURL
+        } else if let first = recents.paths.first {
             repository = URL(fileURLWithPath: first)
         }
+        if let repository { showCachedResult(for: repository.path) }
     }
+
+    var recentPaths: [String] { recents.paths }
 
     var visibleRows: [FileRow] {
         rows.filter { (kind == "全部" || $0.kind.rawValue == kind) && (!onlyExceeded || $0.object.exceedsFileLimit) && $0.matches(query) }
@@ -48,17 +60,50 @@ final class InspectorStore {
             root.deleteLastPathComponent()
         }
         if root.path == "/" { root = url.standardizedFileURL }
+        if root == repository, result != nil || isInspecting { return true }
         repository = root
-        recentPaths = [root.path] + recentPaths.filter { $0 != root.path }
-        recentPaths = Array(recentPaths.prefix(12))
-        UserDefaults.standard.set(recentPaths, forKey: "recentRepositories")
+        for dropped in recents.open(root.path) { cache?.remove(path: dropped) }
+        saveRecents()
+        showCachedResult(for: root.path)
         inspect()
         return true
     }
 
     func forget(_ path: String) {
-        recentPaths.removeAll { $0 == path }
-        UserDefaults.standard.set(recentPaths, forKey: "recentRepositories")
+        recents.remove(path)
+        cache?.remove(path: path)
+        saveRecents()
+    }
+
+    func clearRecents() {
+        for path in recents.paths where path != repository?.path { forget(path) }
+    }
+
+    private func saveRecents() {
+        UserDefaults.standard.set(recents.paths, forKey: "recentRepositories")
+    }
+
+    /// Show the last stored report for `path` immediately, or clear the report if there is none.
+    private func showCachedResult(for path: String) {
+        task?.cancel()
+        requestID = UUID()
+        isInspecting = false
+        error = nil
+        copiedJSON = false
+        if let cached = cache?.load(path: path) {
+            result = cached.result
+            rows = cached.result.report.files
+            checkedAt = cached.checkedAt
+            resultPath = path
+            isShowingCache = true
+        } else {
+            result = nil
+            rows = []
+            checkedAt = nil
+            resultPath = nil
+            isShowingCache = false
+        }
+        selectedFile = nil
     }
 
     func inspect() {
@@ -66,11 +111,16 @@ final class InspectorStore {
         task?.cancel()
         let id = UUID()
         requestID = id
-        result = nil
-        rows = []
-        selectedFile = nil
+        let path = repository.path
+        // Keep showing this repository's last report (cached or live) while the new run is in progress.
+        if resultPath != path {
+            result = nil
+            rows = []
+            selectedFile = nil
+            checkedAt = nil
+            isShowingCache = false
+        }
         error = nil
-        checkedAt = nil
         copiedJSON = false
         isInspecting = true
         task = Task {
@@ -85,9 +135,15 @@ final class InspectorStore {
                 }
                 let next = try await client.inspect(repository: repository, limits: limits)
                 guard requestID == id else { return }
+                let now = Date()
                 result = next
                 rows = next.report.files
-                checkedAt = Date()
+                if let selected = selectedFile, !rows.contains(where: { $0.id == selected }) { selectedFile = nil }
+                checkedAt = now
+                resultPath = path
+                isShowingCache = false
+                // A failed cache write only costs the instant view next time; the live report is unaffected.
+                try? cache?.store(next, path: path, checkedAt: now)
             } catch is CancellationError {
                 // A new selection or explicit cancellation owns the current UI state.
             } catch {

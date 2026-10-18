@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import YunBoxKit
 
 @main
 struct YunBoxApp: App {
@@ -17,6 +18,14 @@ struct YunBoxApp: App {
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("打开仓库…") { store.choosingRepository = true }.keyboardShortcut("o")
+                Menu("最近的仓库") {
+                    ForEach(Array(store.recentPaths.enumerated()), id: \.element) { index, path in
+                        RecentRepositoryButton(store: store, index: index, path: path)
+                    }
+                    if !store.recentPaths.isEmpty { Divider() }
+                    Button("清除最近列表") { store.clearRecents() }
+                        .disabled(store.recentPaths.allSatisfy { $0 == store.repository?.path })
+                }
             }
             CommandMenu("检查") {
                 Button("重新检查") { store.inspect() }.keyboardShortcut("r").disabled(store.isInspecting)
@@ -26,6 +35,25 @@ struct YunBoxApp: App {
             }
         }
         Settings { SettingsView() }
+    }
+}
+
+/// One "最近的仓库" menu item; the first nine get ⌘1–⌘9.
+private struct RecentRepositoryButton: View {
+    let store: InspectorStore
+    let index: Int
+    let path: String
+
+    var body: some View {
+        let url = URL(fileURLWithPath: path)
+        let button = Button("\(url.lastPathComponent) — \(url.deletingLastPathComponent().lastPathComponent)") {
+            store.select(url)
+        }
+        if index < RecentRepositories.shortcutCount {
+            button.keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
+        } else {
+            button
+        }
     }
 }
 

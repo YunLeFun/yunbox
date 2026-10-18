@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import YunBoxKit
 
 struct ContentView: View {
     @Bindable var store: InspectorStore
@@ -10,12 +11,18 @@ struct ContentView: View {
                 if let path, path != store.repository?.path { store.select(URL(fileURLWithPath: path)) }
             })) {
                 Section("最近的仓库") {
-                    ForEach(store.recentPaths, id: \.self) { path in
+                    ForEach(Array(store.recentPaths.enumerated()), id: \.element) { index, path in
                         Label {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(URL(fileURLWithPath: path).lastPathComponent).lineLimit(1)
-                                Text(URL(fileURLWithPath: path).deletingLastPathComponent().lastPathComponent)
-                                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(URL(fileURLWithPath: path).lastPathComponent).lineLimit(1)
+                                    Text(URL(fileURLWithPath: path).deletingLastPathComponent().lastPathComponent)
+                                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                                }
+                                Spacer(minLength: 4)
+                                if index < RecentRepositories.shortcutCount {
+                                    Text("⌘\(index + 1)").font(.caption.monospacedDigit()).foregroundStyle(.tertiary)
+                                }
                             }
                         } icon: { Image(systemName: "folder") }
                         .tag(path)
@@ -45,13 +52,16 @@ struct ContentView: View {
                         }
                         Spacer()
                         if let date = store.checkedAt {
-                            Text("检查于 \(date.formatted(date: .omitted, time: .shortened))")
+                            Text("检查于 \(checkedLabel(date))")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     }.padding(24)
                     Divider()
                 }
-                if store.isInspecting {
+                if let report = store.result?.report {
+                    StatusBanner(store: store)
+                    ReportView(store: store, report: report)
+                } else if store.isInspecting {
                     VStack(spacing: 18) {
                         ProgressView().controlSize(.large)
                         Text("正在分析已提交的历史…").foregroundStyle(.secondary)
@@ -64,8 +74,6 @@ struct ContentView: View {
                         Button("重试") { store.inspect() }
                         SettingsLink { Text("打开设置") }
                     }
-                } else if let report = store.result?.report {
-                    ReportView(store: store, report: report)
                 } else {
                     ContentUnavailableView {
                         Label("检查推送体积", systemImage: "shippingbox")
@@ -94,4 +102,45 @@ struct ContentView: View {
             return store.select(first)
         }
     }
+}
+
+/// Explains when the visible report is not the result of a finished, current inspection.
+private struct StatusBanner: View {
+    @Bindable var store: InspectorStore
+
+    var body: some View {
+        if store.isInspecting {
+            banner(symbol: "arrow.triangle.2.circlepath", tint: .secondary,
+                   text: store.isShowingCache ? "正在重新检查，先显示上次的结果。" : "正在重新检查…") {
+                ProgressView().controlSize(.small)
+                Button("取消") { store.cancel() }
+            }
+        } else if let error = store.error {
+            banner(symbol: "exclamationmark.triangle.fill", tint: .orange, text: "重新检查未完成，显示的是上次的结果：\(error)") {
+                Button("重试") { store.inspect() }
+            }
+        } else if store.isShowingCache {
+            banner(symbol: "clock.arrow.circlepath", tint: .secondary, text: "这是上次检查的结果，仓库可能已有新的提交。") {
+                Button("重新检查") { store.inspect() }
+            }
+        }
+    }
+
+    private func banner(symbol: String, tint: Color, text: String, @ViewBuilder actions: () -> some View) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: symbol).foregroundStyle(tint)
+            Text(text).font(.callout).lineLimit(2).textSelection(.enabled)
+            Spacer()
+            actions()
+        }
+        .padding(.horizontal, 24).padding(.vertical, 8)
+        .background(.bar)
+        .overlay(alignment: .bottom) { Divider() }
+    }
+}
+
+private func checkedLabel(_ date: Date) -> String {
+    Calendar.current.isDateInToday(date)
+        ? date.formatted(date: .omitted, time: .shortened)
+        : date.formatted(date: .abbreviated, time: .shortened)
 }
