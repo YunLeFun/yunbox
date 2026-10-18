@@ -1,8 +1,10 @@
 name: Release
 
 # Publishes the `yunbox` CLI to npm when a v* tag is pushed ("pnpm release"
-# bumps packages/cli/package.json, commits, tags and pushes). Needs the
-# NPM_TOKEN secret: an npm automation token allowed to publish `yunbox`.
+# bumps packages/cli/package.json, commits, tags and pushes). Uses npm
+# trusted publishing (OIDC): no token is stored anywhere. npmjs.com trusts
+# this repository, this workflow file (release.yml) and the `npm`
+# environment; provenance is attached automatically.
 
 on:
   push:
@@ -11,7 +13,7 @@ on:
 
 permissions:
   contents: read
-  id-token: write # npm provenance
+  id-token: write # OIDC for npm trusted publishing and provenance
 
 jobs:
   publish:
@@ -47,7 +49,15 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
 
+      # Trusted publishing needs npm 11.5.1+; the bundled npm depends on the Node.js version.
+      - name: Use an npm that supports trusted publishing
+        run: |
+          npm install --global npm@11
+          npm --version
+
+      # pnpm pack rewrites workspace: ranges; npm publishes the tarball over OIDC.
       - name: Publish
-        run: pnpm --filter yunbox publish --access public --provenance --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        working-directory: packages/cli
+        run: |
+          pnpm pack --pack-destination "$RUNNER_TEMP"
+          npm publish "$RUNNER_TEMP"/yunbox-*.tgz --access public
