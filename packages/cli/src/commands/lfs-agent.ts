@@ -72,7 +72,7 @@ export async function runLfsAgent(context: CliContext, args: string[]): Promise<
         location = await readLocation({ ...context, cwd: root }, root)
         if (location === undefined)
           throw new Error('仓库里没有 .yunboxconfig，先运行 git yunbox init')
-        const { credentials } = requireCredentials(context.env)
+        const { credentials } = await requireCredentials(context.env)
         client = new CosDirectClient(location, () => credentials)
         const commonDir = await runGitChecked(context, ['rev-parse', '--git-common-dir'])
         const gitDir = isAbsolute(commonDir.trim()) ? commonDir.trim() : join(context.cwd, commonDir.trim())

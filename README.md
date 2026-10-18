@@ -26,7 +26,16 @@ git yunbox init              # 列出 bucket → 选一个或新建私有 bucket
 git add .gitattributes .yunboxconfig
 git commit -m "chore: 用 YunBox 把 LFS 素材直传到 COS"
 git push
+
+yunbox policy                # 打印给协作者子账号用的最小权限策略 JSON（只输出，不改动 CAM）
+yunbox policy --read-only    # 只需要拉取的人用这份
 ```
+
+**给协作者开子账号**（详细步骤和策略说明见 [docs/deploy.md](./docs/deploy.md#直连模式给协作者开子账号)）：
+
+1. 腾讯云访问管理 → 用户 → 新建用户，只勾「编程访问」。每人一个子账号。
+2. 策略 → 新建自定义策略 → 按策略语法创建，粘贴 `yunbox policy` 的输出，关联给这个子账号。
+3. 在子账号的「API 密钥」里新建密钥，通过安全渠道交给协作者。人员离开时禁用或删除这把密钥即可。
 
 **协作者：**
 
@@ -36,15 +45,17 @@ git yunbox clone <仓库地址>   # = clone 历史 + git yunbox init + git lfs p
 ```
 
 - **共享的只有位置**：`.yunboxconfig` 记录 bucket、地域和目录前缀，提交到仓库供团队共享，**不含任何密钥**。不同项目可以用不同 bucket，也可以共用一个 bucket、各用一个前缀（默认 `yunbox/<owner>/<repo>`）。对象键是 `<前缀>/<oid[0:2]>/<oid[2:4]>/<oid>`。
-- **密钥只在各自电脑上**：`yunbox login` 存在 `~/.config/yunbox/credentials.json`（Windows 为 `%APPDATA%\yunbox`，权限 600）；也可以用 `TENCENTCLOUD_SECRETID` / `TENCENTCLOUD_SECRETKEY` 环境变量，或 `tccli auth login` 的临时密钥（约 2 小时有效）。SecretKey 不接受命令行参数。
-- **给别人用的安全边界**：每人一个 CAM 子账号，只授权团队 bucket 里对应前缀的 `PutObject`、`GetObject`、`HeadObject`（只需拉取的人去掉 `PutObject`）；人员变动时在 CAM 里禁用或删除他的密钥即可。策略模板见 [docs/deploy.md](./docs/deploy.md#4-cam-最小权限)。
+- **密钥只在各自电脑上**：macOS 上 `yunbox login` 存进登录钥匙串的「yunbox」项（用系统自带的 `security` 命令，SecretKey 经标准输入传入，不出现在命令行参数和进程列表里）；钥匙串不可用时、以及 Linux 和 Windows 上，存在 `~/.config/yunbox/credentials.json`（Windows 为 `%APPDATA%\yunbox`，权限 600）。`YUNBOX_CREDENTIAL_STORE=file` 可以强制用文件。读取顺序是 `TENCENTCLOUD_SECRETID` / `TENCENTCLOUD_SECRETKEY` 环境变量 > 钥匙串 > 文件 > `tccli auth login` 的临时密钥（约 2 小时有效）。`yunbox logout` 同时清理钥匙串和文件。SecretKey 不接受命令行参数。
+  - 钥匙串项信任创建它的 `/usr/bin/security`，所以读取时不弹窗；这也意味着同一用户下的其他程序同样能读到它。它防的是明文文件被备份、同步或误传，不防本机的恶意程序。
+  - Windows 凭据管理器暂不支持：不加依赖的办法只有 `cmdkey`（密码要放在命令行参数里，且不能读回）或 PowerShell 现场编译调用 `CredWrite` / `CredRead`（每次启动要编译 C#，受限语言模式下不可用），都还没在 Windows 上验证，先继续用文件；`%APPDATA%` 默认只有本人和管理员能访问。
+- **给别人用的安全边界**：每人一个 CAM 子账号，只授权团队 bucket 里对应前缀的 `PutObject`、`GetObject`、`HeadObject`（只需拉取的人去掉 `PutObject`），用 `yunbox policy` 生成；人员变动时在 CAM 里禁用或删除他的密钥即可。
 - **数据可靠性**：上传带 `x-cos-forbid-overwrite`，已存在的对象不会被覆盖；对象按内容寻址，同样的文件只传一次。下载时校验大小和 SHA-256，内容被替换或损坏的对象不会交给 git-lfs。
 - **为什么每个人都要装 YunBox 命令行**：git-lfs 出于安全考虑，不允许仓库通过 `.lfsconfig` 指定传输程序，所以传输代理只能由 `git yunbox init` 写进各自 clone 的 `.git/config`。`yunbox doctor` 会检查代理是否登记、密钥是否可用、能否读写前缀。
 - **限制**：没有服务端就没有文件锁（Locks API），`lfs.locksverify` 设为 `false`，同一素材同一时间请只由一人编辑。
 
 ## 当前能力
 
-- **直连 COS**：git-lfs 独立传输代理 `git-yunbox lfs-agent`、`yunbox login` / `logout`、`git yunbox init`（交互选择或新建 bucket）、`git yunbox clone`、`yunbox doctor` 的直连检查
+- **直连 COS**：git-lfs 独立传输代理 `git-yunbox lfs-agent`、`yunbox login` / `logout`（macOS 存钥匙串，其他系统存 600 文件）、`yunbox policy`（输出子账号最小权限策略）、`git yunbox init`（交互选择或新建 bucket）、`git yunbox clone`、`yunbox doctor` 的直连检查
 - Git LFS Batch API：upload / download，`transfer: basic`
 - Verify API：核对对象大小并持久化“已校验”状态
 - 仓库隔离的本地文件存储，以及由服务端提供的签名 PUT / GET 地址

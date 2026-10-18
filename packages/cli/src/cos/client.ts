@@ -4,7 +4,7 @@ import type { CosCredentials } from '@yunbox/core'
 import type { IncomingMessage } from 'node:http'
 import type { CosLocation } from './location.ts'
 import { Buffer } from 'node:buffer'
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import { createReadStream, createWriteStream } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { request as httpRequest } from 'node:http'
@@ -31,9 +31,15 @@ export class CosClientError extends Error {
 /** Called with the bytes transferred since the previous call. */
 export type ProgressListener = (bytes: number) => void
 
+/** The steps of {@link CosDirectClient.probe}, in order. */
+export const PROBE_OPERATIONS = ['PUT', 'HEAD', 'GET'] as const
+
+/** Probe object key, relative to the prefix. */
+export const PROBE_KEY = '_yunbox/probe'
+
 /** One step of {@link CosDirectClient.probe}; `status` is 0 when no response arrived. */
 export interface ProbeStep {
-  operation: 'PUT' | 'HEAD' | 'GET' | 'DELETE'
+  operation: typeof PROBE_OPERATIONS[number]
   ok: boolean
   status: number
 }
@@ -134,9 +140,15 @@ export class CosDirectClient {
     }
   }
 
-  /** Write, inspect, read and delete a small probe object under the prefix; stops at the first failure. */
+  /**
+   * Write, inspect and read back a small probe object under the prefix; stops
+   * at the first failure. It checks exactly what the transfer agent needs, so
+   * keys with the least-privilege policy of `yunbox policy` (no DeleteObject)
+   * pass. The key is fixed and the body constant, so repeated or concurrent
+   * probes overwrite one tiny object instead of leaving one per run.
+   */
   async probe(): Promise<ProbeStep[]> {
-    const key = `${this.location.prefix === '' ? '' : `${this.location.prefix}/`}_yunbox/probe-${randomUUID()}`
+    const key = `${this.location.prefix === '' ? '' : `${this.location.prefix}/`}${PROBE_KEY}`
     const body = Buffer.from('yunbox access probe\n')
     const steps: ProbeStep[] = []
     const record = (operation: ProbeStep['operation'], status: number, ok: boolean): boolean => {
@@ -156,14 +168,10 @@ export class CosDirectClient {
         return steps
       const get = await this.#send('GET', key)
       const text = await readText(get)
-      if (!record('GET', get.statusCode ?? 0, get.statusCode === 200 && text === body.toString()))
-        return steps
-      const del = await this.#send('DELETE', key)
-      del.resume()
-      record('DELETE', del.statusCode ?? 0, del.statusCode === 204 || del.statusCode === 200)
+      record('GET', get.statusCode ?? 0, get.statusCode === 200 && text === body.toString())
     }
     catch {
-      steps.push({ operation: (['PUT', 'HEAD', 'GET', 'DELETE'] as const)[steps.length]!, ok: false, status: 0 })
+      steps.push({ operation: PROBE_OPERATIONS[steps.length]!, ok: false, status: 0 })
     }
     return steps
   }

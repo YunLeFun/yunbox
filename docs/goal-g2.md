@@ -12,8 +12,8 @@
 | 顺序 | 事项 | 状态 |
 |---|---|---|
 | 1 | 直连传输代理、`yunbox login`、`git yunbox init` / `clone`、`doctor` 直连检查 | **完成**，真实 COS 已实测 |
-| 2 | CAM 子账号策略：可直接复制的模板，加一个只输出策略 JSON、不改动账号的 `yunbox policy` 命令 | 待做 |
-| 3 | 密钥改存 macOS 钥匙串 / Windows 凭据管理器，文件存储作为兜底 | 待做 |
+| 2 | CAM 子账号策略：可直接复制的模板，加一个只输出策略 JSON、不改动账号的 `yunbox policy` 命令 | **代码完成**（2026-10-18）：`yunbox policy [--read-only]` 按 `.yunboxconfig` 输出 PutObject / GetObject / HeadObject（只读去掉 PutObject）的前缀级策略，资源格式已按官方文档核对；读写探测不再需要 DeleteObject；开子账号步骤见 deploy.md「直连模式：给协作者开子账号」。还差：真实子账号在真实 bucket 上实测 |
+| 3 | 密钥改存 macOS 钥匙串 / Windows 凭据管理器，文件存储作为兜底 | **macOS 完成**（2026-10-18）：`yunbox login` 默认存进钥匙串（系统 `security` 命令，SecretKey 只经标准输入），失败时回退到 600 文件，`logout` 两处都清理；临时钥匙串上的真实测试可选运行。**Windows 暂用文件**：没有经过验证的免依赖方案，放到第 4 项 Windows 实测时再定 |
 | 4 | Windows 实测（PowerShell、Git Bash、GUI 客户端的 PATH），修复发现的问题 | 需要 Windows 机器 |
 | 5 | 命令行发布到 npm（`yunbox`），CI 自动发布 | 待做 |
 | 6 | macOS 客户端显示直连状态、一键接入和 doctor 结果 | 待做 |

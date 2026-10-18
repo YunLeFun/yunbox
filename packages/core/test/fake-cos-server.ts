@@ -11,6 +11,18 @@ export interface FakeCosObject {
   etag: string
 }
 
+/** The subset of a CAM policy document that {@link FakeCosServer} enforces. */
+export interface FakeCamPolicy {
+  statement: Array<{ effect: string, action: string[], resource: string[] }>
+}
+
+const OBJECT_ACTIONS: Record<string, string> = {
+  PUT: 'PutObject',
+  GET: 'GetObject',
+  HEAD: 'HeadObject',
+  DELETE: 'DeleteObject',
+}
+
 /** A request the fake server answered, without its signature. */
 export interface FakeCosRequest {
   method: string
@@ -56,6 +68,15 @@ export class FakeCosServer {
   readonly buckets: Array<{ name: string, region: string }> = []
   /** `x-cos-acl` of every PUT Bucket (`PUT /`) request, in order. */
   readonly createdBucketAcls: string[] = []
+  /**
+   * When set, requests with valid signatures are also checked against this CAM
+   * policy, as a sub-account would be: object PUT / GET / HEAD / DELETE need
+   * `name/cos:PutObject` / `GetObject` / `HeadObject` / `DeleteObject`, GET
+   * Service needs `name/cos:GetService`, and the resource's part after
+   * `<bucket>/` must match the key (a trailing `*` matches any rest). The
+   * region, APPID and bucket of resources are not checked.
+   */
+  policy: FakeCamPolicy | undefined
 
   constructor(credentials: CosCredentials) {
     this.#credentials = credentials
@@ -97,7 +118,7 @@ export class FakeCosServer {
       response.end(method === 'HEAD' ? undefined : body)
     }
 
-    if (!this.#isAuthorized(request, url, key, method)) {
+    if (!this.#isAuthorized(request, url, key, method) || !this.#isAllowed(key, method)) {
       await drain(request)
       finish(403, { 'Content-Type': 'application/xml' }, Buffer.from('<Error><Code>AccessDenied</Code></Error>'))
       return
@@ -158,6 +179,22 @@ export class FakeCosServer {
       'Content-Length': String(object.body.byteLength),
       'ETag': object.etag,
     }, object.body)
+  }
+
+  #isAllowed(key: string, method: string): boolean {
+    if (this.policy === undefined)
+      return true
+    const action = key === '' ? (method === 'GET' ? 'GetService' : 'PutBucket') : OBJECT_ACTIONS[method]
+    if (action === undefined)
+      return false
+    return this.policy.statement.some(statement => statement.effect === 'allow'
+      && statement.action.includes(`name/cos:${action}`)
+      && statement.resource.some((resource) => {
+        const pattern = /^qcs::cos:[^:]+:uid\/\d+:[^/]+\/(.*)$/.exec(resource)?.[1]
+        if (pattern === undefined)
+          return false
+        return pattern.endsWith('*') ? key.startsWith(pattern.slice(0, -1)) : key === pattern
+      }))
   }
 
   #isAuthorized(request: import('node:http').IncomingMessage, url: URL, key: string, method: string): boolean {

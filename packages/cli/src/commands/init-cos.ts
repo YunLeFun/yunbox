@@ -10,7 +10,7 @@ import { basename, delimiter, join } from 'node:path'
 import process from 'node:process'
 import { cosAppIdOf, CosRequestError, createCosBucket, listCosBuckets } from '@yunbox/core'
 import { CliError, print, USAGE_EXIT_CODE } from '../context.ts'
-import { CosDirectClient } from '../cos/client.ts'
+import { CosDirectClient, PROBE_OPERATIONS } from '../cos/client.ts'
 import { requireCredentials } from '../cos/credentials.ts'
 import { describeLocation, LOCATION_FILE, normalizeLocation, readLocation, writeLocation } from '../cos/location.ts'
 import { readGitConfig, runGit, runGitChecked } from '../git.ts'
@@ -38,7 +38,7 @@ export async function runInitCos(
   categories: ReturnType<typeof selectCategories>,
   install: InstallStep,
 ): Promise<number> {
-  const resolved = requireCredentials(context.env)
+  const resolved = await requireCredentials(context.env)
   printStep(context, { status: 'pass', title: 'COS 密钥', detail: `来自 ${resolved.description}，只保存在本机，不会写进仓库` })
   const { credentials } = resolved
   const ask = createLineReader(context)
@@ -62,9 +62,9 @@ export async function runInitCos(
   // 2. Check access before changing anything in the repository.
   const client = new CosDirectClient(location, () => credentials)
   const steps = await client.probe()
-  const writable = steps.length === 4 && steps.every(step => step.ok)
+  const writable = steps.length === PROBE_OPERATIONS.length && steps.every(step => step.ok)
   if (writable) {
-    printStep(context, { status: 'pass', title: 'COS 权限', detail: `可以在 ${describeLocation(location)} 写入、读取和删除` })
+    printStep(context, { status: 'pass', title: 'COS 权限', detail: `可以在 ${describeLocation(location)} 写入和读取` })
   }
   else if (steps[0]?.operation === 'PUT' && steps[0].status === 403 && await canRead(client, location)) {
     printStep(context, {
