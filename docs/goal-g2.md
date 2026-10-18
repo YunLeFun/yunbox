@@ -16,8 +16,8 @@
 | 3 | 密钥改存 macOS 钥匙串 / Windows 凭据管理器，文件存储作为兜底 | **macOS 完成**（2026-10-18）：`yunbox login` 默认存进钥匙串（系统 `security` 命令，SecretKey 只经标准输入），失败时回退到 600 文件，`logout` 两处都清理；临时钥匙串上的真实测试可选运行。**Windows 暂用文件**：没有经过验证的免依赖方案，放到第 4 项 Windows 实测时再定 |
 | 4 | Windows 实测（PowerShell、Git Bash、GUI 客户端的 PATH），修复发现的问题 | **CI 实测完成**（2026-10-18）：新增 Windows 工作流，在 GitHub 的 Windows 运行环境上用 Git for Windows 自带的 git-lfs 跑 CLI 全部测试，包括直连 COS 的完整端到端流程。修复了两个真实问题：git-lfs 通过 sh 启动传输代理，sh 不认 `.cmd`，`init` 现在只在有 npm/pnpm 生成的无扩展名脚本时按命令名登记，否则写带引号的绝对路径；`yunbox hook install` 不再要求 Windows 上不存在的可执行位。还没测：GUI Git 客户端（Fork、SourceTree）的 PATH，以及 Windows 上的密钥改存凭据管理器 |
 | 5 | 命令行发布到 npm（`yunbox`），CI 自动发布 | **完成**（2026-10-19）：`yunbox@0.1.0` 已发布到 npm（首发用维护者本机登录），从 registry 安装实测可用。之后的版本由 `pnpm release` 打 tag，`Release` 工作流通过 trusted publishing（OIDC）发布并附带 provenance；npm 只信任 `YunLeFun/yunbox` 的 `release.yml` + `npm` environment，包设置为发布必须两步验证、禁止 token |
-| 6 | macOS 客户端显示直连状态、一键接入和 doctor 结果 | **完成**（2026-10-18）：标题栏显示直连状态，面板展示 `doctor --json` 的逐项结果；可以在窗口里保存密钥、选择或新建 bucket 并运行 `git yunbox init`。CLI 新增 `doctor --json` 和 `buckets --json`。还差：在真实 bucket 上从窗口完整接入一次 |
-| 7 | 试点：选一个真实仓库用满 2 周，记录到 plan.md 第 12 节 | 需要你选仓库 |
+| 6 | macOS 客户端显示直连状态、一键接入和 doctor 结果 | **完成**（2026-10-18）：标题栏显示直连状态，面板展示 `doctor --json` 的逐项结果；可以在窗口里保存密钥、选择或新建 bucket 并运行 `git yunbox init`。CLI 新增 `doctor --json` 和 `buckets --json`。在真实 bucket（life 试点）上窗口显示「直连 COS · 正常」；从窗口一键接入只在测试替身上验证过 |
+| 7 | 试点：选一个真实仓库用满 2 周，记录到 plan.md 第 12 节 | **已开始**（2026-10-19）：`YunYouJun/life` 的 main 已接入（`c4bc3fd`），模型、音频、视频走 `yunyoujun-assets-prod-1325586649`（ap-shanghai）的 `yunbox/YunYouJun/life/`，已有的 PNG 等文件不变；真实 bucket 上做过一次往返验证（测试对象已删除），macOS 窗口显示「直连 COS · 正常」。2 周后记录结论 |
 
 ## 一句话目标
 

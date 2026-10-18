@@ -296,6 +296,14 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **CAM 生效有延迟**：从可写切到只读后的约一分钟内，同一子账号的写请求有的被拒绝、有的仍然成功（不同 COS 节点生效时间不同）。第一次实测因此出现「检查显示只读、随后推送仍成功」；等 90 秒并连续 3 次确认拒绝后再测，结果符合预期。这是平台行为，不是代理的问题；文档里提醒开号或改权限后稍等再用。
 - **npm 首发**：npm 的 trusted publishing 要在包的设置里配置，包必须先存在，所以 0.1.0 用维护者本机的 npm 登录手动发布一次（本地发布不能生成 provenance，用 `--provenance=false`）。之后用 `npm trust` 绑定 `YunLeFun/yunbox` 的 `release.yml` 和 `npm` environment，并在包设置里禁止 token 发布；以后的版本只走 OIDC，自动带 provenance。
 
+### 首次 OIDC 发布与 life 试点（2026-10-19）
+
+- **OIDC 发布跑通**：`yunbox@0.1.1` 由 `Release` 工作流通过 npm trusted publishing 发布，没有用任何 token，npm 记录了 GitHub 的 trusted publisher 和 provenance。包已设为 `mfa=publish`（发布必须两步验证、禁止 token）。
+- **修了一个会卡住终端的缺陷**：0.1.0 的 `git yunbox init` 一开始就在标准输入上创建读取器，参数齐全、一个问题都不问时，进程在终端里不会退出。0.1.1 改为只在需要提问时才读取标准输入，并且总会关闭；回归测试会启动真实进程、保持标准输入打开，确认它能退出。这个问题只在真实终端里出现，测试替身和 macOS 应用（标准输入是空设备）都发现不了。
+- **life 试点**：`YunYouJun/life` 是私有仓库，原来没有用 LFS，现在跟踪的文件里也没有大文件。接入时只跟踪模型、音频、视频（`--types model,audio,video`）：仓库里有 50 个 PNG（应用图标、Android 资源），而 CI 拉代码时不下载 LFS，如果把 PNG 也纳入 LFS 会破坏构建。COS 位置是 `yunyoujun-assets-prod-1325586649`（ap-shanghai）的 `yunbox/YunYouJun/life/`，按使用者的选择直接接入 main。
+- **已知风险（使用者已确认）**：`yunyoujun-assets-prod` 的存储桶策略把整个 bucket 的读权限授予了 EdgeOne。如果这个 bucket 是某个 EdgeOne 站点的回源，知道对象键（前缀 + SHA-256）的人可以绕过子账号权限，经 CDN 下载素材。更严格的做法是换到不接 CDN 的 bucket（例如 `yunlefun-private`），或者在 EdgeOne 上屏蔽 `yunbox/` 路径。
+- **CI 与 LFS**：`life` 的 CI 用 `actions/checkout` 拉代码，不下载 LFS。以后如果构建或测试要用到 LFS 里的模型，CI 需要安装 `yunbox`、配置只读子账号密钥（`yunbox policy --read-only`），并在构建前运行 `git yunbox init && git lfs pull`。
+
 ### 后续风险
 
 - CloudBase 云托管绑定运行角色后是否以 `TENCENTCLOUD_*` 环境变量注入临时密钥**未核实**（云函数是这样做的）。如果不是，需要在服务端增加从平台元数据接口获取密钥的代码，或者临时改用只挂最小权限策略的子账号长期密钥。
