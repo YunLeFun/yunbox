@@ -1,6 +1,8 @@
 import type { Sandbox } from './helpers.ts'
-import { writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { delimiter, join } from 'node:path'
+import process from 'node:process'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { FakeCosServer } from '../../core/test/fake-cos-server.ts'
 import { resolveCredentials } from '../src/cos/credentials.ts'
@@ -8,6 +10,9 @@ import { FakeCamServer } from './fake-cam-server.ts'
 import { createRepository, createSandbox, runYunBox } from './helpers.ts'
 
 const admin = { secretId: 'AKIDADMINADMINADMINADMINADMINADMIN', secretKey: 'admin-secret-key-admin-secret-key', sessionToken: 'admin-session-token' }
+const workspaceRoot = fileURLToPath(new URL('../../..', import.meta.url))
+const cliSource = join(workspaceRoot, 'packages', 'cli', 'src', 'cli.ts')
+const tsxLoader = pathToFileURL(join(workspaceRoot, 'node_modules', 'tsx', 'dist', 'loader.mjs')).href
 const cleanups: Array<() => Promise<void>> = []
 
 afterEach(async () => {
@@ -25,7 +30,12 @@ async function setup(): Promise<{ sandbox: Sandbox, cam: FakeCamServer, cos: Fak
   cam.onKeysCreated = keys => cos.allowKeys(keys)
   const tccli = join(sandbox.root, 'tccli.credential')
   await writeFile(tccli, JSON.stringify({ type: 'oauth', secretId: admin.secretId, secretKey: admin.secretKey, token: admin.sessionToken, expiresAt: Math.floor(Date.now() / 1000) + 3600 }))
+  // init registers `git-yunbox` by name; never rely on one installed on the developer's PATH.
+  const bin = join(sandbox.root, 'bin')
+  await mkdir(bin)
+  await writeFile(join(bin, 'git-yunbox'), `#!/bin/sh\nexec "${process.execPath.replaceAll('\\', '/')}" --no-warnings --import "${tsxLoader}" "${cliSource.replaceAll('\\', '/')}" "$@"\n`, { mode: 0o755 })
   Object.assign(sandbox.env, {
+    PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
     YUNBOX_TCCLI_CREDENTIAL: tccli,
     YUNBOX_CAM_ENDPOINT: cam.origin,
     YUNBOX_COS_ENDPOINT: cos.origin,
