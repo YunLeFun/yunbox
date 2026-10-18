@@ -12,7 +12,7 @@
 | 顺序 | 事项 | 状态 |
 |---|---|---|
 | 1 | 直连传输代理、`yunbox login`、`git yunbox init` / `clone`、`doctor` 直连检查 | **完成**，真实 COS 已实测 |
-| 2 | CAM 子账号策略：可直接复制的模板，加一个只输出策略 JSON、不改动账号的 `yunbox policy` 命令 | **代码完成**（2026-10-18）：`yunbox policy [--read-only]` 按 `.yunboxconfig` 输出 PutObject / GetObject / HeadObject（只读去掉 PutObject）的前缀级策略，资源格式已按官方文档核对；读写探测不再需要 DeleteObject；开子账号步骤见 deploy.md「直连模式：给协作者开子账号」。还差：真实子账号在真实 bucket 上实测 |
+| 2 | CAM 子账号策略：可直接复制的模板，加一个只输出策略 JSON、不改动账号的 `yunbox policy` 命令 | **代码完成**（2026-10-18）：`yunbox policy [--read-only]` 按 `.yunboxconfig` 输出 PutObject / GetObject / HeadObject（只读去掉 PutObject）的前缀级策略，资源格式已按官方文档核对；读写探测不再需要 DeleteObject；开子账号步骤见 deploy.md「直连模式：给协作者开子账号」。**真实子账号已实测**（2026-10-18）：临时子账号只挂 `yunbox policy` 生成的策略，在测试 bucket 上 8 项全部通过（可写：接入、推送、clone，前缀外被拒绝，不能列出 bucket；只读：`doctor --read-only` 通过、推送被拒绝、拉取正常），子账号、密钥和策略已删除 |
 | 3 | 密钥改存 macOS 钥匙串 / Windows 凭据管理器，文件存储作为兜底 | **macOS 完成**（2026-10-18）：`yunbox login` 默认存进钥匙串（系统 `security` 命令，SecretKey 只经标准输入），失败时回退到 600 文件，`logout` 两处都清理；临时钥匙串上的真实测试可选运行。**Windows 暂用文件**：没有经过验证的免依赖方案，放到第 4 项 Windows 实测时再定 |
 | 4 | Windows 实测（PowerShell、Git Bash、GUI 客户端的 PATH），修复发现的问题 | **CI 实测完成**（2026-10-18）：新增 Windows 工作流，在 GitHub 的 Windows 运行环境上用 Git for Windows 自带的 git-lfs 跑 CLI 全部测试，包括直连 COS 的完整端到端流程。修复了两个真实问题：git-lfs 通过 sh 启动传输代理，sh 不认 `.cmd`，`init` 现在只在有 npm/pnpm 生成的无扩展名脚本时按命令名登记，否则写带引号的绝对路径；`yunbox hook install` 不再要求 Windows 上不存在的可执行位。还没测：GUI Git 客户端（Fork、SourceTree）的 PATH，以及 Windows 上的密钥改存凭据管理器 |
 | 5 | 命令行发布到 npm（`yunbox`），CI 自动发布 | **准备完成**（2026-10-18）：包信息、LICENSE、包内 README、`publishConfig`（public + provenance）；`pnpm release` 用 bumpp 改版本、打 tag、推送，`Release` 工作流校验 tag、跑全部检查后发布。`npm pack` 后全局安装实测可用。**还差你**：在 npm 生成自动化 token，存为仓库 `npm` environment 的 `NPM_TOKEN`，然后运行 `pnpm release` |

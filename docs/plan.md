@@ -290,6 +290,12 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **测试沙箱**：Windows 上 `yunbox login` 的密钥文件在 `%APPDATA%`，沙箱现在把 `APPDATA` / `LOCALAPPDATA` 也指到临时目录；写进 `.gitconfig` 的路径改用正斜杠，因为 git 把反斜杠当转义。
 - **npm 发布**：`yunbox` 和 `git-yunbox` 在 npm 上都没有被占用。包里 `@yunbox/core` 已打进 `dist`，没有运行时依赖；`yunbox --version` 读取包版本。发布由推送 `v*` tag 触发，用仓库 `npm` environment 里的 `NPM_TOKEN`，带 npm provenance。
 
+### 子账号实测与 npm 首发（2026-10-18）
+
+- **子账号实测**：用 `tccli` 临时创建一个只能编程访问的 CAM 子账号，只关联 `yunbox policy` 生成的策略（资源 `qcs::cos:<地域>:uid/<APPID>:<bucket>/<前缀>/*`），在 `yunbox-e2e-1325586649` 的随机前缀下测试。可写策略：`git yunbox init` 的读写探测、推送、协作者 clone 都通过，前缀外的 `init` 被拒绝，`yunbox buckets` 报 AccessDenied。换成只读策略后：`doctor --read-only` 通过、`doctor` 报不能写、推送新对象被拒绝、拉取已有对象正常。测试完删除了子账号（连同密钥）、两条策略和测试对象。
+- **CAM 生效有延迟**：从可写切到只读后的约一分钟内，同一子账号的写请求有的被拒绝、有的仍然成功（不同 COS 节点生效时间不同）。第一次实测因此出现「检查显示只读、随后推送仍成功」；等 90 秒并连续 3 次确认拒绝后再测，结果符合预期。这是平台行为，不是代理的问题；文档里提醒开号或改权限后稍等再用。
+- **npm 首发**：npm 的 trusted publishing 要在包的设置里配置，包必须先存在，所以 0.1.0 用维护者本机的 npm 登录手动发布一次（本地发布不能生成 provenance，用 `--provenance=false`）。之后用 `npm trust` 绑定 `YunLeFun/yunbox` 的 `release.yml` 和 `npm` environment，并在包设置里禁止 token 发布；以后的版本只走 OIDC，自动带 provenance。
+
 ### 后续风险
 
 - CloudBase 云托管绑定运行角色后是否以 `TENCENTCLOUD_*` 环境变量注入临时密钥**未核实**（云函数是这样做的）。如果不是，需要在服务端增加从平台元数据接口获取密钥的代码，或者临时改用只挂最小权限策略的子账号长期密钥。
