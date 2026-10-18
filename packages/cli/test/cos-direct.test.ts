@@ -54,6 +54,8 @@ async function setup(): Promise<{ sandbox: Sandbox, cos: FakeCosServer }> {
     YUNBOX_COS_SERVICE_ENDPOINT: cos.origin,
     YUNBOX_COS_ENDPOINT: cos.origin,
     GIT_LFS_SKIP_SMUDGE: '0',
+    // On Windows, show git-lfs's view of the transfer agent when a push fails.
+    ...(process.platform === 'win32' ? { GIT_TRACE: '1', GIT_TRANSFER_TRACE: '1' } : {}),
   })
   delete sandbox.env.TENCENTCLOUD_SECRETID
   delete sandbox.env.TENCENTCLOUD_SECRETKEY

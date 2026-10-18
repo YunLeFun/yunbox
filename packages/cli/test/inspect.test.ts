@@ -4,6 +4,7 @@ import { Buffer } from 'node:buffer'
 import { createHash, randomBytes } from 'node:crypto'
 import { rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import process from 'node:process'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createRepository, createSandbox, git, runYunBox } from './helpers.ts'
 
@@ -119,7 +120,8 @@ describe('push inspection', () => {
     }
   })
 
-  it('keeps full JSON details while limiting terminal rankings and escaping paths', async () => {
+  // Windows file names cannot contain quotes or control characters.
+  it.skipIf(process.platform === 'win32')('keeps full JSON details while limiting terminal rankings and escaping paths', async () => {
     const { sandbox, repo } = await fixture()
     const unusualPath = '素材 "one"\n\t\x1B.bin'
     await writeFile(join(repo, unusualPath), randomBytes(4096))

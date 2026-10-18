@@ -32,6 +32,9 @@ export async function createSandbox(options: { credentialHelper?: boolean } = {}
     HOME: home,
     USERPROFILE: home,
     XDG_CONFIG_HOME: join(home, '.config'),
+    // Windows keeps per-user settings (and `yunbox login` keys) under %APPDATA%.
+    APPDATA: join(home, 'AppData', 'Roaming'),
+    LOCALAPPDATA: join(home, 'AppData', 'Local'),
     GIT_CONFIG_GLOBAL: globalConfig,
     GIT_CONFIG_NOSYSTEM: '1',
     GIT_TERMINAL_PROMPT: '0',

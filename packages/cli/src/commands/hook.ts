@@ -76,7 +76,7 @@ export async function runHook(context: CliContext, args: string[]): Promise<numb
     if (!isAbsolute(guard) || !(await regularFile(guard)))
       throw new CliError('--guard 必须指向已有的绝对路径可执行文件')
     const stat = await lstat(guard)
-    if ((stat.mode & 0o111) === 0)
+    if (!isExecutableMode(stat.mode))
       throw new CliError('--guard 文件不可执行')
     command = `WORKSTATION_YUNBOX_CHAIN=1 ${shellQuote(guard)} "$@"`
   }
@@ -88,7 +88,7 @@ export async function runHook(context: CliContext, args: string[]): Promise<numb
     command = `${shellQuote(process.execPath)} ${shellQuote(cli)} inspect --push --stdin --remote "$2"`
   }
   const hadOriginal = state?.hadOriginal ?? Boolean(hookFile)
-  const originalExecutable = (((state ? backupFile : hookFile)?.mode ?? 0) & 0o111) !== 0
+  const originalExecutable = isExecutableMode((state ? backupFile : hookFile)?.mode ?? 0)
   const wrapper = `#!/bin/sh
 ${MARKER}
 set -eu
@@ -151,4 +151,12 @@ async function regularFile(path: string): Promise<Stats | undefined> {
       return undefined
     throw error
   }
+}
+
+/**
+ * Whether a file mode marks an executable. Windows has no execute bit (Node
+ * never reports one); Git for Windows runs hooks and what they call through sh.
+ */
+function isExecutableMode(mode: number): boolean {
+  return process.platform === 'win32' || (mode & 0o111) !== 0
 }
