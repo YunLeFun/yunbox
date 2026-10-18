@@ -386,6 +386,8 @@ async function diagnoseCos(repo: CliContext, location: CosLocation, report: (ste
   // resolveCredentials already validated YUNBOX_CREDENTIAL_STORE, so this cannot throw.
   if (resolved.source === 'file' && defaultSecretStores(repo.env).some(store => store.kind === 'keychain'))
     report({ status: 'warn', title: 'COS 密钥', detail: `来自 ${resolved.description}（明文文件）`, fixes: ['yunbox login   # 重新保存到 macOS 钥匙串，会删除这个文件'] })
+  else if (resolved.source === 'tccli')
+    report({ status: 'warn', title: 'COS 密钥', detail: `来自 ${resolved.description}：临时密钥，大约 2 小时后要重新登录`, fixes: ['yunbox subaccount create --save   # 用当前登录新建只给 YunBox 用的子账号，长期密钥存进本机'] })
   else
     report({ status: 'pass', title: 'COS 密钥', detail: `来自 ${resolved.description}` })
 

@@ -40,6 +40,9 @@ export async function runInitCos(
 ): Promise<number> {
   const resolved = await requireCredentials(context.env)
   printStep(context, { status: 'pass', title: 'COS 密钥', detail: `来自 ${resolved.description}，只保存在本机，不会写进仓库` })
+  if (resolved.source === 'tccli') {
+    printStep(context, { status: 'warn', title: 'COS 密钥', detail: '这是 tccli 的临时密钥，大约 2 小时后过期', fixes: ['接入完成后运行 yunbox subaccount create --save，换成只给 YunBox 用的长期子账号密钥'] })
+  }
   const { credentials } = resolved
   const ask = createLineReader(context)
   try {

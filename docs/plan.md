@@ -304,6 +304,13 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **已知风险（使用者已确认）**：`yunyoujun-assets-prod` 的存储桶策略把整个 bucket 的读权限授予了 EdgeOne。如果这个 bucket 是某个 EdgeOne 站点的回源，知道对象键（前缀 + SHA-256）的人可以绕过子账号权限，经 CDN 下载素材。更严格的做法是换到不接 CDN 的 bucket（例如 `yunlefun-private`），或者在 EdgeOne 上屏蔽 `yunbox/` 路径。
 - **CI 与 LFS**：`life` 的 CI 用 `actions/checkout` 拉代码，不下载 LFS。以后如果构建或测试要用到 LFS 里的模型，CI 需要安装 `yunbox`、配置只读子账号密钥（`yunbox policy --read-only`），并在构建前运行 `git yunbox init && git lfs pull`。
 
+### 长期子账号密钥一条命令配置（2026-10-19）
+
+- **问题**：`tccli auth login` 的临时密钥大约 2 小时过期，日常 push / pull 要反复登录；手动在控制台建子账号、贴策略、建密钥、`yunbox login` 步骤太多。
+- **做法**：新增 `yunbox subaccount create | grant | list | delete`。只用管理员身份（`TENCENTCLOUD_*` 环境变量或 tccli 登录）调用 CAM API 3.0，签名（TC3-HMAC-SHA256）自己实现，和 tccli 自带的官方 Python SDK 结果逐字节一致，运行时仍然不依赖 SDK。子账号只能编程访问，备注标记为 YunBox 所建；策略就是 `yunbox policy` 的输出，命名为 `<子账号>-<位置哈希>-rw|ro`，同一位置重复授权会复用；中途失败会删除已建的子账号，不留半成品。`--save` 把长期密钥存进本机（macOS 钥匙串）后，用新密钥反复探测直到权限生效；`--show-key` 只显示一次，用于转交协作者。`delete` 只删除备注为 YunBox 的子账号，连同密钥和它的 YunBox 策略。
+- **提醒**：`yunbox doctor` 和 `git yunbox init` 发现正在用 tccli 临时密钥时，提示换成 `yunbox subaccount create --save`。
+- **实测**：在真实 CAM 上创建临时子账号、保存密钥到临时目录、等待权限生效并读写测试 bucket、`list`、`delete`，最后 CAM 里没有遗留用户和策略。真实的 `ListAttachedUserPolicies` 不返回策略描述，`list` 改为再调用 `GetPolicy` 取描述。
+
 ### 后续风险
 
 - CloudBase 云托管绑定运行角色后是否以 `TENCENTCLOUD_*` 环境变量注入临时密钥**未核实**（云函数是这样做的）。如果不是，需要在服务端增加从平台元数据接口获取密钥的代码，或者临时改用只挂最小权限策略的子账号长期密钥。

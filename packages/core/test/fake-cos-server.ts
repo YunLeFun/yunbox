@@ -78,6 +78,13 @@ export class FakeCosServer {
    */
   policy: FakeCamPolicy | undefined
 
+  readonly #extraKeys: CosCredentials[] = []
+
+  /** Also accept requests signed with these keys, for example a sub-account created during a test. */
+  allowKeys(credentials: CosCredentials): void {
+    this.#extraKeys.push(credentials)
+  }
+
   constructor(credentials: CosCredentials) {
     this.#credentials = credentials
   }
@@ -215,11 +222,12 @@ export class FakeCosServer {
     }
     if (AUTHORIZATION_FIELDS.some(name => !fields.has(name)))
       return false
-    if (fields.get('q-ak') !== this.#credentials.secretId || fields.get('q-sign-time') !== fields.get('q-key-time'))
+    const credentials = [this.#credentials, ...this.#extraKeys].find(candidate => candidate.secretId === fields.get('q-ak'))
+    if (credentials === undefined || fields.get('q-sign-time') !== fields.get('q-key-time'))
       return false
 
     const token = request.headers['x-cos-security-token'] ?? url.searchParams.get('x-cos-security-token') ?? undefined
-    if (token !== this.#credentials.sessionToken)
+    if (token !== credentials.sessionToken)
       return false
 
     const keyTime = fields.get('q-key-time')!
@@ -243,8 +251,8 @@ export class FakeCosServer {
       signedQuery[name] = value
     }
     const expected = COS.getAuthorization({
-      SecretId: this.#credentials.secretId,
-      SecretKey: this.#credentials.secretKey,
+      SecretId: credentials.secretId,
+      SecretKey: credentials.secretKey,
       Method: method.toLowerCase(),
       Pathname: `/${key}`,
       Query: signedQuery,

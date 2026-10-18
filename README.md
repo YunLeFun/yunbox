@@ -21,22 +21,30 @@ git push / clone ──▶ git-lfs ──▶ git-yunbox lfs-agent ──▶ 腾�
 **管理员第一次接入仓库：**
 
 ```bash
-yunbox login                 # 保存自己的 SecretId / SecretKey（或者 tccli auth login）
+tccli auth login             # 浏览器登录腾讯云（管理员身份，临时密钥约 2 小时）
 git yunbox init              # 列出 bucket → 选一个或新建私有 bucket → 填目录前缀 → 读写探测
 git add .gitattributes .yunboxconfig
 git commit -m "chore: 用 YunBox 把 LFS 素材直传到 COS"
 git push
 
-yunbox policy                # 打印给协作者子账号用的最小权限策略 JSON（只输出，不改动 CAM）
-yunbox policy --read-only    # 只需要拉取的人用这份
+yunbox subaccount create --save   # 给自己建只能读写这个前缀的子账号，长期密钥存进本机钥匙串
 ```
 
-**给协作者开子账号**（详细步骤和策略说明见 [docs/deploy.md](./docs/deploy.md#直连模式给协作者开子账号)）：
+最后一步之后，这台电脑就一直用这把长期子账号密钥，不用再每两小时 `tccli auth login`；`yunbox doctor` 在还用着 tccli 临时密钥时会提醒。
 
-1. 腾讯云访问管理 → 用户 → 新建用户，只勾「编程访问」。每人一个子账号。
-2. 策略 → 新建自定义策略 → 按策略语法创建，粘贴 `yunbox policy` 的输出，关联给这个子账号。
-3. 在子账号的「API 密钥」里新建密钥，通过安全渠道交给协作者。人员离开时禁用或删除这把密钥即可。
-4. 策略改动要几十秒到一两分钟才在 COS 各节点全部生效。刚开好或刚改过权限时，先等一会儿再让对方运行 `yunbox doctor`。
+**给协作者开子账号**（同样用管理员的 `tccli auth login`）：
+
+```bash
+yunbox subaccount create yunbox-alice --show-key              # 新建并显示一次密钥，通过安全渠道转交
+yunbox subaccount create yunbox-bob --show-key --read-only    # 只需要拉取的人
+yunbox subaccount grant yunbox-alice                          # 在另一个已接入的仓库里运行：给她再授权这个仓库
+yunbox subaccount list                                        # YunBox 建的子账号和各自能访问的前缀
+yunbox subaccount delete yunbox-alice                         # 人员离开：删除子账号、密钥和策略，立即失效
+```
+
+- 子账号只能编程访问（不能登录控制台），策略只授权这个前缀下对象的 `PutObject`、`GetObject`、`HeadObject`（只读去掉 `PutObject`），不能列出 bucket、不能删除、碰不到其他前缀。策略内容就是 `yunbox policy` 的输出，想在控制台手动建也可以，步骤见 [docs/deploy.md](./docs/deploy.md#直连模式给协作者开子账号)。
+- `--save` 会等权限生效后用新密钥实测读写；权限改动要几十秒到一两分钟才在 COS 各节点全部生效。
+- `subaccount` 只用管理员身份（`tccli auth login` 或 `TENCENTCLOUD_*` 环境变量）调用 CAM，不会用、也不会改动本机已保存的子账号密钥；`delete` 只删 YunBox 建的子账号。
 
 **协作者：**
 

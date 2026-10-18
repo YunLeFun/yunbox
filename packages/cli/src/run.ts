@@ -10,6 +10,7 @@ import { runLfsAgent } from './commands/lfs-agent.ts'
 import { runLogin, runLogout } from './commands/login.ts'
 import { runPolicy } from './commands/policy.ts'
 import { runStatus } from './commands/status.ts'
+import { runSubaccount } from './commands/subaccount.ts'
 import { CliError, printError, USAGE_EXIT_CODE } from './context.ts'
 
 /** Version reported by `yunbox --version`. */
@@ -23,6 +24,7 @@ export const mainHelp = `云匣 YunBox 命令行（版本 ${CLI_VERSION}）
 
 命令：
   login    在这台电脑上保存自己的腾讯云 COS 密钥（logout 删除）
+  subaccount  用管理员身份新建 / 授权 / 删除只给 YunBox 用的子账号，并保存长期密钥
   policy   输出给协作者子账号用的最小权限 CAM 策略 JSON（不改动账号）
   init     在当前仓库接入 YunBox：.gitattributes、.lfsconfig，git-lfs 直连 COS
   clone    clone 一个直连 COS 的仓库并下载素材
@@ -40,6 +42,7 @@ export const mainHelp = `云匣 YunBox 命令行（版本 ${CLI_VERSION}）
 const COMMANDS: Record<string, (context: CliContext, args: string[]) => Promise<number>> = {
   'login': runLogin,
   'buckets': runBuckets,
+  'subaccount': runSubaccount,
   'logout': runLogout,
   'policy': runPolicy,
   'init': runInit,
