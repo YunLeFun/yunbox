@@ -1,0 +1,44 @@
+name: macOS client
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - apps/macos/**
+      - script/**
+      - packages/cli/**
+      - pnpm-lock.yaml
+      - .github/workflows/macos.yml
+  pull_request:
+    paths:
+      - apps/macos/**
+      - script/**
+      - packages/cli/**
+      - pnpm-lock.yaml
+      - .github/workflows/macos.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r run build
+      - name: Test native client and CLI integration
+        run: |
+          YUNBOX_TEST_NODE="$(node -p 'process.execPath')" \
+          YUNBOX_TEST_CLI="$PWD/packages/cli/dist/cli.mjs" \
+          swift test --package-path apps/macos
+      - run: ./script/build_and_run.sh --build

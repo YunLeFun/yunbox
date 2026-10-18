@@ -7,6 +7,8 @@ export default antfu(
     pnpm: true,
     ignores: [
       '**/dist/**',
+      '**/.build/**',
+      '**/.swiftpm/**',
       'coverage/**',
     ],
   },

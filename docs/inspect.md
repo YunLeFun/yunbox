@@ -2,6 +2,8 @@
 
 `yunbox inspect` 检查已提交的 Git 内容和 LFS 指针，不上传文件、不改写历史，也不要求配置 YunBox 服务或安装 git-lfs。未提交的构建目录不在统计范围内。
 
+希望使用窗口操作时，可安装 [macOS 原生客户端](../apps/macos/README.md)，它复用以下 JSON 接口，支持仓库选择、文件筛选和报告复制。
+
 ```bash
 yunbox inspect --push
 yunbox inspect --push --base origin/main --head HEAD --json

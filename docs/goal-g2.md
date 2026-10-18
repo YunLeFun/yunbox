@@ -89,7 +89,7 @@
 - 按 token 限流，防止单个客户端打满并发。
 - 用量统计命令：按仓库统计对象数和总大小。
 
-> **补充进度（2026-10-18）：本地推送检查已实现。** `yunbox inspect --push` 提供 Git/LFS 分项、超限文件与 JSON，`yunbox hook install` 串联检查和原上传钩子，供 Workstation 调用；见 [inspect.md](./inspect.md)。这是推送前的本地预算检查，服务端仓库用量、审计、告警仍按本阶段计划推进，Craft Hub 界面尚未接入。
+> **补充进度（2026-10-18）：本地推送检查已实现。** `yunbox inspect --push` 提供 Git/LFS 分项、超限文件与 JSON，`yunbox hook install` 串联检查和原上传钩子，供 Workstation 调用；见 [inspect.md](./inspect.md)。新增 [macOS 原生客户端](../apps/macos/README.md)，提供本机查看和筛选界面。这是推送前的本地预算检查，服务端仓库用量、审计、告警仍按本阶段计划推进，Craft Hub 界面尚未接入。
 
 ### 阶段 5：备份与恢复
 
