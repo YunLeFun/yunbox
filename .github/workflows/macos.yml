@@ -6,6 +6,7 @@ on:
     paths:
       - apps/macos/**
       - script/**
+      - assets/brand/**
       - packages/cli/**
       - pnpm-lock.yaml
       - .github/workflows/macos.yml
@@ -13,6 +14,7 @@ on:
     paths:
       - apps/macos/**
       - script/**
+      - assets/brand/**
       - packages/cli/**
       - pnpm-lock.yaml
       - .github/workflows/macos.yml

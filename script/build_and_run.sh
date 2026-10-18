@@ -19,9 +19,28 @@ mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources/cli"
 cp "$BUILD_DIR/YunBox" "$APP_BUNDLE/Contents/MacOS/YunBox"
 cp -R packages/cli/dist/. "$APP_BUNDLE/Contents/Resources/cli/"
 node -e 'require("node:fs").writeFileSync(process.argv[1], JSON.stringify({node: process.execPath}))' "$APP_BUNDLE/Contents/Resources/runtime.json"
-swift script/create_app_icon.swift "$ROOT_DIR/dist/AppIcon.iconset"
+swift script/create_app_icon.swift assets/brand/yunbox-app-icon.svg "$ROOT_DIR/dist/AppIcon.iconset"
 iconutil -c icns "$ROOT_DIR/dist/AppIcon.iconset" -o "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
-cat > "$APP_BUNDLE/Contents/Info.plist" <<'PLIST'
+# macOS 26 reads the layered Icon Composer icon (default, dark, clear, tinted)
+# from Assets.car via CFBundleIconName; AppIcon.icns above stays the fallback.
+# Compiling .icon files needs Xcode 26+, so older toolchains keep only the icns.
+node script/sync-app-icon.mjs --check
+ACTOOL_MAJOR="$(xcrun actool --version 2>/dev/null | sed -n '/short-bundle-version/{n;s/.*<string>\([0-9]*\).*/\1/p;}')"
+if [ "${ACTOOL_MAJOR:-0}" -ge 26 ]; then
+  ICON_BUILD_DIR="$ROOT_DIR/dist/YunBox.icon-build"
+  rm -rf "$ICON_BUILD_DIR"
+  mkdir -p "$ICON_BUILD_DIR"
+  xcrun actool assets/brand/YunBox.icon --compile "$ICON_BUILD_DIR" \
+    --platform macosx --target-device mac --minimum-deployment-target 14.0 \
+    --app-icon YunBox --output-partial-info-plist "$ICON_BUILD_DIR/partial.plist" \
+    --errors --warnings --output-format human-readable-text >/dev/null
+  cp "$ICON_BUILD_DIR/Assets.car" "$APP_BUNDLE/Contents/Resources/Assets.car"
+  ICON_NAME_KEY='<key>CFBundleIconName</key><string>YunBox</string>'
+else
+  echo "warning: actool ${ACTOOL_MAJOR:-unknown} cannot compile YunBox.icon (needs Xcode 26+); using AppIcon.icns only" >&2
+  ICON_NAME_KEY=''
+fi
+cat > "$APP_BUNDLE/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
@@ -33,6 +52,7 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<'PLIST'
   <key>CFBundleShortVersionString</key><string>0.1.0</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
+  $ICON_NAME_KEY
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSHighResolutionCapable</key><true/>

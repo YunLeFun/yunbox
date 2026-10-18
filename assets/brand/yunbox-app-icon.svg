@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>云匣应用图标</title>
+  <defs>
+    <linearGradient id="yunbox-sky" x1="32" y1="0" x2="32" y2="64" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#55aaff"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" fill="url(#yunbox-sky)"/>
+  <g fill="#ffffff">
+    <path d="M8 13H56V21H8Z"/>
+    <path fill-rule="evenodd" d="M11 25H53V53H11ZM22.6 33.6 28.6 44H16.6ZM41.6 33.4A5.6 5.6 0 1 0 41.6 44.6 5.6 5.6 0 1 0 41.6 33.4Z"/>
+  </g>
+</svg>

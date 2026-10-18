@@ -10,6 +10,8 @@ export default antfu(
       '**/.build/**',
       '**/.swiftpm/**',
       'coverage/**',
+      // Icon Composer documents keep Apple's formatting and are SHA-256 pinned.
+      '**/*.icon/**',
     ],
   },
 )

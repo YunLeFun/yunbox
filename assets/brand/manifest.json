@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "product": "yunbox",
+  "displayName": "云匣",
+  "version": "v1",
+  "canonical": {
+    "repository": "YunLeFun/icons",
+    "path": "assets/apps/yunbox/v1"
+  },
+  "provenance": {
+    "kind": "vector-artwork",
+    "originalRepository": "YunLeFun/yunbox",
+    "originalPath": "assets/brand/yunbox-app-icon.svg",
+    "created": "2026-10-18"
+  },
+  "files": {
+    "yunbox-app-icon.svg": "2403400b302770b9c9e621cd17ce956e38b13ebdb000d48e0c2c5d804a21fe36",
+    "yunbox-mark.svg": "0bf2b9c24284d069a6591a31ed83db5cc9f68b760e3dbfbcd71ecff96f871219",
+    "YunBox.icon/icon.json": "2739b4cf4f39596e6d7d1cd3d82b03288330325fcbb7fc8e0867caee67f5c580",
+    "YunBox.icon/Assets/lid.svg": "fd14760c21cc9f09eea3acf0bf805c7da9abe225bd8bb9f7f67433ac2c38c1a9",
+    "YunBox.icon/Assets/body.svg": "ed8ab419d288ea1d639bb0152ad604fbbf12d94fe7f59a4b3ed97f97d9792925"
+  }
+}
