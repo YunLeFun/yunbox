@@ -1,6 +1,7 @@
 import type { FakeCamPolicy } from '../../core/test/fake-cos-server.ts'
 import type { Sandbox } from './helpers.ts'
 import { Buffer } from 'node:buffer'
+import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { chmod, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { delimiter, join } from 'node:path'
@@ -185,6 +186,28 @@ describe('git-lfs directly to COS, without a server', () => {
     expect(noKeys.code).toBe(1)
     expect(noKeys.stderr).toContain('yunbox login')
   })
+
+  it('exits after a fully specified init even when stdin stays open, as in a terminal', async () => {
+    const { sandbox } = await setup()
+    sandbox.env.TENCENTCLOUD_SECRETID = keys.secretId
+    sandbox.env.TENCENTCLOUD_SECRETKEY = keys.secretKey
+    const repo = await createRepository(sandbox)
+    // stdin is a pipe that is never closed: an unused reader on it used to keep init running forever.
+    const child = spawn(process.execPath, ['--no-warnings', '--import', tsxLoader, cliSource, 'init', '--bucket', 'team-assets-1250000000', '--prefix', 'yunbox/open-stdin'], { cwd: repo, env: sandbox.env, stdio: ['pipe', 'ignore', 'ignore'] })
+    try {
+      const code = await new Promise<number | null>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('git yunbox init did not exit')), 20_000)
+        child.on('exit', (exitCode) => {
+          clearTimeout(timer)
+          resolve(exitCode)
+        })
+      })
+      expect(code).toBe(0)
+    }
+    finally {
+      child.kill()
+    }
+  }, 30_000)
 
   it('reports buckets and doctor results as JSON for graphical clients', async () => {
     const { sandbox } = await setup()

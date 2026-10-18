@@ -3,24 +3,38 @@ import { createInterface } from 'node:readline'
 import { CliError, USAGE_EXIT_CODE } from './context.ts'
 
 /** Asks questions one line at a time; `undefined` once input has ended. */
-export type LineReader = (question: string) => Promise<string | undefined>
+export interface LineReader {
+  (question: string): Promise<string | undefined>
+  /** Stop reading stdin. Always call it: an open reader keeps the process alive. */
+  close: () => void
+}
 
 /**
  * Read answers line by line from the context's stdin, showing each question
- * first. Works on a terminal and with piped answers (tests, scripts).
+ * first. Works on a terminal and with piped answers (tests, scripts). stdin is
+ * only touched once a question is actually asked, so a command that needs no
+ * answers never waits on it.
  */
 export function createLineReader(context: CliContext): LineReader {
-  const lines = createInterface({ input: context.stdin, crlfDelay: Infinity })
-  const iterator = lines[Symbol.asyncIterator]()
+  let lines: ReturnType<typeof createInterface> | undefined
+  let iterator: AsyncIterator<string> | undefined
   let ended = false
-  return async (question) => {
+  const close = (): void => {
+    ended = true
+    lines?.close()
+    lines = undefined
+  }
+  const ask = async (question: string): Promise<string | undefined> => {
     if (ended)
       return undefined
+    if (lines === undefined) {
+      lines = createInterface({ input: context.stdin, crlfDelay: Infinity })
+      iterator = lines[Symbol.asyncIterator]()
+    }
     context.stdout.write(question)
-    const next = await iterator.next()
+    const next = await iterator!.next()
     if (next.done) {
-      ended = true
-      lines.close()
+      close()
       context.stdout.write('\n')
       return undefined
     }
@@ -28,6 +42,7 @@ export function createLineReader(context: CliContext): LineReader {
       context.stdout.write('\n')
     return next.value
   }
+  return Object.assign(ask, { close })
 }
 
 /** Ask and require an answer; explains which option replaces the question when input has ended. */

@@ -42,87 +42,91 @@ export async function runInitCos(
   printStep(context, { status: 'pass', title: 'COS 密钥', detail: `来自 ${resolved.description}，只保存在本机，不会写进仓库` })
   const { credentials } = resolved
   const ask = createLineReader(context)
-
-  // 1. Where the objects go: .yunboxconfig, options, or an interactive choice.
-  const existing = await readLocation(repo, root).catch((error: Error) => {
-    throw new CliError(`${LOCATION_FILE} 的配置不对：${error.message}`)
-  })
-  const choosing = values.bucket !== undefined || values.region !== undefined || values.prefix !== undefined || values.create === true || existing === undefined
-  let location: CosLocation
-  if (!choosing) {
-    location = existing!
-    printStep(context, { status: 'pass', title: 'COS 位置', detail: `沿用 ${LOCATION_FILE}：${describeLocation(location)}` })
-  }
-  else {
-    location = await chooseLocation(context, repo, root, values, credentials, ask, existing)
-    if (existing !== undefined && !sameLocation(existing, location) && !values.force)
-      throw new CliError(`${LOCATION_FILE} 里已经配置了 ${describeLocation(existing)}，和 ${describeLocation(location)} 不同。确认要替换时加 --force`)
-  }
-
-  // 2. Check access before changing anything in the repository.
-  const client = new CosDirectClient(location, () => credentials)
-  const steps = await client.probe()
-  const writable = steps.length === PROBE_OPERATIONS.length && steps.every(step => step.ok)
-  if (writable) {
-    printStep(context, { status: 'pass', title: 'COS 权限', detail: `可以在 ${describeLocation(location)} 写入和读取` })
-  }
-  else if (steps[0]?.operation === 'PUT' && steps[0].status === 403 && await canRead(client, location)) {
-    printStep(context, {
-      status: values['read-only'] ? 'pass' : 'warn',
-      title: 'COS 权限',
-      detail: '这把密钥只能读取，可以 pull / clone，不能 push',
-      fixes: values['read-only'] ? [] : ['需要推送时，请管理员给你的子账号加上这个前缀的写权限（PutObject）'],
+  try {
+    // 1. Where the objects go: .yunboxconfig, options, or an interactive choice.
+    const existing = await readLocation(repo, root).catch((error: Error) => {
+      throw new CliError(`${LOCATION_FILE} 的配置不对：${error.message}`)
     })
-  }
-  else {
-    const failed = steps.find(step => !step.ok)
-    throw new CliError([
-      `本机密钥不能访问 ${describeLocation(location)}（${failed?.operation ?? 'PUT'} 返回 ${failed?.status || '无响应'}），仓库没有修改。`,
-      '  - 检查 bucket 名称和地域是否正确',
-      '  - 确认子账号有这个前缀的 PutObject、GetObject、HeadObject 权限',
-      '  - 临时密钥可能已过期：tccli auth login，或 yunbox login 重新保存',
-    ].join('\n'))
-  }
+    const choosing = values.bucket !== undefined || values.region !== undefined || values.prefix !== undefined || values.create === true || existing === undefined
+    let location: CosLocation
+    if (!choosing) {
+      location = existing!
+      printStep(context, { status: 'pass', title: 'COS 位置', detail: `沿用 ${LOCATION_FILE}：${describeLocation(location)}` })
+    }
+    else {
+      location = await chooseLocation(context, repo, root, values, credentials, ask, existing)
+      if (existing !== undefined && !sameLocation(existing, location) && !values.force)
+        throw new CliError(`${LOCATION_FILE} 里已经配置了 ${describeLocation(existing)}，和 ${describeLocation(location)} 不同。确认要替换时加 --force`)
+    }
 
-  // 3. Shared steps, then the COS settings.
-  // Joining a repository that is already set up must not change its committed .gitattributes.
-  await install(context, repo, root, choosing || values.types !== undefined ? categories : undefined)
-  if (existing !== undefined && sameLocation(existing, location)) {
-    printStep(context, { status: 'pass', title: LOCATION_FILE, detail: `已是 ${describeLocation(location)}，未修改` })
-  }
-  else {
-    await writeLocation(repo, root, location)
-    printStep(context, { status: 'pass', title: LOCATION_FILE, detail: `bucket / region / prefix = ${describeLocation(location)}（不含密钥，提交后团队共享）` })
-  }
-  const leftoverUrl = await readGitConfig(repo, 'lfs.url', join(root, '.lfsconfig'))
-  if (leftoverUrl !== undefined) {
-    printStep(context, {
-      status: 'warn',
-      title: 'lfs.url',
-      detail: `.lfsconfig 里还有服务端模式的 lfs.url（${leftoverUrl}）；直连 COS 时不会用到它`,
-      fixes: ['git config --file .lfsconfig --unset lfs.url'],
-    })
-  }
+    // 2. Check access before changing anything in the repository.
+    const client = new CosDirectClient(location, () => credentials)
+    const steps = await client.probe()
+    const writable = steps.length === PROBE_OPERATIONS.length && steps.every(step => step.ok)
+    if (writable) {
+      printStep(context, { status: 'pass', title: 'COS 权限', detail: `可以在 ${describeLocation(location)} 写入和读取` })
+    }
+    else if (steps[0]?.operation === 'PUT' && steps[0].status === 403 && await canRead(client, location)) {
+      printStep(context, {
+        status: values['read-only'] ? 'pass' : 'warn',
+        title: 'COS 权限',
+        detail: '这把密钥只能读取，可以 pull / clone，不能 push',
+        fixes: values['read-only'] ? [] : ['需要推送时，请管理员给你的子账号加上这个前缀的写权限（PutObject）'],
+      })
+    }
+    else {
+      const failed = steps.find(step => !step.ok)
+      throw new CliError([
+        `本机密钥不能访问 ${describeLocation(location)}（${failed?.operation ?? 'PUT'} 返回 ${failed?.status || '无响应'}），仓库没有修改。`,
+        '  - 检查 bucket 名称和地域是否正确',
+        '  - 确认子账号有这个前缀的 PutObject、GetObject、HeadObject 权限',
+        '  - 临时密钥可能已过期：tccli auth login，或 yunbox login 重新保存',
+      ].join('\n'))
+    }
 
-  const agent = resolveAgentCommand(context)
-  await runGitChecked(repo, ['config', '--local', 'lfs.standalonetransferagent', AGENT_NAME])
-  await runGitChecked(repo, ['config', '--local', `lfs.customtransfer.${AGENT_NAME}.path`, agent.path])
-  await runGitChecked(repo, ['config', '--local', `lfs.customtransfer.${AGENT_NAME}.args`, agent.args])
-  await runGitChecked(repo, ['config', '--local', `lfs.customtransfer.${AGENT_NAME}.concurrent`, 'true'])
-  // Without a server there is no Locks API to verify against.
-  await runGitChecked(repo, ['config', '--local', 'lfs.locksverify', 'false'])
-  printStep(context, { status: 'pass', title: '传输代理', detail: `本仓库的 git-lfs 改用 ${agent.display} 直连 COS（写在 .git/config，只对这份 clone 生效）` })
+    // 3. Shared steps, then the COS settings.
+    // Joining a repository that is already set up must not change its committed .gitattributes.
+    await install(context, repo, root, choosing || values.types !== undefined ? categories : undefined)
+    if (existing !== undefined && sameLocation(existing, location)) {
+      printStep(context, { status: 'pass', title: LOCATION_FILE, detail: `已是 ${describeLocation(location)}，未修改` })
+    }
+    else {
+      await writeLocation(repo, root, location)
+      printStep(context, { status: 'pass', title: LOCATION_FILE, detail: `bucket / region / prefix = ${describeLocation(location)}（不含密钥，提交后团队共享）` })
+    }
+    const leftoverUrl = await readGitConfig(repo, 'lfs.url', join(root, '.lfsconfig'))
+    if (leftoverUrl !== undefined) {
+      printStep(context, {
+        status: 'warn',
+        title: 'lfs.url',
+        detail: `.lfsconfig 里还有服务端模式的 lfs.url（${leftoverUrl}）；直连 COS 时不会用到它`,
+        fixes: ['git config --file .lfsconfig --unset lfs.url'],
+      })
+    }
 
-  print(context)
-  print(context, '下一步：')
-  print(context, `  git add .gitattributes ${LOCATION_FILE}`)
-  print(context, '  git commit -m "chore: 用 YunBox 把 LFS 素材直传到 COS"')
-  print(context, '  git push')
-  print(context)
-  print(context, '协作者：安装 YunBox 命令行，用 yunbox login 保存自己的子账号密钥，然后')
-  print(context, '  git yunbox clone <仓库地址>      # 新 clone')
-  print(context, '  git yunbox init && git lfs pull  # 已有的 clone')
-  return 0
+    const agent = resolveAgentCommand(context)
+    await runGitChecked(repo, ['config', '--local', 'lfs.standalonetransferagent', AGENT_NAME])
+    await runGitChecked(repo, ['config', '--local', `lfs.customtransfer.${AGENT_NAME}.path`, agent.path])
+    await runGitChecked(repo, ['config', '--local', `lfs.customtransfer.${AGENT_NAME}.args`, agent.args])
+    await runGitChecked(repo, ['config', '--local', `lfs.customtransfer.${AGENT_NAME}.concurrent`, 'true'])
+    // Without a server there is no Locks API to verify against.
+    await runGitChecked(repo, ['config', '--local', 'lfs.locksverify', 'false'])
+    printStep(context, { status: 'pass', title: '传输代理', detail: `本仓库的 git-lfs 改用 ${agent.display} 直连 COS（写在 .git/config，只对这份 clone 生效）` })
+
+    print(context)
+    print(context, '下一步：')
+    print(context, `  git add .gitattributes ${LOCATION_FILE}`)
+    print(context, '  git commit -m "chore: 用 YunBox 把 LFS 素材直传到 COS"')
+    print(context, '  git push')
+    print(context)
+    print(context, '协作者：安装 YunBox 命令行，用 yunbox login 保存自己的子账号密钥，然后')
+    print(context, '  git yunbox clone <仓库地址>      # 新 clone')
+    print(context, '  git yunbox init && git lfs pull  # 已有的 clone')
+    return 0
+  }
+  finally {
+    ask.close()
+  }
 }
 
 async function chooseLocation(
