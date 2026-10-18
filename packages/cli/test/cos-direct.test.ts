@@ -38,9 +38,15 @@ async function setup(): Promise<{ sandbox: Sandbox, cos: FakeCosServer }> {
   cos.buckets.push({ name: 'team-assets-1250000000', region: 'ap-shanghai' })
   const bin = join(sandbox.root, 'bin')
   await mkdir(bin)
-  const shim = join(bin, 'git-yunbox')
-  await writeFile(shim, `#!/bin/sh\nexec "${process.execPath}" --no-warnings --import "${tsxLoader}" "${cliSource}" "$@"\n`)
-  await chmod(shim, 0o755)
+  // Stand-in for the npm bin; git-lfs finds the .cmd through PATHEXT on Windows.
+  if (process.platform === 'win32') {
+    await writeFile(join(bin, 'git-yunbox.cmd'), `@"${process.execPath}" --no-warnings --import "${tsxLoader}" "${cliSource}" %*\r\n`)
+  }
+  else {
+    const shim = join(bin, 'git-yunbox')
+    await writeFile(shim, `#!/bin/sh\nexec "${process.execPath}" --no-warnings --import "${tsxLoader}" "${cliSource}" "$@"\n`)
+    await chmod(shim, 0o755)
+  }
   Object.assign(sandbox.env, {
     PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
     TSX_TSCONFIG_PATH: join(workspaceRoot, 'tsconfig.json'),
@@ -54,7 +60,7 @@ async function setup(): Promise<{ sandbox: Sandbox, cos: FakeCosServer }> {
   return { sandbox, cos }
 }
 
-describe.skipIf(process.platform === 'win32')('git-lfs directly to COS, without a server', () => {
+describe('git-lfs directly to COS, without a server', () => {
   it('logs in, sets up a repository interactively, pushes, clones, restores history and refuses tampered objects', async () => {
     const { sandbox, cos } = await setup()
 
@@ -62,7 +68,8 @@ describe.skipIf(process.platform === 'win32')('git-lfs directly to COS, without 
     expect(login.stderr).toBe('')
     expect(login.code).toBe(0)
     const file = credentialsFilePath(sandbox.env)
-    expect((await stat(file)).mode & 0o777).toBe(0o600)
+    if (process.platform !== 'win32')
+      expect((await stat(file)).mode & 0o777).toBe(0o600)
     expect((await resolveCredentials(sandbox.env))?.source).toBe('file')
 
     const origin = join(sandbox.root, 'origin.git')

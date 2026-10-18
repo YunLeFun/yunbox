@@ -1,0 +1,47 @@
+name: Windows
+
+# The CLI and the git-lfs transfer agent on Windows: Git for Windows (with its
+# bundled git-lfs), npm-style .cmd shims, PowerShell and backslash paths. The
+# macOS client is not involved; it only runs on macOS.
+
+on:
+  push:
+    branches:
+      - main
+      - 'ci/**'
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: CLI and git-lfs agent on Windows
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Show Git and git-lfs
+        run: |
+          git --version
+          git lfs version
+          git lfs install --skip-repo
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm exec vitest run packages/core packages/cli
