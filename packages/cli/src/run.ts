@@ -1,4 +1,5 @@
 import type { CliContext } from './context.ts'
+import { runBuckets } from './commands/buckets.ts'
 import { runClone } from './commands/clone.ts'
 import { runDoctor } from './commands/doctor.ts'
 import { runHook } from './commands/hook.ts'
@@ -24,6 +25,7 @@ export const mainHelp = `云匣 YunBox 命令行（版本 ${CLI_VERSION}）
   policy   输出给协作者子账号用的最小权限 CAM 策略 JSON（不改动账号）
   init     在当前仓库接入 YunBox：.gitattributes、.lfsconfig，git-lfs 直连 COS
   clone    clone 一个直连 COS 的仓库并下载素材
+  buckets  列出本机密钥能看到的 COS bucket
   doctor   检查配置、连通性和读写权限，并给出修复命令
   status   列出当前仓库 LFS 对象的数量和总大小
   inspect  推送前分别检查 Git/LFS 大小、超限文件和 JSON 明细
@@ -36,6 +38,7 @@ export const mainHelp = `云匣 YunBox 命令行（版本 ${CLI_VERSION}）
 
 const COMMANDS: Record<string, (context: CliContext, args: string[]) => Promise<number>> = {
   'login': runLogin,
+  'buckets': runBuckets,
   'logout': runLogout,
   'policy': runPolicy,
   'init': runInit,

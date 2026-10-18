@@ -10,18 +10,63 @@ public struct InspectionClient: Sendable {
     }
 
     public func inspect(repository: URL, limits: [String] = []) async throws -> InspectionResult {
+        let output = try await ProcessRunner.run(
+            executable: node,
+            arguments: [cli.path, "inspect", "--push", "--json"] + limits,
+            directory: repository, environment: environment()
+        )
+        return try InspectionResult.decode(output.data, exitCode: output.exitCode)
+    }
+
+    /// `yunbox doctor --json`: whether this repository can push and pull through YunBox.
+    public func doctor(repository: URL) async throws -> DoctorReport {
+        let output = try await ProcessRunner.run(
+            executable: node, arguments: [cli.path, "doctor", "--json"],
+            directory: repository, environment: environment(), timeout: 60
+        )
+        return try DoctorReport.decode(output.data, exitCode: output.exitCode)
+    }
+
+    /// `yunbox buckets --json` with this machine's keys.
+    public func buckets(directory: URL) async throws -> [CosBucket] {
+        let output = try await ProcessRunner.run(
+            executable: node, arguments: [cli.path, "buckets", "--json"],
+            directory: directory, environment: environment(), timeout: 60
+        )
+        return try BucketListing.decode(output.data)
+    }
+
+    /// `git yunbox init` for direct COS without questions; the window has already asked them.
+    public func setUpCos(repository: URL, bucket: String, region: String, prefix: String, create: Bool) async throws -> CommandOutput {
+        var arguments = [cli.path, "init", "--bucket", bucket, "--region", region, "--prefix", prefix, "--yes"]
+        if create { arguments.append("--create") }
+        return try await text(arguments: arguments, directory: repository, timeout: 120)
+    }
+
+    /// `yunbox login`; the SecretKey only travels on stdin, never in arguments.
+    public func login(secretId: String, secretKey: String, directory: URL) async throws -> CommandOutput {
+        try await text(
+            arguments: [cli.path, "login", "--secret-id", secretId, "--secret-key-stdin"],
+            directory: directory, timeout: 60, input: Data(secretKey.utf8)
+        )
+    }
+
+    private func text(arguments: [String], directory: URL, timeout: TimeInterval, input: Data? = nil) async throws -> CommandOutput {
+        let output = try await ProcessRunner.run(
+            executable: node, arguments: arguments, directory: directory, environment: environment(),
+            timeout: timeout, outputLimit: 1024 * 1024, input: input, mergeStandardError: true
+        )
+        return CommandOutput(exitCode: output.exitCode, text: String(decoding: output.data, as: UTF8.self))
+    }
+
+    private func environment() -> [String: String] {
         var environment = ProcessInfo.processInfo.environment
         let standardPath = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
         environment["PATH"] = "\(node.deletingLastPathComponent().path):\(environment["PATH"] ?? ""):\(standardPath)"
         environment["GIT_TERMINAL_PROMPT"] = "0"
         // A selected directory is authoritative, even if launched from a shell with Git overrides.
         for key in ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"] { environment.removeValue(forKey: key) }
-        let output = try await ProcessRunner.run(
-            executable: node,
-            arguments: [cli.path, "inspect", "--push", "--json"] + limits,
-            directory: repository, environment: environment
-        )
-        return try InspectionResult.decode(output.data, exitCode: output.exitCode)
+        return environment
     }
 
     public static func bundled(nodeOverride: String = "", bundle: Bundle = .main) throws -> InspectionClient {

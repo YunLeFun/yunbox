@@ -39,8 +39,25 @@ export const doctorHelp = `用法：yunbox doctor [选项]
 
 选项：
   --read-only   只需要拉取素材时使用：不要求写权限
+  --json        只输出一个 JSON 对象（schemaVersion 1），供图形界面等工具读取
   -h, --help    显示帮助
 `
+
+/** What `yunbox doctor --json` prints. */
+export interface DoctorJson {
+  schemaVersion: 1
+  status: 'ok' | 'failed'
+  /** How this repository uses YunBox: direct COS, a YunBox server, or not set up. */
+  mode: 'cos' | 'server' | 'none'
+  location?: { bucket: string, region: string, prefix: string }
+  steps: StepReport[]
+}
+
+/** Facts `diagnose` learns on the way, for the JSON output. */
+interface DoctorSummary {
+  mode: DoctorJson['mode']
+  location?: CosLocation
+}
 
 /** Run `yunbox doctor`. Returns 0 when every check passes, otherwise 1. */
 export async function runDoctor(context: CliContext, args: string[]): Promise<number> {
@@ -52,10 +69,23 @@ export async function runDoctor(context: CliContext, args: string[]): Promise<nu
   const steps: StepReport[] = []
   const report = (step: StepReport): void => {
     steps.push(step)
-    printStep(context, step)
+    if (!values.json)
+      printStep(context, step)
   }
-  await diagnose(context, report, values['read-only'] ?? false)
+  const summary: DoctorSummary = { mode: 'none' }
+  await diagnose(context, report, values['read-only'] ?? false, summary)
   const failures = steps.filter(step => step.status === 'fail').length
+  if (values.json) {
+    const output: DoctorJson = {
+      schemaVersion: 1,
+      status: failures === 0 ? 'ok' : 'failed',
+      mode: summary.mode,
+      ...(summary.location === undefined ? {} : { location: { bucket: summary.location.bucket, region: summary.location.region, prefix: summary.location.prefix } }),
+      steps,
+    }
+    context.stdout.write(`${JSON.stringify(output)}\n`)
+    return failures === 0 ? 0 : 1
+  }
   print(context)
   if (failures === 0) {
     print(context, values['read-only'] ? '全部检查通过，可以拉取素材。' : '全部检查通过，可以推送和拉取素材。')
@@ -65,7 +95,7 @@ export async function runDoctor(context: CliContext, args: string[]): Promise<nu
   return 1
 }
 
-async function diagnose(context: CliContext, report: (step: StepReport) => void, readOnly: boolean): Promise<void> {
+async function diagnose(context: CliContext, report: (step: StepReport) => void, readOnly: boolean, summary: DoctorSummary): Promise<void> {
   const git = await detectGitVersion(context)
   if (!git.found) {
     report({ status: 'fail', title: 'git', detail: git.reason, fixes: gitInstallHints() })
@@ -108,11 +138,15 @@ async function diagnose(context: CliContext, report: (step: StepReport) => void,
     return
   }
   if (location !== undefined) {
+    summary.mode = 'cos'
+    summary.location = location
     await diagnoseCos(repo, location, report, readOnly)
     return
   }
 
   const configured = await readLfsUrl(repo, root)
+  if (configured !== undefined)
+    summary.mode = 'server'
   if (configured === undefined) {
     report({
       status: 'fail',
@@ -379,12 +413,13 @@ async function diagnoseCos(repo: CliContext, location: CosLocation, report: (ste
   })
 }
 
-function parseDoctorArgs(args: string[]): { 'read-only'?: boolean, 'help'?: boolean } {
+function parseDoctorArgs(args: string[]): { 'read-only'?: boolean, 'json'?: boolean, 'help'?: boolean } {
   try {
     return parseArgs({
       args,
       options: {
         'read-only': { type: 'boolean' },
+        'json': { type: 'boolean' },
         'help': { type: 'boolean', short: 'h' },
       },
     }).values

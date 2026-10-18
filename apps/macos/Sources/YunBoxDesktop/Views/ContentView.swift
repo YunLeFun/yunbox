@@ -51,6 +51,7 @@ struct ContentView: View {
                             Text(repository.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
                         }
                         Spacer()
+                        CosStatusChip(store: store)
                         if let date = store.checkedAt {
                             Text("检查于 \(checkedLabel(date))")
                                 .font(.caption).foregroundStyle(.secondary)
@@ -94,6 +95,7 @@ struct ContentView: View {
                 }
             }
         }
+        .sheet(isPresented: $store.showingCos) { CosSheet(store: store) }
         .fileImporter(isPresented: $store.choosingRepository, allowedContentTypes: [.folder]) { result in
             if case .success(let url) = result { store.select(url) }
         }

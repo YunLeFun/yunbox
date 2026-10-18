@@ -12,7 +12,7 @@ struct YunBoxApp: App {
             ContentView(store: store)
                 .frame(minWidth: 880, minHeight: 600)
                 .onOpenURL { store.select($0) }
-                .task { if store.repository != nil { store.inspect() } }
+                .task { if store.repository != nil { store.inspect(); store.checkCos() } }
         }
         .defaultSize(width: 1120, height: 760)
         .commands {

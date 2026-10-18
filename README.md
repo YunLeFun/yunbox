@@ -55,7 +55,7 @@ git yunbox clone <仓库地址>   # = clone 历史 + git yunbox init + git lfs p
 
 ## 当前能力
 
-- **直连 COS**：git-lfs 独立传输代理 `git-yunbox lfs-agent`、`yunbox login` / `logout`（macOS 存钥匙串，其他系统存 600 文件）、`yunbox policy`（输出子账号最小权限策略）、`git yunbox init`（交互选择或新建 bucket）、`git yunbox clone`、`yunbox doctor` 的直连检查
+- **直连 COS**：git-lfs 独立传输代理 `git-yunbox lfs-agent`、`yunbox login` / `logout`（macOS 存钥匙串，其他系统存 600 文件）、`yunbox policy`（输出子账号最小权限策略）、`git yunbox init`（交互选择或新建 bucket）、`git yunbox clone`、`yunbox doctor` 的直连检查、`yunbox buckets`；`doctor` 和 `buckets` 都支持 `--json`，供图形界面读取
 - Git LFS Batch API：upload / download，`transfer: basic`
 - Verify API：核对对象大小并持久化“已校验”状态
 - 仓库隔离的本地文件存储，以及由服务端提供的签名 PUT / GET 地址
@@ -67,7 +67,7 @@ git yunbox clone <仓库地址>   # = clone 历史 + git yunbox init + git lfs p
 - Docker 镜像、免鉴权的健康检查 `GET /_health`、全部来自环境变量的配置和启动时的配置自检
 - 命令行 `git yunbox init` / `yunbox doctor` / `yunbox status`：一条命令接入仓库，自检配置、凭据和读写权限
 - [推送体积检查](./docs/inspect.md)：`yunbox inspect --push` 分别统计 Git pack 和 LFS 候选量，列出超限文件，支持 JSON；`yunbox hook install` 在原有上传钩子前串行执行检查
-- [macOS 原生客户端](./apps/macos/README.md)：选择仓库查看 Git/LFS 预算、搜索超限文件、复制完整 JSON；SwiftUI 界面复用 CLI，可安装到本机 Applications
+- [macOS 原生客户端](./apps/macos/README.md)：选择仓库查看 Git/LFS 预算、搜索超限文件、复制完整 JSON；显示 COS 直连状态，可以在窗口里保存密钥、选择或新建 bucket 一键接入；SwiftUI 界面复用 CLI，可安装到本机 Applications
 
 默认只监听 `127.0.0.1`。监听其他地址时必须用 `--public-url` 配置 https 地址，否则拒绝启动；Basic 认证的内容是明文，**公网部署必须经过 HTTPS**。部署方式见 [docs/deploy.md](./docs/deploy.md)，按其中的检查清单确认之前不要把服务暴露到其他网络。
 

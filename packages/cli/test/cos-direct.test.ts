@@ -177,4 +177,34 @@ describe.skipIf(process.platform === 'win32')('git-lfs directly to COS, without 
     expect(noKeys.code).toBe(1)
     expect(noKeys.stderr).toContain('yunbox login')
   })
+
+  it('reports buckets and doctor results as JSON for graphical clients', async () => {
+    const { sandbox } = await setup()
+    const repo = await createRepository(sandbox)
+    const noKeys = JSON.parse((await runYunBox(sandbox, repo, ['buckets', '--json'])).stdout) as { status: string, error: { code: string } }
+    expect(noKeys).toMatchObject({ status: 'error', error: { code: 'NO_CREDENTIALS' } })
+
+    sandbox.env.TENCENTCLOUD_SECRETID = keys.secretId
+    sandbox.env.TENCENTCLOUD_SECRETKEY = keys.secretKey
+    const buckets = await runYunBox(sandbox, repo, ['buckets', '--json'])
+    expect(buckets.code).toBe(0)
+    expect(JSON.parse(buckets.stdout)).toEqual({ schemaVersion: 1, status: 'ok', buckets: [{ name: 'team-assets-1250000000', region: 'ap-shanghai' }] })
+
+    const before = await runYunBox(sandbox, repo, ['doctor', '--json'])
+    expect(before.code).toBe(1)
+    const unset = JSON.parse(before.stdout) as { mode: string, status: string, steps: Array<{ title: string, status: string }> }
+    expect(unset).toMatchObject({ schemaVersion: 1, status: 'failed', mode: 'none' })
+    expect(unset.steps.some(step => step.title === 'YunBox' && step.status === 'fail')).toBe(true)
+
+    expect((await runYunBox(sandbox, repo, ['init', '--bucket', 'team-assets-1250000000', '--prefix', 'yunbox/json'])).code).toBe(0)
+    const after = await runYunBox(sandbox, repo, ['doctor', '--json'])
+    expect(after.stdout.trim().split('\n')).toHaveLength(1)
+    expect(JSON.parse(after.stdout)).toMatchObject({
+      schemaVersion: 1,
+      status: 'ok',
+      mode: 'cos',
+      location: { bucket: 'team-assets-1250000000', region: 'ap-shanghai', prefix: 'yunbox/json' },
+    })
+    expect(after.stdout).not.toContain(keys.secretKey)
+  })
 })

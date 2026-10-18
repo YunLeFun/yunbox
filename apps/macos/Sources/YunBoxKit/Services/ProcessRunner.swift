@@ -10,7 +10,7 @@ public enum ProcessRunner {
     public static func run(
         executable: URL, arguments: [String], directory: URL,
         environment: [String: String], timeout: TimeInterval = 120,
-        outputLimit: Int = 64 * 1024 * 1024
+        outputLimit: Int = 64 * 1024 * 1024, input: Data? = nil, mergeStandardError: Bool = false
     ) async throws -> Output {
         let controller = ProcessController()
         return try await withTaskCancellationHandler {
@@ -22,14 +22,21 @@ public enum ProcessRunner {
                     process.arguments = arguments
                     process.currentDirectoryURL = directory
                     process.environment = environment
-                    process.standardInput = FileHandle.nullDevice
+                    let inputPipe = input == nil ? nil : Pipe()
+                    process.standardInput = inputPipe ?? FileHandle.nullDevice
                     process.standardOutput = output
-                    // CLI errors are structured on stdout. Never expose raw subprocess diagnostics/URLs.
-                    process.standardError = FileHandle.nullDevice
+                    // JSON commands report errors on stdout, so their stderr is dropped. Setup commands
+                    // print user-facing messages on stderr; callers opt in to see them.
+                    process.standardError = mergeStandardError ? output : FileHandle.nullDevice
                     do {
                         try controller.prepare(process)
                         try process.run()
                         controller.didStart()
+                        if let inputPipe, let input {
+                            // Small payloads (a secret key); written once, then closed so the child sees EOF.
+                            try inputPipe.fileHandleForWriting.write(contentsOf: input)
+                            try inputPipe.fileHandleForWriting.close()
+                        }
                         let deadline = DispatchWorkItem { controller.stop(timedOut: true) }
                         DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: deadline)
                         defer { deadline.cancel() }

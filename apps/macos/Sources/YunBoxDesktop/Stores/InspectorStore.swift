@@ -19,6 +19,13 @@ final class InspectorStore {
     var selectedFile: String?
     var choosingRepository = false
     var copiedJSON = false
+    /// `yunbox doctor` for the current repository: direct-COS status and every check.
+    var cosReport: DoctorReport?
+    var isCheckingCos = false
+    var cosError: String?
+    var showingCos = false
+    @ObservationIgnored private var cosTask: Task<Void, Never>?
+    @ObservationIgnored private var cosRequestID = UUID()
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var copyFeedback: Task<Void, Never>?
     @ObservationIgnored private var requestID = UUID()
@@ -66,6 +73,7 @@ final class InspectorStore {
         saveRecents()
         showCachedResult(for: root.path)
         inspect()
+        checkCos()
         return true
     }
 
@@ -154,6 +162,37 @@ final class InspectorStore {
             if requestID == id { isInspecting = false; task = nil }
         }
     }
+
+    /// The CLI bundled with the app, honouring the Node.js path from Settings.
+    func client() throws -> InspectionClient {
+        try InspectionClient.bundled(nodeOverride: UserDefaults.standard.string(forKey: "nodePath") ?? "")
+    }
+
+    /// Run `yunbox doctor` for the current repository; a newer call or a switch supersedes older ones.
+    func checkCos() {
+        guard let repository else { return }
+        cosTask?.cancel()
+        let id = UUID()
+        cosRequestID = id
+        if cosReport != nil, cosReportPath != repository.path { cosReport = nil }
+        cosError = nil
+        isCheckingCos = true
+        cosTask = Task {
+            do {
+                let report = try await client().doctor(repository: repository)
+                guard cosRequestID == id else { return }
+                cosReport = report
+                cosReportPath = repository.path
+            } catch is CancellationError {
+            } catch {
+                guard cosRequestID == id else { return }
+                cosError = (error as? LocalizedError)?.errorDescription ?? "检查程序未能运行。请在设置中确认 Node.js 路径。"
+            }
+            if cosRequestID == id { isCheckingCos = false; cosTask = nil }
+        }
+    }
+
+    @ObservationIgnored private var cosReportPath: String?
 
     func cancel() {
         requestID = UUID()

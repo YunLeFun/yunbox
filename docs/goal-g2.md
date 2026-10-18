@@ -16,7 +16,7 @@
 | 3 | 密钥改存 macOS 钥匙串 / Windows 凭据管理器，文件存储作为兜底 | **macOS 完成**（2026-10-18）：`yunbox login` 默认存进钥匙串（系统 `security` 命令，SecretKey 只经标准输入），失败时回退到 600 文件，`logout` 两处都清理；临时钥匙串上的真实测试可选运行。**Windows 暂用文件**：没有经过验证的免依赖方案，放到第 4 项 Windows 实测时再定 |
 | 4 | Windows 实测（PowerShell、Git Bash、GUI 客户端的 PATH），修复发现的问题 | 需要 Windows 机器 |
 | 5 | 命令行发布到 npm（`yunbox`），CI 自动发布 | 待做 |
-| 6 | macOS 客户端显示直连状态、一键接入和 doctor 结果 | 待做 |
+| 6 | macOS 客户端显示直连状态、一键接入和 doctor 结果 | **完成**（2026-10-18）：标题栏显示直连状态，面板展示 `doctor --json` 的逐项结果；可以在窗口里保存密钥、选择或新建 bucket 并运行 `git yunbox init`。CLI 新增 `doctor --json` 和 `buckets --json`。还差：在真实 bucket 上从窗口完整接入一次 |
 | 7 | 试点：选一个真实仓库用满 2 周，记录到 plan.md 第 12 节 | 需要你选仓库 |
 
 ## 一句话目标
