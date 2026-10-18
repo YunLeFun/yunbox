@@ -23,6 +23,7 @@ export const CONFIG_ENVIRONMENT = {
   publicUrl: ['YUNBOX_PUBLIC_URL'],
   storage: ['YUNBOX_STORAGE'],
   storageDirectory: ['YUNBOX_STORAGE_DIR'],
+  storageConfig: ['YUNBOX_STORAGE_CONFIG'],
   metadata: ['YUNBOX_METADATA'],
   metadataDirectory: ['YUNBOX_METADATA_DIR'],
 } as const
@@ -31,6 +32,7 @@ export const CONFIG_ENVIRONMENT = {
 export interface StorageOptionValues {
   'storage'?: string
   'storage-dir'?: string
+  'storage-config'?: string
   'metadata'?: string
   'metadata-dir'?: string
 }
@@ -46,6 +48,8 @@ export interface ServeOptionValues extends StorageOptionValues {
 export interface StorageSettings {
   kind: 'local' | 'cos'
   storageDirectory: string
+  /** COS routing file path or inline JSON; when set, COS buckets come from it instead of YUNBOX_COS_*. */
+  storageConfig?: string
   metadata: 'local' | 'cloudbase'
   /** Directory of local metadata. */
   metadataDirectory: string
@@ -84,12 +88,17 @@ function pick(cliName: string, cliValue: string | undefined, env: NodeJS.Process
 function resolveStorage(values: StorageOptionValues, env: NodeJS.ProcessEnv, problems: string[]): StorageSettings {
   const kind = pick('storage', values.storage, env, CONFIG_ENVIRONMENT.storage, DEFAULT_STORAGE)
   const storageDirectory = pick('storage-dir', values['storage-dir'], env, CONFIG_ENVIRONMENT.storageDirectory, DEFAULT_STORAGE_DIRECTORY).value
+  const storageConfigSetting = pick('storage-config', values['storage-config'], env, CONFIG_ENVIRONMENT.storageConfig, '')
+  const storageConfig = storageConfigSetting.value === '' ? undefined : storageConfigSetting.value
   const metadataDirectory = pick('metadata-dir', values['metadata-dir'], env, CONFIG_ENVIRONMENT.metadataDirectory, defaultMetadataDirectory(storageDirectory)).value
   const storageKind = kind.value === 'cos' ? 'cos' : 'local'
-  if (kind.value !== 'local' && kind.value !== 'cos')
+  if (kind.value !== 'local' && kind.value !== 'cos') {
     problems.push(`storage (from ${kind.source}) must be local or cos`)
-  else
-    problems.push(...checkStorageEnvironment(kind.value, env))
+  }
+  else {
+    problems.push(...checkStorageEnvironment(kind.value, env, storageConfig).map(problem =>
+      problem.startsWith('storage configuration') ? `${problem} (from ${storageConfigSetting.source})` : problem))
+  }
   const metadata = pick('metadata', values.metadata, env, CONFIG_ENVIRONMENT.metadata, defaultMetadataKind(kind.value))
   const metadataKind = metadata.value === 'cloudbase' ? 'cloudbase' : 'local'
   if (metadata.value !== 'local' && metadata.value !== 'cloudbase') {
@@ -100,7 +109,7 @@ function resolveStorage(values: StorageOptionValues, env: NodeJS.ProcessEnv, pro
     problems.push(...checkMetadataEnvironment(metadata.value, env).filter(problem =>
       !(problem.startsWith('TENCENTCLOUD_SECRETID and') && problems.some(other => other.startsWith('TENCENTCLOUD_SECRET')))))
   }
-  return { kind: storageKind, storageDirectory, metadata: metadataKind, metadataDirectory }
+  return { kind: storageKind, storageDirectory, storageConfig, metadata: metadataKind, metadataDirectory }
 }
 
 /**

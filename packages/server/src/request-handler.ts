@@ -29,6 +29,7 @@ import {
 } from '@yunbox/core'
 import { describeErrorForLog, loggablePath } from './logging.ts'
 import { ActionAuthorizationError } from './signed-actions.ts'
+import { RepositoryNotConfiguredError } from './storage-routes.ts'
 import { permits, resolvePermission, TokenStoreUnavailableError } from './tokens.ts'
 
 /** Largest accepted batch or verify request body. */
@@ -555,6 +556,8 @@ function toHttpError(error: unknown): HttpError {
     return new HttpError(413, 'Object body is larger than the size in the upload action')
   if (error instanceof TokenStoreUnavailableError)
     return new HttpError(503, 'Authentication is temporarily unavailable', { 'Retry-After': '5' })
+  if (error instanceof RepositoryNotConfiguredError)
+    return new HttpError(404, error.message)
   return new HttpError(500, 'Internal server error')
 }
 

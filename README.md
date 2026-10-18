@@ -118,6 +118,25 @@ pnpm --filter @yunbox/server start --storage cos
 - 对象键为 `<prefix>/<owner>/<repo>/<oid[0:2]>/<oid[2:4]>/<oid>`，旁边的 `<oid>.verified.json` 是已校验标记。
 - 上传地址的签名包含 `Content-Length`，大小不符的上传会被 COS 直接拒绝。下载地址的签名包含 `If-Match: <ETag>`，对象在校验后被覆盖时 COS 会拒绝下载。
 
+#### 用 `cos setup` 交互配置，按项目选 bucket
+
+不想手写环境变量时，用管理员命令交互选择：
+
+```bash
+tccli auth login                      # 或者设置 TENCENTCLOUD_SECRETID / TENCENTCLOUD_SECRETKEY
+yunbox-server cos setup               # 列出 bucket → 选一个或新建私有 bucket → 填前缀和适用的仓库 → 读写探测 → 保存
+yunbox-server cos routes              # 查看已配置的路由
+yunbox-server cos check               # 用当前凭据逐条探测读写权限
+yunbox-server --storage cos --storage-config yunbox.storage.json
+```
+
+- 配置保存在 `yunbox.storage.json`（可用 `--config` 或 `YUNBOX_STORAGE_CONFIG` 指定），只记录仓库范围、bucket、地域和前缀，**不含任何密钥**。仓库的 `.gitignore` 默认忽略它。
+- 每条路由的 `repos` 是 `<owner>/<repo>`、`<owner>/*` 或 `*`，精确匹配优先于通配。不同项目可以用不同 bucket，也可以共用一个 bucket、各用一个前缀；对象键总是 `<prefix>/<owner>/<repo>/...`，不同仓库不会共用键。没有匹配路由的仓库会被拒绝（404）。
+- 新建 bucket 前会二次确认，新建的 bucket 一律私有读写。保存前会用当前凭据在 `<prefix>/_yunbox/` 下写入、读取、删除一个探测对象，失败就不保存。
+- `setup` 用的是管理员自己的凭据（环境变量或 `tccli auth login` 的临时密钥）。服务端运行时仍然只读 `TENCENTCLOUD_*` 环境变量，上线前在服务端环境里跑一次 `cos check`，确认运行角色也能访问每条路由。
+- 容器里可以把配置直接放进环境变量：`YUNBOX_STORAGE_CONFIG='{"version":1,"routes":[...]}'`。
+- 设置了 `--storage-config` 时，`YUNBOX_COS_BUCKET` / `REGION` / `PREFIX` 不再使用。
+
 COS 存储默认把元数据放在 CloudBase 文档数据库，还需要 `YUNBOX_CLOUDBASE_ENV` 等变量，见 [docs/deploy.md](./docs/deploy.md)。本地试用 COS 时可以加 `--metadata local` 把元数据留在本机。
 
 ### 用真实 COS 跑端到端测试

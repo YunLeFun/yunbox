@@ -14,3 +14,6 @@ temp
 cache
 .eslintcache
 .yunbox-data
+
+# Deployment-specific COS routes from "yunbox-server cos setup"; no credentials, but not shared by default
+yunbox.storage.json

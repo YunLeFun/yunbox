@@ -13,12 +13,15 @@ import { createToken, listTokens, parseDuration, revokeToken, setGrant } from '.
 export interface CommandIo {
   stdout: (line: string) => void
   env: NodeJS.ProcessEnv
+  /** Ask a question on an interactive terminal; absent when stdin is not a TTY. */
+  prompt?: (question: string) => Promise<string>
 }
 
 const storageOptionsHelp = `Storage options (must match the server; command-line options override the
 environment variables):
   --storage       local or cos; YUNBOX_STORAGE (default: local)
   --storage-dir   Local storage directory; YUNBOX_STORAGE_DIR (default: .yunbox-data)
+  --storage-config  COS routing file (see "yunbox-server cos --help"); YUNBOX_STORAGE_CONFIG
   --metadata      Where tokens and grants live: local or cloudbase; YUNBOX_METADATA
                   (default: cloudbase with COS storage, local otherwise)
   --metadata-dir  Local metadata directory; YUNBOX_METADATA_DIR
@@ -65,6 +68,7 @@ const options = {
   'expires-in': { type: 'string' },
   'storage': { type: 'string' },
   'storage-dir': { type: 'string' },
+  'storage-config': { type: 'string' },
   'metadata': { type: 'string' },
   'metadata-dir': { type: 'string' },
   'help': { type: 'boolean', short: 'h' },

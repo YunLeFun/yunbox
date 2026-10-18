@@ -11,6 +11,7 @@ import { ConfigError } from './config-error.ts'
 import { LEGACY_TOKEN_DOCUMENT_NAME } from './legacy-tokens.ts'
 import { CloudBaseMetadataStore } from './metadata-cloudbase.ts'
 import { LocalMetadataStore } from './metadata-local.ts'
+import { readStorageRoutes, RoutedObjectStorage } from './storage-routes.ts'
 
 /** Environment variables COS storage cannot start without. */
 export const REQUIRED_COS_ENVIRONMENT = [
@@ -25,6 +26,8 @@ export interface StorageSelection {
   /** `local` (files under `storageDirectory`) or `cos`. */
   kind: string
   storageDirectory: string
+  /** COS routing file path or inline JSON (see `storage-routes.ts`); replaces the YUNBOX_COS_* bucket variables. */
+  storageConfig?: string
   /** `local` (files under `metadataDirectory`) or `cloudbase`. Defaults to `cloudbase` with COS and `local` otherwise. */
   metadata?: string
   /** Local metadata directory (default `<storageDirectory>/_yunbox/metadata`). */
@@ -64,7 +67,7 @@ export function configureStorage(selection: StorageSelection): ConfiguredStorage
   const metadataKind = selection.metadata ?? defaultMetadataKind(selection.kind)
   const problems = [
     ...(selection.kind === 'local' || selection.kind === 'cos'
-      ? checkStorageEnvironment(selection.kind, selection.env)
+      ? checkStorageEnvironment(selection.kind, selection.env, selection.storageConfig)
       : ['storage must be local or cos']),
     ...(metadataKind === 'local' || metadataKind === 'cloudbase'
       ? checkMetadataEnvironment(metadataKind, selection.env)
@@ -78,8 +81,16 @@ export function configureStorage(selection: StorageSelection): ConfiguredStorage
   let legacyTokens: LegacyTokenSource
   let storageDescription: string
   if (selection.kind === 'cos') {
-    const cos = createCosStorageFromEnvironment(selection.env)
-    storage = cos
+    let cos: CosObjectStorage
+    if (selection.storageConfig === undefined) {
+      cos = createCosStorageFromEnvironment(selection.env)
+      storage = cos
+    }
+    else {
+      const routed = new RoutedObjectStorage(readStorageRoutes(selection.storageConfig), () => readCosCredentials(selection.env))
+      cos = routed.defaultStorage
+      storage = routed
+    }
     legacyTokens = {
       description: cos.metadataKey(LEGACY_TOKEN_DOCUMENT_NAME),
       read: () => cos.readMetadataDocument(LEGACY_TOKEN_DOCUMENT_NAME),
@@ -87,7 +98,10 @@ export function configureStorage(selection: StorageSelection): ConfiguredStorage
     const credentials = selection.env.TENCENTCLOUD_SESSIONTOKEN
       ? 'temporary credentials (TENCENTCLOUD_SESSIONTOKEN is set)'
       : 'long-term credentials (TENCENTCLOUD_SESSIONTOKEN is not set; prefer a runtime role with temporary keys)'
-    storageDescription = `Objects are stored in COS and transferred directly by Git LFS clients, using ${credentials}`
+    const where = storage instanceof RoutedObjectStorage
+      ? `${storage.routes.length} COS route(s): ${storage.routes.map(({ route }) => `${route.repos} -> ${route.bucket}/${route.prefix ?? ''}`).join(', ')}`
+      : 'COS'
+    storageDescription = `Objects are stored in ${where} and transferred directly by Git LFS clients, using ${credentials}`
   }
   else {
     storage = new LocalFileObjectStorage(storageDirectory)
@@ -115,9 +129,22 @@ export function configureStorage(selection: StorageSelection): ConfiguredStorage
  *
  * @returns One message per problem; empty when the storage can be created.
  */
-export function checkStorageEnvironment(kind: 'local' | 'cos', env: NodeJS.ProcessEnv): string[] {
+export function checkStorageEnvironment(kind: 'local' | 'cos', env: NodeJS.ProcessEnv, storageConfig?: string): string[] {
   if (kind === 'local')
     return []
+  if (storageConfig !== undefined) {
+    const problems = (['TENCENTCLOUD_SECRETID', 'TENCENTCLOUD_SECRETKEY'] as const)
+      .filter(name => !isSet(env, name))
+      .map(name => `${name} must be set to use COS storage`)
+    try {
+      readStorageRoutes(storageConfig)
+    }
+    catch (error) {
+      // Route errors name the route and setting, never credentials.
+      problems.push(error instanceof TypeError ? `storage configuration is invalid: ${error.message}` : 'storage configuration file cannot be read')
+    }
+    return problems
+  }
   const missing = REQUIRED_COS_ENVIRONMENT.filter(name => !isSet(env, name))
   if (missing.length > 0)
     return missing.map(name => `${name} must be set to use COS storage`)
@@ -207,7 +234,8 @@ export function createCloudBaseMetadataFromEnvironment(env: NodeJS.ProcessEnv): 
   })
 }
 
-function readCosCredentials(env: NodeJS.ProcessEnv): CosCredentials {
+/** Tencent Cloud keys from the standard environment variables. */
+export function readCosCredentials(env: NodeJS.ProcessEnv): CosCredentials {
   return {
     secretId: requireVariable(env, 'TENCENTCLOUD_SECRETID', 'Tencent Cloud requests'),
     secretKey: requireVariable(env, 'TENCENTCLOUD_SECRETKEY', 'Tencent Cloud requests'),

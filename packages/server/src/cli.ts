@@ -6,9 +6,11 @@ import type { RunningYunBoxServer } from './types.ts'
 import { realpathSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
+import { createInterface } from 'node:readline/promises'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import { resolveServeConfig } from './config.ts'
+import { runCosCommand } from './cos-command.ts'
 import { startYunBoxServer } from './server.ts'
 import { configureStorage } from './storage-config.ts'
 import { runGrantCommand, runTokenCommand, tokenHelp } from './token-command.ts'
@@ -19,6 +21,7 @@ Usage:
   yunbox-server [serve] [options]
   yunbox-server token create | list | revoke | migrate ...   (see yunbox-server token --help)
   yunbox-server grant list | set ...
+  yunbox-server cos setup | list | routes | check ...   (see yunbox-server cos --help)
 
 Serve options (each falls back to an environment variable, then a default):
   --host          Listen address; YUNBOX_HOST (default: 127.0.0.1)
@@ -28,6 +31,9 @@ Serve options (each falls back to an environment variable, then a default):
   --storage       local: files under the storage directory; cos: Tencent Cloud COS;
                   YUNBOX_STORAGE (default: local)
   --storage-dir   Local object storage directory; YUNBOX_STORAGE_DIR (default: .yunbox-data)
+  --storage-config  COS routing file, or inline JSON, that maps repositories to
+                  buckets and prefixes; replaces YUNBOX_COS_BUCKET / REGION / PREFIX.
+                  Create it with "yunbox-server cos setup"; YUNBOX_STORAGE_CONFIG
   --metadata      Where tokens, grants, locks and the audit log live: local or
                   cloudbase; YUNBOX_METADATA (default: cloudbase with COS storage,
                   local otherwise)
@@ -63,6 +69,10 @@ export async function main(argv: string[], io: CommandIo): Promise<RunningYunBox
     await runGrantCommand(argv.slice(1), io)
     return undefined
   }
+  if (argv[0] === 'cos') {
+    await runCosCommand(argv.slice(1), io)
+    return undefined
+  }
   return await serve(argv[0] === 'serve' ? argv.slice(1) : argv, io)
 }
 
@@ -75,6 +85,7 @@ async function serve(args: string[], io: CommandIo): Promise<RunningYunBoxServer
       'public-url': { type: 'string' },
       'storage': { type: 'string' },
       'storage-dir': { type: 'string' },
+      'storage-config': { type: 'string' },
       'metadata': { type: 'string' },
       'metadata-dir': { type: 'string' },
       'help': { type: 'boolean', short: 'h' },
@@ -121,8 +132,13 @@ async function serve(args: string[], io: CommandIo): Promise<RunningYunBoxServer
 }
 
 if (process.argv[1] !== undefined && fileURLToPath(import.meta.url) === realpathSync(resolve(process.argv[1]))) {
-  main(process.argv.slice(2), { stdout: line => console.log(line), env: process.env }).catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : 'yunbox-server failed')
-    process.exitCode = 1
-  })
+  const readline = process.stdin.isTTY ? createInterface({ input: process.stdin, output: process.stdout }) : undefined
+  const prompt = readline === undefined ? undefined : (question: string): Promise<string> => readline.question(question)
+  main(process.argv.slice(2), { stdout: line => console.log(line), env: process.env, prompt })
+    .catch((error: unknown) => {
+      console.error(error instanceof Error ? error.message : 'yunbox-server failed')
+      process.exitCode = 1
+    })
+    // The server keeps running on its own; only the prompt must not hold the process open.
+    .finally(() => readline?.close())
 }

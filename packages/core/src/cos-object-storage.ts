@@ -10,6 +10,7 @@ import type {
   StorageVerificationResult,
   StoredObjectInfo,
 } from './types.ts'
+import { randomUUID } from 'node:crypto'
 import { cosEncode, createCosAuthorization } from './cos-signature.ts'
 import { assertOid, assertRepository } from './validation.ts'
 
@@ -54,6 +55,13 @@ export class CosRequestError extends Error {
   }
 }
 
+/** One step of {@link CosObjectStorage.probeAccess}; `status` is 0 when the request did not complete. */
+export interface CosAccessCheck {
+  operation: 'PUT' | 'HEAD' | 'GET' | 'DELETE'
+  ok: boolean
+  status: number
+}
+
 interface VerificationMarker {
   oid: string
   size: number
@@ -76,6 +84,9 @@ interface ObjectHead {
  * signed `If-Match` header so COS refuses to serve replaced bytes.
  */
 export class CosObjectStorage implements ObjectStorage {
+  /** Bucket name including the APPID suffix. */
+  readonly bucket: string
+  readonly region: string
   readonly #origin: URL
   readonly #prefix: string
   readonly #credentials: CosCredentialSource
@@ -89,6 +100,8 @@ export class CosObjectStorage implements ObjectStorage {
       throw new TypeError('bucket must look like <name>-<appid>')
     if (!REGION_PATTERN.test(options.region))
       throw new TypeError('region is not a valid COS region')
+    this.bucket = options.bucket
+    this.region = options.region
     this.#origin = new URL(options.endpoint ?? `https://${options.bucket}.cos.${options.region}.myqcloud.com`)
     if (this.#origin.pathname !== '/' || this.#origin.search !== '' || this.#origin.hash !== '')
       throw new TypeError('endpoint must be an origin without a path, query or fragment')
@@ -98,6 +111,46 @@ export class CosObjectStorage implements ObjectStorage {
     this.#now = options.now ?? Date.now
     this.#fetch = options.fetch ?? globalThis.fetch
     this.#slots = new RequestSlots(options.maxConcurrentRequests ?? DEFAULT_MAX_CONCURRENT_REQUESTS)
+  }
+
+  /** Normalized key prefix shared by every repository, empty or ending in `/`. */
+  get prefix(): string {
+    return this.#prefix
+  }
+
+  /**
+   * Check that the credentials can write, read, inspect and delete under this
+   * prefix, using a small probe object in `<prefix>/_yunbox/` that is removed
+   * afterwards. Stops at the first failing step.
+   */
+  async probeAccess(): Promise<CosAccessCheck[]> {
+    const key = this.metadataKey(`probe-${randomUUID()}.json`)
+    const body = `${JSON.stringify({ probe: true })}\n`
+    const steps: Array<[CosAccessCheck['operation'], () => Promise<Response>, (response: Response) => Promise<boolean>]> = [
+      ['PUT', () => this.#request('PUT', key, body), async response => response.ok],
+      ['HEAD', () => this.#request('HEAD', key), async response => response.ok],
+      ['GET', () => this.#request('GET', key), async response => response.ok && await response.text() === body],
+      ['DELETE', () => this.#request('DELETE', key), async response => response.ok],
+    ]
+    const results: CosAccessCheck[] = []
+    for (const [operation, send, accept] of steps) {
+      let status = 0
+      let ok = false
+      try {
+        const response = await send()
+        status = response.status
+        ok = await accept(response)
+        if (!response.bodyUsed)
+          await response.body?.cancel()
+      }
+      catch {
+        // A network failure is reported as status 0.
+      }
+      results.push({ operation, ok, status })
+      if (!ok)
+        break
+    }
+    return results
   }
 
   /** Resolve the repository-isolated COS key for an object. */

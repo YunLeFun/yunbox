@@ -48,6 +48,8 @@
 
 这一阶段的大部分操作只能由你在腾讯云控制台完成，代码只做配合修改。阶段 0 没有完成前，后面各阶段只能在测试替身上验证。
 
+> **进度（2026-10-18）：真实 COS 已跑通。** 新增 `yunbox-server cos setup / list / routes / check`，可以交互选择或新建私有 bucket，并按仓库把对象路由到不同 bucket 或前缀（见 README）。用它新建了私有测试 bucket `yunbox-e2e-1325586649`（ap-guangzhou，前缀 `yunbox-e2e`），在上面跑通了 `cos-live.test.ts`。还没完成：CAM 最小权限、CloudBase 部署与元数据实测、试点和 Windows 实测。
+
 - 创建私有 COS bucket 和只能访问测试前缀的子账号，配置 GitHub 的 `cos-e2e` environment，运行 `COS E2E` 工作流，确认预签名、`If-Match`、临时密钥和 token 文档读写在真实 COS 上都正常。
 - 按 [deploy.md](./deploy.md) 部署到 CloudBase 云托管，逐项核实所有「未核实」项，重点是：运行角色是否注入 `TENCENTCLOUD_*` 临时密钥、密钥怎么刷新、明文 HTTP 会不会被转发、网关鉴权会不会占用 `Authorization` 头、健康检查怎么探测。核实结果写回 deploy.md。
 - 选定试点仓库，完成 G1 阶段 5：试点 2 周，Windows 实测。

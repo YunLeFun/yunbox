@@ -52,6 +52,10 @@ export class FakeCosServer {
   #interruptedKeys = new Set<string>()
   interruptedAttempts = 0
   origin = ''
+  /** Buckets returned by GET Service (`GET /`), as the account's bucket list. */
+  readonly buckets: Array<{ name: string, region: string }> = []
+  /** `x-cos-acl` of every PUT Bucket (`PUT /`) request, in order. */
+  readonly createdBucketAcls: string[] = []
 
   constructor(credentials: CosCredentials) {
     this.#credentials = credentials
@@ -96,6 +100,18 @@ export class FakeCosServer {
     if (!this.#isAuthorized(request, url, key, method)) {
       await drain(request)
       finish(403, { 'Content-Type': 'application/xml' }, Buffer.from('<Error><Code>AccessDenied</Code></Error>'))
+      return
+    }
+
+    if (key === '' && method === 'GET') {
+      const entries = this.buckets.map(bucket => `<Bucket><Name>${bucket.name}</Name><Location>${bucket.region}</Location><CreationDate>2026-01-01T00:00:00Z</CreationDate></Bucket>`)
+      finish(200, { 'Content-Type': 'application/xml' }, Buffer.from(`<ListAllMyBucketsResult><Buckets>${entries.join('')}</Buckets></ListAllMyBucketsResult>`))
+      return
+    }
+    if (key === '' && method === 'PUT') {
+      await drain(request)
+      this.createdBucketAcls.push(String(request.headers['x-cos-acl']))
+      finish(200)
       return
     }
 

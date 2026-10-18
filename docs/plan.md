@@ -258,6 +258,13 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - 本机包依赖 Node.js，构建脚本记录运行路径并提供设置入口。当前 ad-hoc 签名用于本机，Developer ID 公证、其他操作系统客户端和 Craft Hub 界面仍待后续。
 - Swift 测试验证 JSON/退出码、未知 LFS 上传量、真实 Git/CLI、进程取消和资源限制；新增 macOS CI。此工具不改变 G2 的生产验收范围。
 
+### 按仓库路由 COS 存储（2026-10-18）
+
+- **配置放在服务端**：协作者只拿 `lfs.url` 和 token，COS 密钥始终只在服务端，所以「选哪个 bucket」是管理员的配置，不是客户端的。`yunbox-server cos setup` 用管理员自己的凭据（`TENCENTCLOUD_*` 环境变量，或 `tccli auth login` 写下的临时密钥）列出 bucket，交互选择已有 bucket 或新建私有 bucket，再填前缀和适用的仓库范围。
+- **路由规则**：`yunbox.storage.json` 里的每条路由是 `repos`（`<owner>/<repo>`、`<owner>/*` 或 `*`）加 bucket、地域和前缀。精确匹配优先于 owner 通配，再到 `*`；没有匹配的仓库返回 404，不会落到某个默认 bucket。对象键仍是 `<prefix>/<owner>/<repo>/...`，所以多个路由共用一个 bucket 也不会共用键。文件不含密钥，也可以直接作为 `YUNBOX_STORAGE_CONFIG` 的内联 JSON 放进容器环境变量。
+- **保存前探测**：`setup` 在保存前用同一组凭据在 `<prefix>/_yunbox/` 下做一次 PUT、HEAD、GET、DELETE，任一步失败就不保存；新建 bucket 前要求确认，且一律私有读写。服务端运行时用的是另一组凭据（运行角色），所以上线前要在服务端环境里跑 `cos check`。
+- **兼容**：没有路由配置时，`YUNBOX_COS_BUCKET` / `REGION` / `PREFIX` 的行为不变，相当于只有一条 `*` 路由。旧版 `tokens.json` 迁移读取 `*` 路由（没有时读第一条路由）的 bucket。
+
 ### 后续风险
 
 - CloudBase 云托管绑定运行角色后是否以 `TENCENTCLOUD_*` 环境变量注入临时密钥**未核实**（云函数是这样做的）。如果不是，需要在服务端增加从平台元数据接口获取密钥的代码，或者临时改用只挂最小权限策略的子账号长期密钥。
@@ -266,13 +273,15 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - CloudBase 路由的网关鉴权如果开启，可能会占用 `Authorization` 头，导致 git-lfs 的 Basic 认证失效，必须保持关闭（**未核实**）。
 - CloudBase 健康检查的探测方式和路径文档里没有写。如果只有 TCP 探测，事件循环卡死时实例不会被重启；镜像里的 Docker `HEALTHCHECK` 是否被平台使用也**未核实**。
 - 基础镜像固定到 `node:24.22.0-bookworm-slim` 的多架构索引摘要，由 Dependabot 每周提出更新。合并这类更新前要确认 CI 和镜像构建通过；Dependabot 不会自动重新构建已部署的镜像。
-- 真实 COS 尚未实测：预签名签名、`If-Match`、临时密钥和 CAM 最小权限都只在测试替身上验证过，需要用 `COS E2E` 工作流在真实 bucket 上跑一遍。（G2 阶段 1 起这个工作流不再读写 token 文档。）
+- 真实 COS 已部分实测（2026-10-18）：在私有测试 bucket `yunbox-e2e-1325586649`（ap-guangzhou）上，用 `tccli auth login` 的临时密钥跑通了 `cos-live.test.ts`，也就是真实 git-lfs 通过预签名 PUT（签名包含 `content-length`）上传、带签名 `If-Match` 的预签名 GET 下载、临时密钥放在 `x-cos-security-token` 查询参数里，以及推送、全新 clone、恢复旧版本和重复推送；测试结束后 bucket 为空。`cos setup` 在真实 COS 上新建私有 bucket 和读写探测也通过了。还没验证的是：CAM 最小权限策略（这次用的是主账号登录的临时密钥，权限比服务端运行角色大）、运行角色注入的密钥，以及 CloudBase 元数据。
 - ~~token 文档没有并发保护：两个管理员同时执行 `token create` / `revoke` 时，后写入的会覆盖先写入的。~~ **已解决（G2 阶段 1）**：token 改存元数据存储，每个 token 一个文档，授权修改以 etag 为条件重试，契约测试和命令行测试覆盖了并发签发、吊销和授权修改。
 - ~~token 文档和对象放在同一个 bucket 里。~~ G2 阶段 1 起 token 在文档数据库里，不再和对象共用 COS 权限；但运行角色仍然能读写全部元数据，服务端被攻破时 token 哈希会暴露（哈希不能反推出 token）。
 - 吊销时限依赖每个实例自己的缓存，多实例部署时每个实例都满足 5 分钟的上界；但 CloudBase 文档数据库写入后立刻查询是否一定能读到（强一致）**未核实**，要在真实环境确认。
 - git-lfs 在新仓库里的第一次上传会先不带凭据发送，收到 401 后重试。服务端会在读请求体之前拒绝并断开连接，但客户端可能已经通过网络发出了一部分请求体；大文件的首次 push 会因此多花一点流量。COS 直传模式下上传地址不经过服务端，没有这个问题。
 - Basic 认证的内容是明文，公网部署时 TLS 必须在 CloudBase 的入口终止，服务端只监听容器内部地址。阶段 3 的部署文档给出了检查方法，但还没有在真实环境确认 CloudBase 云托管会不会把明文 HTTP 请求转发给服务（见上面关于 `X-Forwarded-Proto` 的风险）。
 - ETag 在单次 PUT 时是内容的 MD5。有写权限的人理论上可以用 MD5 碰撞构造同样大小、同样 ETag 的不同内容，在地址有效期内覆盖已校验对象；这种情况由客户端下载时的 SHA-256 校验兜底，第一版不做服务端哈希校验。
+- 多条路由指向不同 bucket 时，服务端的运行角色要能访问所有 bucket 的对应前缀；CAM 策略写漏一条，只有那条路由的仓库会失败。`cos check` 能发现，但要记得在服务端环境里运行。
+- `tccli auth login` 的临时密钥大约 2 小时过期，只适合用来做 `cos setup`，不能当作服务端的运行凭据。
 - Windows 下 npm 生成的 `git-yunbox` shim（`git-yunbox.cmd`、`git-yunbox.ps1` 和无扩展名的 sh 脚本）能否被 Git for Windows 的 `git yunbox` 找到，**仍未实测**；自动测试只在 macOS / Linux 上用 sh shim 验证了 `git yunbox` 和 `yunbox` 输出一致。阶段 5 要在 Windows 上实测，不行就改用 Node SEA 或 `bun build --compile` 打成单个可执行文件。
 - 命令行目前只能从仓库 `pnpm pack` 后 `npm install -g` 安装，协作者需要 Node.js 22.18+。npm 包名和发布方式还没定；如果试点里有人没有 Node.js，就需要单文件可执行程序。
 - `.gitattributes` 只生成小写扩展名的规则（`*.png`）。Linux 和 CI 上 Git 默认区分大小写，`HERO.PNG` 这类文件不会走 LFS，会作为普通文件提交进 Git 历史。macOS 和 Windows 上 `core.ignorecase=true` 时能匹配。如果试点素材里常见大写扩展名，要考虑生成 `*.[pP][nN][gG]` 这种规则，或在 `doctor` 里检查已提交的非 LFS 大文件。

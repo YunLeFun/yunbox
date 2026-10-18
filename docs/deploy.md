@@ -101,8 +101,9 @@ curl -s http://127.0.0.1:8080/_health
 | `YUNBOX_PUBLIC_URL` | `--public-url` | 客户端访问的 https origin，例如 `https://lfs.example.com`，不能带路径。监听在非回环地址时必填 |
 | `YUNBOX_STORAGE` | `--storage` | `cos` 或 `local`。镜像默认 `cos` |
 | `YUNBOX_STORAGE_DIR` | `--storage-dir` | `local` 存储的目录 |
-| `YUNBOX_COS_BUCKET` | — | 必填，格式 `<名称>-<APPID>` |
-| `YUNBOX_COS_REGION` | — | 必填，例如 `ap-guangzhou` |
+| `YUNBOX_STORAGE_CONFIG` | `--storage-config` | 可选。按仓库路由到不同 bucket / 前缀的配置文件路径，或以 `{` 开头的内联 JSON，由 `yunbox-server cos setup` 生成。设置后不再读下面三个 `YUNBOX_COS_*` |
+| `YUNBOX_COS_BUCKET` | — | 不用路由配置时必填，格式 `<名称>-<APPID>` |
+| `YUNBOX_COS_REGION` | — | 不用路由配置时必填，例如 `ap-guangzhou` |
 | `YUNBOX_COS_PREFIX` | — | 强烈建议设置，例如 `yunbox`。CAM 权限按这个前缀授予 |
 | `TENCENTCLOUD_SECRETID`、`TENCENTCLOUD_SECRETKEY` | — | 必填，最好由运行角色注入（见下文） |
 | `TENCENTCLOUD_SESSIONTOKEN` | — | 使用临时密钥时必填 |
@@ -121,8 +122,8 @@ curl -s http://127.0.0.1:8080/_health
 
 ### 1. 准备 COS bucket
 
-1. 在与云托管同一地域创建 bucket，**访问权限选私有读写**。不要配置公有读、不要开启静态网站。
-2. 确定键前缀，例如 `yunbox`。对象键是 `<prefix>/<owner>/<repo>/<oid[0:2]>/<oid[2:4]>/<oid>`。
+1. 在与云托管同一地域创建 bucket，**访问权限选私有读写**。不要配置公有读、不要开启静态网站。也可以在管理员本机运行 `yunbox-server cos setup`，交互选择已有 bucket 或新建私有 bucket，并按项目配置多条路由（见 README「用 `cos setup` 交互配置」）。
+2. 确定键前缀，例如 `yunbox`。对象键是 `<prefix>/<owner>/<repo>/<oid[0:2]>/<oid[2:4]>/<oid>`。用了多条路由时，CAM 策略要覆盖每条路由的 `<bucket>/<prefix>/*`，部署后在服务端环境里运行 `yunbox-server cos check` 确认。
 3. 不要给 bucket 配置生命周期规则删除 `<prefix>/` 下的对象：已校验标记也在这里。
 4. 真实 COS 端到端测试另用一个前缀（例如 `yunbox-e2e`），最好用另一个 bucket，见[手动运行 COS E2E](#手动运行-cos-e2e)。
 
