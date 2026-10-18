@@ -121,6 +121,11 @@ export class FakeCosServer {
         request.once('data', () => request.socket.destroy())
         return
       }
+      if (request.headers['x-cos-forbid-overwrite'] === 'true' && this.objects.has(key)) {
+        await drain(request)
+        finish(409, { 'Content-Type': 'application/xml' }, Buffer.from('<Error><Code>FileAlreadyExists</Code></Error>'))
+        return
+      }
       const body = await readBody(request)
       const object = { body, etag: `"${createHash('md5').update(body).digest('hex')}"` }
       this.objects.set(key, object)

@@ -265,6 +265,15 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **保存前探测**：`setup` 在保存前用同一组凭据在 `<prefix>/_yunbox/` 下做一次 PUT、HEAD、GET、DELETE，任一步失败就不保存；新建 bucket 前要求确认，且一律私有读写。服务端运行时用的是另一组凭据（运行角色），所以上线前要在服务端环境里跑 `cos check`。
 - **兼容**：没有路由配置时，`YUNBOX_COS_BUCKET` / `REGION` / `PREFIX` 的行为不变，相当于只有一条 `*` 路由。旧版 `tokens.json` 迁移读取 `*` 路由（没有时读第一条路由）的 bucket。
 
+### 改为默认直连 COS，不需要服务端（2026-10-18）
+
+- **决定**：按使用者的要求，默认模式从「服务端签发预签名地址」改为「客户端用自己的密钥直连 COS」。每个协作者用 `yunbox login` 保存自己的 CAM 子账号密钥，git-lfs 通过独立传输代理（`lfs.standalonetransferagent`）调用 `git-yunbox lfs-agent`，代理直接对 COS 做 PUT / GET / HEAD，不调用任何 Batch API。服务端模式保留为可选项，代码不删。
+- **取舍**：省掉了部署和运维服务端；安全边界从「服务端 token + 5 分钟地址」变为「每人一个 CAM 子账号 + 前缀级权限」，吊销靠在 CAM 里禁用密钥。代价是每个协作者都要安装 YunBox 命令行、各自持有云密钥，并且没有文件锁（Locks API 需要服务端）。
+- **git-lfs 的限制（实测 3.7.1）**：`.lfsconfig` 里的 `lfs.standalonetransferagent`、`lfs.customtransfer.*` 会被当作不安全配置忽略，所以代理只能写进每份 clone 的 `.git/config`（`git yunbox init` / `clone` 负责）；`.lfsconfig` 里任何 git-lfs 不认识的键也会在每条命令上报警告，所以 COS 位置单独放在仓库根目录的 `.yunboxconfig`（git config 格式，`[cos] bucket / region / prefix`）。
+- **数据可靠性**：上传前先 HEAD，已存在且大小一致就跳过；上传带 `x-cos-forbid-overwrite: true` 和签名的 `Content-Length`，不会覆盖已有对象；并发上传同一对象收到 409 时再 HEAD 确认。下载边写边算 SHA-256，大小或哈希不符就删掉临时文件并报错，不交给 git-lfs。下载的临时文件放在 `.git/lfs/tmp`，与 git-lfs 的对象目录在同一个文件系统上。
+- **实测**：在私有测试 bucket `yunbox-e2e-1325586649` 上，用 `tccli auth login` 的临时密钥跑通了 init（读写探测）、推送两个版本、协作者 `git yunbox clone`、恢复旧版本（SHA-256 一致）、重复推送不重复上传；测试对象已清理。fake COS 上另外覆盖了内容被篡改时拒绝交付、无权限时不修改仓库。
+- **加入已接入的仓库**：仓库里已有 `.yunboxconfig` 且没有传 `--types` 时，`init` 不改 `.gitattributes`，clone 后工作区保持干净。
+
 ### 后续风险
 
 - CloudBase 云托管绑定运行角色后是否以 `TENCENTCLOUD_*` 环境变量注入临时密钥**未核实**（云函数是这样做的）。如果不是，需要在服务端增加从平台元数据接口获取密钥的代码，或者临时改用只挂最小权限策略的子账号长期密钥。
@@ -282,6 +291,10 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - ETag 在单次 PUT 时是内容的 MD5。有写权限的人理论上可以用 MD5 碰撞构造同样大小、同样 ETag 的不同内容，在地址有效期内覆盖已校验对象；这种情况由客户端下载时的 SHA-256 校验兜底，第一版不做服务端哈希校验。
 - 多条路由指向不同 bucket 时，服务端的运行角色要能访问所有 bucket 的对应前缀；CAM 策略写漏一条，只有那条路由的仓库会失败。`cos check` 能发现，但要记得在服务端环境里运行。
 - `tccli auth login` 的临时密钥大约 2 小时过期，只适合用来做 `cos setup`，不能当作服务端的运行凭据。
+- 直连模式下每个协作者都持有云密钥。密钥泄露的影响范围取决于 CAM 策略写得多严；需要给出可直接复制的子账号策略模板，最好提供一键生成策略的命令（会改动 CAM，需要管理员确认）。
+- `git-yunbox` 必须在 PATH 上，git-lfs 才能启动代理。GUI Git 客户端（如 Fork、SourceTree）的 PATH 可能和终端不同；`init` 在找不到命令时会写入 Node.js 和脚本的绝对路径，但升级 Node.js 后要重新运行 `git yunbox init`。
+- 直连模式没有文件锁，多人同时编辑同一个二进制素材时只能靠约定。
+- 密钥文件是明文 JSON（权限 600）。可以考虑改存到 macOS 钥匙串 / Windows 凭据管理器。
 - Windows 下 npm 生成的 `git-yunbox` shim（`git-yunbox.cmd`、`git-yunbox.ps1` 和无扩展名的 sh 脚本）能否被 Git for Windows 的 `git yunbox` 找到，**仍未实测**；自动测试只在 macOS / Linux 上用 sh shim 验证了 `git yunbox` 和 `yunbox` 输出一致。阶段 5 要在 Windows 上实测，不行就改用 Node SEA 或 `bun build --compile` 打成单个可执行文件。
 - 命令行目前只能从仓库 `pnpm pack` 后 `npm install -g` 安装，协作者需要 Node.js 22.18+。npm 包名和发布方式还没定；如果试点里有人没有 Node.js，就需要单文件可执行程序。
 - `.gitattributes` 只生成小写扩展名的规则（`*.png`）。Linux 和 CI 上 Git 默认区分大小写，`HERO.PNG` 这类文件不会走 LFS，会作为普通文件提交进 Git 历史。macOS 和 Windows 上 `core.ignorecase=true` 时能匹配。如果试点素材里常见大写扩展名，要考虑生成 `*.[pP][nN][gG]` 这种规则，或在 `doctor` 里检查已提交的非 LFS 大文件。

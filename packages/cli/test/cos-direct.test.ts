@@ -1,0 +1,144 @@
+import type { Sandbox } from './helpers.ts'
+import { Buffer } from 'node:buffer'
+import { createHash } from 'node:crypto'
+import { chmod, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { delimiter, join } from 'node:path'
+import process from 'node:process'
+import { fileURLToPath, pathToFileURL } from 'node:url'
+import { afterEach, describe, expect, it } from 'vitest'
+import { FakeCosServer } from '../../core/test/fake-cos-server.ts'
+import { credentialsFilePath, resolveCredentials } from '../src/cos/credentials.ts'
+import { createRepository, createSandbox, git, runYunBox } from './helpers.ts'
+
+const workspaceRoot = fileURLToPath(new URL('../../..', import.meta.url))
+const cliSource = join(workspaceRoot, 'packages', 'cli', 'src', 'cli.ts')
+const tsxLoader = pathToFileURL(join(workspaceRoot, 'node_modules', 'tsx', 'dist', 'loader.mjs')).href
+const keys = { secretId: 'AKIDTESTTESTTESTTESTTESTTESTTEST', secretKey: 'test-secret-key-test-secret-key' }
+const cleanups: Array<() => Promise<void>> = []
+
+afterEach(async () => {
+  await Promise.all(cleanups.splice(0).map(cleanup => cleanup()))
+})
+
+function sha256(data: Uint8Array): string {
+  return createHash('sha256').update(data).digest('hex')
+}
+
+/** A sandbox whose PATH has a `git-yunbox` that git-lfs can start, and a fake COS account. */
+async function setup(): Promise<{ sandbox: Sandbox, cos: FakeCosServer }> {
+  const sandbox = await createSandbox()
+  cleanups.push(sandbox.cleanup)
+  const cos = await new FakeCosServer(keys).start()
+  cleanups.push(() => cos.close())
+  cos.buckets.push({ name: 'team-assets-1250000000', region: 'ap-shanghai' })
+  const bin = join(sandbox.root, 'bin')
+  await mkdir(bin)
+  const shim = join(bin, 'git-yunbox')
+  await writeFile(shim, `#!/bin/sh\nexec "${process.execPath}" --no-warnings --import "${tsxLoader}" "${cliSource}" "$@"\n`)
+  await chmod(shim, 0o755)
+  Object.assign(sandbox.env, {
+    PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
+    TSX_TSCONFIG_PATH: join(workspaceRoot, 'tsconfig.json'),
+    // Point both the account API and the bucket at the fake; real runs use the public COS origins.
+    YUNBOX_COS_SERVICE_ENDPOINT: cos.origin,
+    YUNBOX_COS_ENDPOINT: cos.origin,
+    GIT_LFS_SKIP_SMUDGE: '0',
+  })
+  delete sandbox.env.TENCENTCLOUD_SECRETID
+  delete sandbox.env.TENCENTCLOUD_SECRETKEY
+  return { sandbox, cos }
+}
+
+describe.skipIf(process.platform === 'win32')('git-lfs directly to COS, without a server', () => {
+  it('logs in, sets up a repository interactively, pushes, clones, restores history and refuses tampered objects', async () => {
+    const { sandbox, cos } = await setup()
+
+    const login = await runYunBox(sandbox, sandbox.root, ['login', '--secret-id', keys.secretId, '--secret-key-stdin'], keys.secretKey)
+    expect(login.stderr).toBe('')
+    expect(login.code).toBe(0)
+    const file = credentialsFilePath(sandbox.env)
+    expect((await stat(file)).mode & 0o777).toBe(0o600)
+    expect(resolveCredentials(sandbox.env)?.source).toBe('file')
+
+    const origin = join(sandbox.root, 'origin.git')
+    await git(sandbox, sandbox.root, 'init', '--bare', '--quiet', origin)
+    const repo = await createRepository(sandbox, 'game')
+    await git(sandbox, repo, 'remote', 'add', 'origin', 'https://github.com/team/game.git')
+
+    // Pick bucket 1 and accept the suggested prefix.
+    const init = await runYunBox(sandbox, repo, ['init', '--types', 'model'], '1\n\n')
+    expect(init.stderr).toBe('')
+    expect(init.code).toBe(0)
+    expect(init.stdout).toContain('可以在 team-assets-1250000000（ap-shanghai）/yunbox/team/game/ 写入、读取和删除')
+    const shared = await readFile(join(repo, '.yunboxconfig'), 'utf8')
+    expect(shared).toContain('bucket = team-assets-1250000000')
+    expect(shared).toContain('prefix = yunbox/team/game')
+    expect(shared).not.toMatch(/secret|AKID/i)
+    await expect(stat(join(repo, '.lfsconfig'))).rejects.toThrow()
+    expect(await git(sandbox, repo, 'config', '--local', 'lfs.standalonetransferagent')).toBe('yunbox')
+    expect(await git(sandbox, repo, 'config', '--local', 'lfs.customtransfer.yunbox.path')).toBe('git-yunbox')
+    const doctor = await runYunBox(sandbox, repo, ['doctor'])
+    expect(doctor.stdout).toContain('COS 权限')
+    expect(doctor.code).toBe(0)
+
+    const first = Buffer.alloc(3 * 1024 * 1024, 7)
+    await writeFile(join(repo, 'car.fbx'), first)
+    await git(sandbox, repo, 'add', '.')
+    await git(sandbox, repo, 'commit', '--quiet', '-m', 'first car')
+    const firstCommit = await git(sandbox, repo, 'rev-parse', 'HEAD')
+    await git(sandbox, repo, 'remote', 'set-url', 'origin', origin)
+    await git(sandbox, repo, 'push', '--quiet', 'origin', 'HEAD:main')
+    const firstKey = `yunbox/team/game/${sha256(first).slice(0, 2)}/${sha256(first).slice(2, 4)}/${sha256(first)}`
+    expect(cos.objects.get(firstKey)?.body.equals(first)).toBe(true)
+
+    const second = Buffer.alloc(1024 * 1024, 9)
+    await writeFile(join(repo, 'car.fbx'), second)
+    await git(sandbox, repo, 'commit', '--quiet', '-am', 'second car')
+    await git(sandbox, repo, 'push', '--quiet', 'origin', 'HEAD:main')
+    await git(sandbox, repo, 'lfs', 'push', '--all', 'origin')
+    expect(cos.putCount(firstKey)).toBe(1)
+
+    // A collaborator with the same bucket access clones with one command.
+    const clone = await runYunBox(sandbox, sandbox.root, ['clone', origin, 'teammate'])
+    expect(clone.stderr).toBe('')
+    expect(clone.code).toBe(0)
+    const teammate = join(sandbox.root, 'teammate')
+    expect(sha256(await readFile(join(teammate, 'car.fbx')))).toBe(sha256(second))
+    // Joining an existing setup must not modify committed files such as .gitattributes.
+    expect(await git(sandbox, teammate, 'status', '--porcelain')).toBe('')
+    await git(sandbox, teammate, 'checkout', '--quiet', firstCommit)
+    expect(sha256(await readFile(join(teammate, 'car.fbx')))).toBe(sha256(first))
+    expect(cos.requests.every(request => request.status !== 403)).toBe(true)
+
+    // Replace the stored bytes: the agent must refuse to hand them to git-lfs.
+    cos.objects.set(firstKey, { body: Buffer.alloc(first.byteLength, 1), etag: '"tampered"' })
+    await expect(runYunBox(sandbox, sandbox.root, ['clone', origin, 'victim']).then((run) => {
+      if (run.code !== 0)
+        throw new Error(run.stderr)
+      return git(sandbox, join(sandbox.root, 'victim'), 'checkout', '--quiet', firstCommit)
+    })).rejects.toThrow(/SHA-256/)
+  }, 180_000)
+
+  it('refuses keys without access and changes nothing', async () => {
+    const { sandbox } = await setup()
+    sandbox.env.TENCENTCLOUD_SECRETID = keys.secretId
+    sandbox.env.TENCENTCLOUD_SECRETKEY = 'wrong-secret-key-wrong-secret'
+    const repo = await createRepository(sandbox)
+    const run = await runYunBox(sandbox, repo, ['init', '--bucket', 'team-assets-1250000000', '--region', 'ap-shanghai', '--prefix', 'yunbox/x'])
+    expect(run.code).toBe(1)
+    expect(run.stderr).toContain('不能访问 team-assets-1250000000（ap-shanghai）/yunbox/x/')
+    await expect(stat(join(repo, '.yunboxconfig'))).rejects.toThrow()
+    await expect(git(sandbox, repo, 'config', '--local', 'lfs.standalonetransferagent')).rejects.toThrow()
+  })
+
+  it('never accepts a SecretKey on the command line and explains missing keys', async () => {
+    const { sandbox } = await setup()
+    const inline = await runYunBox(sandbox, sandbox.root, ['login', '--secret-id', keys.secretId, `--secret-key=${keys.secretKey}`])
+    expect(inline.code).toBe(2)
+    expect(inline.stderr).not.toContain(keys.secretKey)
+    const repo = await createRepository(sandbox)
+    const noKeys = await runYunBox(sandbox, repo, ['init'])
+    expect(noKeys.code).toBe(1)
+    expect(noKeys.stderr).toContain('yunbox login')
+  })
+})

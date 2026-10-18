@@ -2,15 +2,49 @@
 
 > 兼容 Git LFS 的素材托管。代码交给 Git，素材交给云匣。
 
-**状态：G1 阶段 2（鉴权与权限）和阶段 4（命令行）已完成；阶段 3 的镜像、配置自检和部署文档已完成，尚未部署到公网，也未在真实 COS 上实测。**
+**状态：默认改为直连 COS，不需要任何服务端。已在真实腾讯云 COS 上跑通推送、clone、恢复旧版本和重复推送；Windows 尚未实测，命令行还没发布到 npm。**
 
-YunBox 是一个 Git LFS 服务端：代码仍托管在 GitHub 等平台，LFS 大文件存到你自己的对象存储（先支持腾讯云 COS）。协作者只需原版 [git-lfs](https://git-lfs.com) 和仓库里的 `.lfsconfig`，不必安装 YunBox。
+代码仍托管在 GitHub 等平台，LFS 大文件存到你自己的腾讯云 COS。每个协作者在自己电脑上用 `yunbox login` 保存自己的子账号密钥，git-lfs 通过 YunBox 的传输代理直接上传、下载 COS，**中间没有服务端**。需要集中签发 token 时，也可以改用[服务端模式](#服务端模式)。
 
 - 方案与里程碑：[docs/plan.md](./docs/plan.md)
 - 部署到 CloudBase 云托管：[docs/deploy.md](./docs/deploy.md)
 
+## 直连 COS（推荐）
+
+```
+git push / clone ──▶ git-lfs ──▶ git-yunbox lfs-agent ──▶ 腾讯云 COS
+                                   用本机密钥签名，直接上传 / 下载，不经过任何服务端
+```
+
+先按[安装命令行](#安装命令行)装好 `yunbox`。
+
+**管理员第一次接入仓库：**
+
+```bash
+yunbox login                 # 保存自己的 SecretId / SecretKey（或者 tccli auth login）
+git yunbox init              # 列出 bucket → 选一个或新建私有 bucket → 填目录前缀 → 读写探测
+git add .gitattributes .yunboxconfig
+git commit -m "chore: 用 YunBox 把 LFS 素材直传到 COS"
+git push
+```
+
+**协作者：**
+
+```bash
+yunbox login                 # 用管理员分配给你的子账号密钥
+git yunbox clone <仓库地址>   # = clone 历史 + git yunbox init + git lfs pull
+```
+
+- **共享的只有位置**：`.yunboxconfig` 记录 bucket、地域和目录前缀，提交到仓库供团队共享，**不含任何密钥**。不同项目可以用不同 bucket，也可以共用一个 bucket、各用一个前缀（默认 `yunbox/<owner>/<repo>`）。对象键是 `<前缀>/<oid[0:2]>/<oid[2:4]>/<oid>`。
+- **密钥只在各自电脑上**：`yunbox login` 存在 `~/.config/yunbox/credentials.json`（Windows 为 `%APPDATA%\yunbox`，权限 600）；也可以用 `TENCENTCLOUD_SECRETID` / `TENCENTCLOUD_SECRETKEY` 环境变量，或 `tccli auth login` 的临时密钥（约 2 小时有效）。SecretKey 不接受命令行参数。
+- **给别人用的安全边界**：每人一个 CAM 子账号，只授权团队 bucket 里对应前缀的 `PutObject`、`GetObject`、`HeadObject`（只需拉取的人去掉 `PutObject`）；人员变动时在 CAM 里禁用或删除他的密钥即可。策略模板见 [docs/deploy.md](./docs/deploy.md#4-cam-最小权限)。
+- **数据可靠性**：上传带 `x-cos-forbid-overwrite`，已存在的对象不会被覆盖；对象按内容寻址，同样的文件只传一次。下载时校验大小和 SHA-256，内容被替换或损坏的对象不会交给 git-lfs。
+- **为什么每个人都要装 YunBox 命令行**：git-lfs 出于安全考虑，不允许仓库通过 `.lfsconfig` 指定传输程序，所以传输代理只能由 `git yunbox init` 写进各自 clone 的 `.git/config`。`yunbox doctor` 会检查代理是否登记、密钥是否可用、能否读写前缀。
+- **限制**：没有服务端就没有文件锁（Locks API），`lfs.locksverify` 设为 `false`，同一素材同一时间请只由一人编辑。
+
 ## 当前能力
 
+- **直连 COS**：git-lfs 独立传输代理 `git-yunbox lfs-agent`、`yunbox login` / `logout`、`git yunbox init`（交互选择或新建 bucket）、`git yunbox clone`、`yunbox doctor` 的直连检查
 - Git LFS Batch API：upload / download，`transfer: basic`
 - Verify API：核对对象大小并持久化“已校验”状态
 - 仓库隔离的本地文件存储，以及由服务端提供的签名 PUT / GET 地址
@@ -155,7 +189,9 @@ YUNBOX_CLOUDBASE_E2E=1 YUNBOX_CLOUDBASE_ENV=<环境 ID> pnpm exec vitest run pac
 
 凭据和 CloudBase 服务端一样读取（`TENCENTCLOUD_*` 或 `YUNBOX_CLOUDBASE_API_KEY`）。测试使用 `yunbox_e2e_tokens`、`yunbox_e2e_grants`、`yunbox_e2e_locks`、`yunbox_e2e_audit` 四个集合（`YUNBOX_CLOUDBASE_COLLECTION_PREFIX` 可改前缀），需要事先创建，并且**只用于测试**：每个用例前后都会清空它们。
 
-## 配置测试仓库
+## 服务端模式
+
+需要集中签发、吊销个人 token，或者不想给每个协作者分配 COS 子账号时，可以部署 YunBox 服务端：服务端只签发 5 分钟有效的预签名地址，素材仍由 git-lfs 直传 COS，协作者只需原版 git-lfs 和 token。下面几节都是服务端模式的说明。
 
 ### 安装命令行
 
@@ -168,7 +204,7 @@ cd packages/cli && pnpm pack && npm install -g ./yunbox-0.0.0.tgz
 
 `git yunbox --help` 会被 Git 改写成 `git help yunbox`（找 man 手册，会失败），查看帮助请用 `git yunbox help`、`git yunbox init -h` 或 `yunbox --help`。
 
-### 接入一个仓库
+### 用服务端接入一个仓库
 
 在需要使用 LFS 的 Git 仓库里执行（示例仓库路径为 `demo/assets`，token 由管理员用 `token create` 创建后发给你）：
 

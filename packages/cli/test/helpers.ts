@@ -40,6 +40,11 @@ export async function createSandbox(options: { credentialHelper?: boolean } = {}
     GIT_COMMITTER_EMAIL: 'yunbox-test@example.invalid',
     LC_ALL: 'C',
   }
+  // Never let a developer's real cloud keys or YunBox settings reach a test.
+  for (const name of Object.keys(env)) {
+    if (name.startsWith('TENCENTCLOUD_') || name.startsWith('YUNBOX_'))
+      delete env[name]
+  }
   delete env.GIT_ASKPASS
   delete env.SSH_ASKPASS
   delete env.GIT_DIR

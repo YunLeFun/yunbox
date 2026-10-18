@@ -4,6 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
 import { CliError, print, USAGE_EXIT_CODE } from '../context.ts'
+import { LOCATION_FILE } from '../cos/location.ts'
 import { approveCredential, assertTokenShape, fillCredential, findCredentialHelper, suggestedHelperCommands } from '../credentials.ts'
 import {
   compareVersions,
@@ -23,30 +24,40 @@ import { gitInstallHints, gitLfsInstallHints } from '../install-hints.ts'
 import { printStep } from '../report.ts'
 import { isSecureServiceUrl, parseServiceUrl, ServiceUrlError } from '../service-url.ts'
 import { promptForToken, readTokenFromStdin } from '../token-input.ts'
+import { runInitCos } from './init-cos.ts'
 
-export const initHelp = `用法：git yunbox init --url <服务地址>/<owner>/<repo> [选项]
+export const initHelp = `用法：git yunbox init [选项]
 
-在当前 Git 仓库里接入 YunBox：
+在当前 Git 仓库里接入 YunBox。默认直连 COS，不需要任何服务端：
   1. 检查 git 和 git-lfs 版本，执行 git lfs install
-  2. 按素材类型生成或合并 .gitattributes（已有规则不会重复添加）
-  3. 把 lfs.url 写进 .lfsconfig（只写地址，从不写凭据）
-  4. 设置 lfs.locksverify=false（YunBox 还没有实现文件锁）
-  5. 把个人 token 存进 Git 凭据管理器
+  2. 选择 COS bucket（或新建私有 bucket）和目录前缀，写进 .yunboxconfig（不含密钥，提交后团队共享）
+  3. 用本机密钥检查能否在这个前缀写入、读取和删除
+  4. 按素材类型生成或合并 .gitattributes（已有规则不会重复添加）
+  5. 在本仓库的 .git/config 登记传输代理：git-lfs 用 git-yunbox lfs-agent 直接上传下载
+  6. 设置 lfs.locksverify=false（直连模式没有文件锁服务）
 
-可以重复执行，不会破坏已有配置。
+.yunboxconfig 已存在时（例如别人已经接入、你刚 clone 下来）不会再提问，只做第 3、5、6 步。
+可以重复执行，不会破坏已有配置。密钥用 yunbox login 保存在本机，不会写进仓库。
 
-选项：
+直连 COS 的选项：
+  --bucket <名称>    bucket 名称（包含 -APPID），不提供时列出账号下的 bucket 让你选
+  --region <地域>    bucket 地域，例如 ap-guangzhou；选已有 bucket 时自动识别
+  --prefix <前缀>    bucket 里的目录前缀，默认 yunbox/<owner>/<repo>；多个项目可以共用一个 bucket
+  --create           新建私有 bucket（会先确认，--yes 跳过确认）
+  --read-only        只需要拉取：密钥没有写权限时不提示警告
+  --yes, -y          跳过确认
+  --force            .yunboxconfig 或 .lfsconfig 里已有不同的配置时替换它
+
+服务端模式（使用 YunBox 服务端和个人 token）：
   --url <地址>       YunBox 仓库地址，例如 https://lfs.example.com/team/assets；
                      .lfsconfig 里已有 lfs.url 时可以省略
+  --token-stdin      从标准输入读取 token，例如 pbpaste | git yunbox init --token-stdin
+  --skip-credential  不配置 token
+
+通用选项：
   --types <类型>     只跟踪这些素材类型，逗号分隔（默认全部）：
                      ${ASSET_CATEGORIES.map(category => `${category.id}（${category.label}）`).join('、')}
-  --token-stdin      从标准输入读取 token，例如 pbpaste | git yunbox init --token-stdin
-  --skip-credential  不配置凭据
-  --force            .lfsconfig 里已有不同的 lfs.url 时替换它
   -h, --help         显示帮助
-
-不提供 --token-stdin 时，在终端里会提示输入 token（输入不显示）。
-token 不接受命令行参数，以免留在 shell 历史里。
 `
 
 const LOCKS_REASON = 'YunBox G1 还没有实现 Git LFS 文件锁（Locks API）。试点期间同一个素材同一时间只能由一个人编辑，提交前先在团队里说一声'
@@ -68,58 +79,25 @@ export async function runInit(context: CliContext, args: string[]): Promise<numb
   // Validate everything before touching the repository.
   const lfsConfigPath = join(root, '.lfsconfig')
   const currentUrl = await readGitConfig(repo, 'lfs.url', lfsConfigPath)
+  const cosOptions = values.bucket !== undefined || values.region !== undefined || values.prefix !== undefined || values.create === true
+  const hasCosLocation = await readGitConfig(repo, 'cos.bucket', join(root, LOCATION_FILE)) !== undefined
+  if (values.cos === true || cosOptions || (values.url === undefined && (hasCosLocation || currentUrl === undefined))) {
+    if (values.url !== undefined)
+      throw new CliError('--url（服务端模式）和 --cos（直连 COS）只能选一个', USAGE_EXIT_CODE)
+    return await runInitCos(context, repo, root, values, parseCategories(values.types), installLfsAndAttributes)
+  }
   const service = resolveService(values.url ?? currentUrl)
   if (currentUrl !== undefined && currentUrl !== service.url && !values.force) {
     throw new CliError(`.lfsconfig 里的 lfs.url 已经是 ${currentUrl}，和 ${service.url} 不同。确认要替换时加 --force`)
   }
-  let categories: ReturnType<typeof selectCategories>
-  try {
-    categories = selectCategories(values.types)
-  }
-  catch (error) {
-    throw new CliError((error as Error).message, USAGE_EXIT_CODE)
-  }
+  const categories = parseCategories(values.types)
   let token: string | undefined
   if (values['token-stdin']) {
     token = await readTokenFromStdin(context)
     assertToken(token)
   }
 
-  const install = await runGit(repo, ['lfs', 'install'])
-  if (install.code !== 0) {
-    const reason = firstLine(install.stderr) || firstLine(install.stdout)
-    const hint = /hook already exists/i.test(`${install.stdout}${install.stderr}`)
-      ? '仓库里已有其他工具的 Git 钩子。运行 git lfs update --manual，按提示把 git-lfs 的命令加进已有钩子后重试'
-      : '按上面的错误修复后重新运行 git yunbox init'
-    throw new CliError(`git lfs install 失败：${reason}\n${hint}`)
-  }
-  printStep(context, { status: 'pass', title: 'git lfs install', detail: '已启用 LFS 过滤器和本仓库的钩子' })
-
-  const attributesPath = join(root, '.gitattributes')
-  const existingAttributes = await readFile(attributesPath, 'utf8').catch((error: NodeJS.ErrnoException) => {
-    if (error.code === 'ENOENT')
-      return ''
-    throw error
-  })
-  const merge = mergeGitAttributes(existingAttributes, categories)
-  if (merge.content !== existingAttributes)
-    await writeFile(attributesPath, merge.content)
-  const addedCount = [...merge.added.values()].reduce((sum, patterns) => sum + patterns.length, 0)
-  printStep(context, {
-    status: 'pass',
-    title: '.gitattributes',
-    detail: addedCount === 0
-      ? '已包含全部素材规则，未修改'
-      : `新增 ${addedCount} 条规则（${categories.filter(category => merge.added.has(category.id)).map(category => `${category.label} ${merge.added.get(category.id)!.length}`).join('、')}）`,
-  })
-  if (merge.keptNonLfs.length > 0) {
-    printStep(context, {
-      status: 'warn',
-      title: '.gitattributes',
-      detail: `这些扩展名已有不走 LFS 的规则，保持不变：${merge.keptNonLfs.join(' ')}`,
-      fixes: ['确实需要用 LFS 管理时，手动把对应规则改成 filter=lfs diff=lfs merge=lfs -text'],
-    })
-  }
+  await installLfsAndAttributes(context, repo, root, categories)
 
   if (currentUrl === service.url) {
     printStep(context, { status: 'pass', title: '.lfsconfig', detail: `lfs.url 已是 ${service.url}，未修改` })
@@ -152,6 +130,58 @@ export async function runInit(context: CliContext, args: string[]): Promise<numb
     print(context, '  git yunbox init   # 在终端里重新运行，按提示输入 token')
   print(context, '  yunbox doctor     # 检查连通性和读写权限')
   return 0
+}
+
+/** `git lfs install` plus merging the asset rules into `.gitattributes`; shared by both modes. */
+export async function installLfsAndAttributes(context: CliContext, repo: CliContext, root: string, categories: ReturnType<typeof selectCategories> | undefined): Promise<void> {
+  const install = await runGit(repo, ['lfs', 'install'])
+  if (install.code !== 0) {
+    const reason = firstLine(install.stderr) || firstLine(install.stdout)
+    const hint = /hook already exists/i.test(`${install.stdout}${install.stderr}`)
+      ? '仓库里已有其他工具的 Git 钩子。运行 git lfs update --manual，按提示把 git-lfs 的命令加进已有钩子后重试'
+      : '按上面的错误修复后重新运行 git yunbox init'
+    throw new CliError(`git lfs install 失败：${reason}\n${hint}`)
+  }
+  printStep(context, { status: 'pass', title: 'git lfs install', detail: '已启用 LFS 过滤器和本仓库的钩子' })
+
+  if (categories === undefined) {
+    printStep(context, { status: 'skip', title: '.gitattributes', detail: '沿用仓库里已有的规则，未修改（要追加素材类型：加 --types）' })
+    return
+  }
+  const attributesPath = join(root, '.gitattributes')
+  const existingAttributes = await readFile(attributesPath, 'utf8').catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ENOENT')
+      return ''
+    throw error
+  })
+  const merge = mergeGitAttributes(existingAttributes, categories)
+  if (merge.content !== existingAttributes)
+    await writeFile(attributesPath, merge.content)
+  const addedCount = [...merge.added.values()].reduce((sum, patterns) => sum + patterns.length, 0)
+  printStep(context, {
+    status: 'pass',
+    title: '.gitattributes',
+    detail: addedCount === 0
+      ? '已包含全部素材规则，未修改'
+      : `新增 ${addedCount} 条规则（${categories.filter(category => merge.added.has(category.id)).map(category => `${category.label} ${merge.added.get(category.id)!.length}`).join('、')}）`,
+  })
+  if (merge.keptNonLfs.length > 0) {
+    printStep(context, {
+      status: 'warn',
+      title: '.gitattributes',
+      detail: `这些扩展名已有不走 LFS 的规则，保持不变：${merge.keptNonLfs.join(' ')}`,
+      fixes: ['确实需要用 LFS 管理时，手动把对应规则改成 filter=lfs diff=lfs merge=lfs -text'],
+    })
+  }
+}
+
+function parseCategories(types: string[] | undefined): ReturnType<typeof selectCategories> {
+  try {
+    return selectCategories(types)
+  }
+  catch (error) {
+    throw new CliError((error as Error).message, USAGE_EXIT_CODE)
+  }
 }
 
 /** Store the token, keep an existing credential, or explain how to add one later. Returns whether a credential is in place. */
@@ -251,7 +281,24 @@ function assertToken(token: string): void {
   }
 }
 
-function parseInitArgs(args: string[]): { 'url'?: string, 'types'?: string[], 'token-stdin'?: boolean, 'skip-credential'?: boolean, 'force'?: boolean, 'help'?: boolean } {
+/** Parsed `git yunbox init` options. */
+export interface InitOptions {
+  'url'?: string
+  'cos'?: boolean
+  'bucket'?: string
+  'region'?: string
+  'prefix'?: string
+  'create'?: boolean
+  'yes'?: boolean
+  'read-only'?: boolean
+  'types'?: string[]
+  'token-stdin'?: boolean
+  'skip-credential'?: boolean
+  'force'?: boolean
+  'help'?: boolean
+}
+
+function parseInitArgs(args: string[]): InitOptions {
   if (args.some(arg => arg === '--token' || arg.startsWith('--token=') || arg === '--password' || arg.startsWith('--password=')))
     throw new CliError('不要在命令行参数里传 token，它会留在 shell 历史和进程列表里。用 --token-stdin，或直接运行 git yunbox init 按提示输入', USAGE_EXIT_CODE)
   try {
@@ -259,6 +306,13 @@ function parseInitArgs(args: string[]): { 'url'?: string, 'types'?: string[], 't
       args,
       options: {
         'url': { type: 'string' },
+        'cos': { type: 'boolean' },
+        'bucket': { type: 'string' },
+        'region': { type: 'string' },
+        'prefix': { type: 'string' },
+        'create': { type: 'boolean' },
+        'yes': { type: 'boolean', short: 'y' },
+        'read-only': { type: 'boolean' },
         'types': { type: 'string', multiple: true },
         'token-stdin': { type: 'boolean' },
         'skip-credential': { type: 'boolean' },

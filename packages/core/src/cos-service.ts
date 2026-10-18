@@ -37,7 +37,7 @@ export async function listCosBuckets(options: CosServiceOptions): Promise<CosBuc
   const response = await signedRequest('GET', options.endpoint ?? SERVICE_ORIGIN, options)
   const xml = await response.text()
   if (!response.ok)
-    throw new CosRequestError('GET Service', response.status)
+    throw new CosRequestError('GET Service', response.status, xmlField(xml, 'Code'))
   const buckets: CosBucketSummary[] = []
   for (const match of xml.matchAll(/<Bucket>([\s\S]*?)<\/Bucket>/g)) {
     const name = xmlField(match[1]!, 'Name')

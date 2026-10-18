@@ -118,13 +118,17 @@ describe('git yunbox init', () => {
       [['init', '--url', SERVICE_URL, '--token-stdin'], 'not a token', /token 不能包含空白字符/],
       [['init', '--url', SERVICE_URL, '--token-stdin'], 'password123', /ybx_/],
       [['init', '--url', SERVICE_URL, '--types', 'texture,unknown'], '', /未知的素材类型：unknown/],
-      [['init'], '', /缺少 --url/],
+      [['init', '--url', SERVICE_URL, '--bucket', 'assets-1250000000'], '', /--url（服务端模式）和 --cos（直连 COS）只能选一个/],
     ]
     for (const [argv, stdin, message] of cases) {
       const result = await runYunBox(sandbox, repo, argv, stdin)
       expect(result.code, argv.join(' ')).toBe(2)
       expect(result.stderr).toMatch(message)
     }
+    // Without --url, init sets up direct COS access and needs the user's own keys first.
+    const noKeys = await runYunBox(sandbox, repo, ['init'])
+    expect(noKeys.code).toBe(1)
+    expect(noKeys.stderr).toContain('yunbox login')
     await expect(access(join(repo, '.gitattributes'))).rejects.toThrow()
     await expect(access(join(repo, '.lfsconfig'))).rejects.toThrow()
 

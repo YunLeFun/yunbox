@@ -141,7 +141,7 @@ describe('yunbox doctor', () => {
     await git(notFound.sandbox, notFound.repo, 'config', '--file', '.lfsconfig', '--unset', 'lfs.url')
     const missing = await runYunBox(notFound.sandbox, notFound.repo, ['doctor'])
     expect(missing.code).toBe(1)
-    expect(missing.stdout).toContain('✗ lfs.url：没有配置')
+    expect(missing.stdout).toContain('✗ YunBox：这个仓库还没有接入 YunBox')
     expect(missing.stdout).toContain('git yunbox init --url https://<YunBox 服务地址>/<owner>/<repo>')
 
     const outside = await runYunBox(notFound.sandbox, notFound.sandbox.root, ['doctor'])

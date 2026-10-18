@@ -47,11 +47,15 @@ export interface CosObjectStorageOptions {
 /** Error raised when COS rejects a server-side request. The message never contains signed URLs. */
 export class CosRequestError extends Error {
   readonly status: number
+  /** COS error code from the XML body, such as `AccessDenied` or `InvalidAccessKeyId`, when known. */
+  readonly code?: string
 
-  constructor(operation: string, status: number) {
-    super(`COS ${operation} request failed with HTTP ${status}`)
+  constructor(operation: string, status: number, code?: string) {
+    super(`COS ${operation} request failed with HTTP ${status}${code === undefined ? '' : ` (${code})`}`)
     this.name = 'CosRequestError'
     this.status = status
+    if (code !== undefined)
+      this.code = code
   }
 }
 
