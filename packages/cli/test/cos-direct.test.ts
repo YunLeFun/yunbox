@@ -1,3 +1,4 @@
+import type { FakeCamPolicy } from '../../core/test/fake-cos-server.ts'
 import type { Sandbox } from './helpers.ts'
 import { Buffer } from 'node:buffer'
 import { createHash } from 'node:crypto'
@@ -22,6 +23,10 @@ afterEach(async () => {
 
 function sha256(data: Uint8Array): string {
   return createHash('sha256').update(data).digest('hex')
+}
+
+function objectKey(oid: string): string {
+  return `yunbox/team/game/${oid.slice(0, 2)}/${oid.slice(2, 4)}/${oid}`
 }
 
 /** A sandbox whose PATH has a `git-yunbox` that git-lfs can start, and a fake COS account. */
@@ -58,7 +63,7 @@ describe.skipIf(process.platform === 'win32')('git-lfs directly to COS, without 
     expect(login.code).toBe(0)
     const file = credentialsFilePath(sandbox.env)
     expect((await stat(file)).mode & 0o777).toBe(0o600)
-    expect(resolveCredentials(sandbox.env)?.source).toBe('file')
+    expect((await resolveCredentials(sandbox.env))?.source).toBe('file')
 
     const origin = join(sandbox.root, 'origin.git')
     await git(sandbox, sandbox.root, 'init', '--bare', '--quiet', origin)
@@ -69,7 +74,7 @@ describe.skipIf(process.platform === 'win32')('git-lfs directly to COS, without 
     const init = await runYunBox(sandbox, repo, ['init', '--types', 'model'], '1\n\n')
     expect(init.stderr).toBe('')
     expect(init.code).toBe(0)
-    expect(init.stdout).toContain('可以在 team-assets-1250000000（ap-shanghai）/yunbox/team/game/ 写入、读取和删除')
+    expect(init.stdout).toContain('可以在 team-assets-1250000000（ap-shanghai）/yunbox/team/game/ 写入和读取')
     const shared = await readFile(join(repo, '.yunboxconfig'), 'utf8')
     expect(shared).toContain('bucket = team-assets-1250000000')
     expect(shared).toContain('prefix = yunbox/team/game')
@@ -88,7 +93,7 @@ describe.skipIf(process.platform === 'win32')('git-lfs directly to COS, without 
     const firstCommit = await git(sandbox, repo, 'rev-parse', 'HEAD')
     await git(sandbox, repo, 'remote', 'set-url', 'origin', origin)
     await git(sandbox, repo, 'push', '--quiet', 'origin', 'HEAD:main')
-    const firstKey = `yunbox/team/game/${sha256(first).slice(0, 2)}/${sha256(first).slice(2, 4)}/${sha256(first)}`
+    const firstKey = objectKey(sha256(first))
     expect(cos.objects.get(firstKey)?.body.equals(first)).toBe(true)
 
     const second = Buffer.alloc(1024 * 1024, 9)
@@ -109,6 +114,37 @@ describe.skipIf(process.platform === 'win32')('git-lfs directly to COS, without 
     await git(sandbox, teammate, 'checkout', '--quiet', firstCommit)
     expect(sha256(await readFile(join(teammate, 'car.fbx')))).toBe(sha256(first))
     expect(cos.requests.every(request => request.status !== 403)).toBe(true)
+
+    // From here the collaborator's sub-account only has what `yunbox policy` prints.
+    const writePolicy = await runYunBox(sandbox, repo, ['policy'])
+    expect(writePolicy.code).toBe(0)
+    cos.policy = JSON.parse(writePolicy.stdout) as FakeCamPolicy
+    const teammateDoctor = await runYunBox(sandbox, teammate, ['doctor'])
+    expect(teammateDoctor.stdout).toContain('✓ COS 权限')
+    expect(teammateDoctor.code).toBe(0)
+    await git(sandbox, teammate, 'checkout', '--quiet', 'main')
+    const third = Buffer.alloc(512 * 1024, 3)
+    await writeFile(join(teammate, 'car.fbx'), third)
+    await git(sandbox, teammate, 'commit', '--quiet', '-am', 'third car')
+    await git(sandbox, teammate, 'push', '--quiet', 'origin', 'HEAD:main')
+    expect(cos.objects.get(objectKey(sha256(third)))?.body.equals(third)).toBe(true)
+    // Nothing outside the prefix, and no deleting.
+    expect(cos.requests.some(request => request.method === 'DELETE')).toBe(false)
+    const otherRepo = await createRepository(sandbox, 'other')
+    const otherInit = await runYunBox(sandbox, otherRepo, ['init', '--bucket', 'team-assets-1250000000', '--region', 'ap-shanghai', '--prefix', 'yunbox/team/other'])
+    expect(otherInit.code).toBe(1)
+
+    // Read-only: pulls work, pushes are refused.
+    const readPolicy = await runYunBox(sandbox, repo, ['policy', '--read-only'])
+    cos.policy = JSON.parse(readPolicy.stdout) as FakeCamPolicy
+    expect((await runYunBox(sandbox, teammate, ['doctor', '--read-only'])).code).toBe(0)
+    const reader = await runYunBox(sandbox, sandbox.root, ['clone', origin, 'reader'])
+    expect(reader.code).toBe(0)
+    expect(sha256(await readFile(join(sandbox.root, 'reader', 'car.fbx')))).toBe(sha256(third))
+    await writeFile(join(teammate, 'car.fbx'), Buffer.alloc(256 * 1024, 4))
+    await git(sandbox, teammate, 'commit', '--quiet', '-am', 'fourth car')
+    await expect(git(sandbox, teammate, 'push', '--quiet', 'origin', 'HEAD:main')).rejects.toThrow()
+    cos.policy = undefined
 
     // Replace the stored bytes: the agent must refuse to hand them to git-lfs.
     cos.objects.set(firstKey, { body: Buffer.alloc(first.byteLength, 1), etag: '"tampered"' })

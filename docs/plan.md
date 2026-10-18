@@ -274,6 +274,14 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **实测**：在私有测试 bucket `yunbox-e2e-1325586649` 上，用 `tccli auth login` 的临时密钥跑通了 init（读写探测）、推送两个版本、协作者 `git yunbox clone`、恢复旧版本（SHA-256 一致）、重复推送不重复上传；测试对象已清理。fake COS 上另外覆盖了内容被篡改时拒绝交付、无权限时不修改仓库。
 - **加入已接入的仓库**：仓库里已有 `.yunboxconfig` 且没有传 `--types` 时，`init` 不改 `.gitattributes`，clone 后工作区保持干净。
 
+### 子账号策略与钥匙串（2026-10-18）
+
+- **`yunbox policy` 只输出不改动**：读取 `.yunboxconfig`（或 `--bucket` / `--region` / `--prefix`），打印一份策略：`name/cos:PutObject`、`GetObject`、`HeadObject`（`--read-only` 去掉 `PutObject`），资源 `qcs::cos:<地域>:uid/<APPID>:<bucket>/<前缀>/*`，APPID 取 bucket 名的数字后缀。资源六段式、`uid/<APPID>`、三个动作名和按目录授权的写法都已对照腾讯云文档（链接在 deploy.md）。不调用 CAM 接口，所以不需要管理员密钥，也不存在误改账号的风险；代价是管理员要自己在控制台粘贴和关联。
+- **读写探测改为不需要删除**：原来 `init` / `doctor` 的探测是 PUT、HEAD、GET、DELETE 一个随机键，最小权限策略没有 `DeleteObject`，会让 `init` 直接失败。现在探测固定写 `<前缀>/_yunbox/probe`（内容不变，反复覆盖），只做 PUT、HEAD、GET，和传输代理实际用到的动作一致；不再删除，也就不会在多人同时探测时互相删掉对方的探测对象。COS 测试替身新增按 CAM 策略拒绝请求，端到端测试用 `yunbox policy` 的输出覆盖了：只有这份策略时 doctor、push、clone 都正常，从不发 DELETE，前缀外的 init 被拒绝，只读策略能 clone 不能 push。
+- **密钥存储抽象为 `SecretStore`**：macOS 默认「钥匙串 → 0600 文件」，其他系统只有文件；`YUNBOX_CREDENTIAL_STORE=auto|keychain|file` 可以覆盖。解析顺序保持 `TENCENTCLOUD_*` > 钥匙串 > 文件 > tccli；某个存储读取失败时跳过、继续找下一个，只有全部找不到时才报这个错误。`login` 保存成功后删除其他存储里的旧副本（钥匙串成功就删除明文文件；钥匙串失败改存文件时，删除钥匙串里可能遮住新密钥的旧项）。`logout` 清理所有存储。`doctor` 在 macOS 上发现密钥还在明文文件里时给出警告。
+- **钥匙串的写法**：钥匙串项是 generic password（service `yunbox`、account `cos`），内容是与文件相同的 JSON。写入时把 `add-generic-password -U … -X <十六进制>` 通过标准输入交给 `security -i`，读取用 `find-generic-password -w`，所以 SecretKey 不出现在任何进程的参数里（`-w <密码>` 会出现在 `ps` 里，`-w` 放最后又会要求终端交互，都不用）。写完立即读回比较；`security` 的错误输出在拼进提示前会去掉十六进制内容。测试通过注入的 `security` 替身检查每次调用的参数里都没有 SecretKey；`YUNBOX_TEST_KEYCHAIN=1` 时在临时钥匙串文件上跑真实 `security`，不碰登录钥匙串。所有命令行测试强制用文件存储。
+- **Windows 凭据管理器暂不做**：不加依赖的办法里，`cmdkey /generic … /pass:` 要把密码放进命令行参数，而且无法读回；PowerShell 用 `Add-Type` 调 `advapi32` 的 `CredWriteW` / `CredReadW` 可以经标准输入传密钥，但每次启动传输代理都要编译一次 C#（预计 1 秒以上），在受限语言模式（AppLocker / WDAC）下不可用；`Windows.Security.Credentials.PasswordVault` 只能在 Windows PowerShell 5.1 里用，PowerShell 7 不行。都没在 Windows 上验证过，所以 Windows 继续用 `%APPDATA%\yunbox\credentials.json`，放到 G2 第 4 项 Windows 实测时再决定。
+
 ### 后续风险
 
 - CloudBase 云托管绑定运行角色后是否以 `TENCENTCLOUD_*` 环境变量注入临时密钥**未核实**（云函数是这样做的）。如果不是，需要在服务端增加从平台元数据接口获取密钥的代码，或者临时改用只挂最小权限策略的子账号长期密钥。
@@ -291,10 +299,14 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - ETag 在单次 PUT 时是内容的 MD5。有写权限的人理论上可以用 MD5 碰撞构造同样大小、同样 ETag 的不同内容，在地址有效期内覆盖已校验对象；这种情况由客户端下载时的 SHA-256 校验兜底，第一版不做服务端哈希校验。
 - 多条路由指向不同 bucket 时，服务端的运行角色要能访问所有 bucket 的对应前缀；CAM 策略写漏一条，只有那条路由的仓库会失败。`cos check` 能发现，但要记得在服务端环境里运行。
 - `tccli auth login` 的临时密钥大约 2 小时过期，只适合用来做 `cos setup`，不能当作服务端的运行凭据。
-- 直连模式下每个协作者都持有云密钥。密钥泄露的影响范围取决于 CAM 策略写得多严；需要给出可直接复制的子账号策略模板，最好提供一键生成策略的命令（会改动 CAM，需要管理员确认）。
+- 直连模式下每个协作者都持有云密钥。密钥泄露的影响范围取决于 CAM 策略写得多严。~~需要给出可直接复制的子账号策略模板~~ **已提供 `yunbox policy`**（2026-10-18），但它只输出不改动 CAM，管理员可能关联错策略或给了 `cos:*` 这类更宽的预设策略，YunBox 发现不了（子账号通常没有读取自身策略的权限）。用这份策略的真实子账号**还没在真实 bucket 上实测**，试点开始前要补上：`doctor`、push、clone 各一次。
+- 有写权限的子账号仍然可以不带 `x-cos-forbid-overwrite` 直接覆盖已有对象（传输代理不会这样做，但泄露的密钥可以）。下载时的 SHA-256 校验能发现被替换的内容，但内容本身要靠 COS 版本控制找回。可以给 `PutObject` 加 `cos:x-cos-forbid-overwrite` 条件（**未实测**），但腾讯云文档说开启版本控制的 bucket 上这个请求头不生效，而且探测对象需要覆盖，所以暂不加进 `yunbox policy`。
+- 探测对象 `<前缀>/_yunbox/probe` 会一直留在 bucket 里（20 字节）。开启版本控制后每次 `init` / `doctor` 都会多一个历史版本，由历史版本的生命周期规则清理。
+- 钥匙串项信任 `/usr/bin/security`，读取不弹窗，因此同一用户下的任何程序都能用 `security find-generic-password -s yunbox -a cos -w` 读到密钥。钥匙串只解决「明文文件被备份、同步、误传」的问题，不防本机恶意程序；要防就得用 `-T ""` 让每次读取都弹窗，git-lfs 每次 push / pull 都会触发，不现实。
+- 钥匙串被锁住（例如通过 SSH 登录、或屏幕锁定后）时，读取会失败或弹出解锁窗口。读取失败会回退到文件，没有文件就报错并提示 `YUNBOX_CREDENTIAL_STORE=file`；弹窗时传输代理会一直等到用户操作（最多 120 秒）。只在临时钥匙串上自动测试过，登录钥匙串的实际弹窗行为没有在 CI 里覆盖。
 - `git-yunbox` 必须在 PATH 上，git-lfs 才能启动代理。GUI Git 客户端（如 Fork、SourceTree）的 PATH 可能和终端不同；`init` 在找不到命令时会写入 Node.js 和脚本的绝对路径，但升级 Node.js 后要重新运行 `git yunbox init`。
 - 直连模式没有文件锁，多人同时编辑同一个二进制素材时只能靠约定。
-- 密钥文件是明文 JSON（权限 600）。可以考虑改存到 macOS 钥匙串 / Windows 凭据管理器。
+- ~~密钥文件是明文 JSON（权限 600）。~~ macOS 已改存钥匙串（2026-10-18）；Linux 和 Windows 仍是明文 JSON（Windows 上 600 权限位不起作用，靠 `%APPDATA%` 默认的用户目录权限）。Linux 可以用 libsecret 的 `secret-tool store`（从标准输入读密码），但很多服务器和 CI 没有 Secret Service，暂不做。
 - Windows 下 npm 生成的 `git-yunbox` shim（`git-yunbox.cmd`、`git-yunbox.ps1` 和无扩展名的 sh 脚本）能否被 Git for Windows 的 `git yunbox` 找到，**仍未实测**；自动测试只在 macOS / Linux 上用 sh shim 验证了 `git yunbox` 和 `yunbox` 输出一致。阶段 5 要在 Windows 上实测，不行就改用 Node SEA 或 `bun build --compile` 打成单个可执行文件。
 - 命令行目前只能从仓库 `pnpm pack` 后 `npm install -g` 安装，协作者需要 Node.js 22.18+。npm 包名和发布方式还没定；如果试点里有人没有 Node.js，就需要单文件可执行程序。
 - `.gitattributes` 只生成小写扩展名的规则（`*.png`）。Linux 和 CI 上 Git 默认区分大小写，`HERO.PNG` 这类文件不会走 LFS，会作为普通文件提交进 Git 历史。macOS 和 Windows 上 `core.ignorecase=true` 时能匹配。如果试点素材里常见大写扩展名，要考虑生成 `*.[pP][nN][gG]` 这种规则，或在 `doctor` 里检查已提交的非 LFS 大文件。

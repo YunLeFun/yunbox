@@ -145,7 +145,7 @@ curl -s http://127.0.0.1:8080/_health
 
 ### 4. CAM 最小权限
 
-服务端只需要对 `<prefix>/` 下的对象执行 `PutObject`、`GetObject`、`HeadObject`、`DeleteObject`（删除只用于已校验标记）。其中 `PutObject` / `GetObject` 也用于读写 token 文档。策略示例（资源格式凭记忆写成，**未核实**，创建时用控制台的策略生成器核对）：
+服务端只需要对 `<prefix>/` 下的对象执行 `PutObject`、`GetObject`、`HeadObject`、`DeleteObject`（删除只用于已校验标记）。其中 `PutObject` / `GetObject` 也用于读写 token 文档。策略示例（资源格式 `qcs::cos:<地域>:uid/<APPID>:<bucket>/<前缀>/*` 和动作名已按腾讯云文档核对，见下一节的出处）：
 
 ```json
 {
@@ -170,6 +170,54 @@ curl -s http://127.0.0.1:8080/_health
 - 把地域、APPID、bucket 和前缀换成自己的。不要授予 `GetBucket`（列出对象）、`PutBucketACL`、`PutObjectACL` 或 `cos:*`。
 - 预签名地址用服务端当时的密钥签名，所以 git-lfs 直传的权限也受这个策略限制。
 - 访问文档数据库还需要云开发的权限。用密钥换取 AccessToken、再访问数据库需要哪个 CAM 动作、能否限定到单个环境，文档里没有找到，**未核实**。先用预设策略确认能跑通，再收窄到只允许这个环境的数据库读写，结论写回本文。不要授予管理环境、云函数或云托管本身的权限。
+
+#### 直连模式：给协作者开子账号
+
+默认的直连模式没有服务端，每个协作者用自己的子账号密钥直接读写 COS。安全边界就是这个子账号的策略，所以**每人一个子账号、只授权仓库的前缀**。策略不用手写，在已接入的仓库里运行：
+
+```bash
+yunbox policy              # 读写：PutObject、GetObject、HeadObject
+yunbox policy --read-only  # 只读：GetObject、HeadObject
+yunbox policy --bucket assets-1250000000 --region ap-guangzhou --prefix yunbox/team/game   # 不在仓库里时
+```
+
+它读取 `.yunboxconfig`，把策略 JSON 打印到标准输出（可以 `| pbcopy`），**不调用任何 CAM 接口，也不需要密钥**。输出形如：
+
+```json
+{
+  "version": "2.0",
+  "statement": [
+    {
+      "effect": "allow",
+      "action": [
+        "name/cos:PutObject",
+        "name/cos:GetObject",
+        "name/cos:HeadObject"
+      ],
+      "resource": [
+        "qcs::cos:ap-guangzhou:uid/1250000000:assets-1250000000/yunbox/team/game/*"
+      ]
+    }
+  ]
+}
+```
+
+- **为什么是这三个动作**：传输代理上传前先 `HEAD` 判断对象是否已存在，再带 `x-cos-forbid-overwrite: true` 做 `PUT`；下载是 `GET`。`init` / `doctor` 的读写探测也只用这三个动作，固定写入 `<前缀>/_yunbox/probe`（20 字节，反复覆盖同一个对象）。不授予 `DeleteObject`、`GetBucket`（列出对象）、`GetService`（列出 bucket）和任何 ACL 动作。
+- **没有 `GetService` 的影响**：协作者的 `yunbox login` 会提示「这个子账号不能列出 bucket」，这是正常的；`git yunbox init` 在仓库已有 `.yunboxconfig` 时不需要列出 bucket。第一次接入仓库（选 bucket、新建 bucket）用管理员自己的账号做。
+- **前缀为空时**策略覆盖整个 bucket，`yunbox policy` 会提示。多个仓库共用 bucket 时，每个仓库用自己的前缀（`init` 默认 `yunbox/<owner>/<repo>`），每个子账号只关联它要用的仓库的策略。
+- **已核实**（2026-10-18，腾讯云文档）：资源六段式与 `uid/<APPID>` 写法见 [COS 访问策略语言概述](https://cloud.tencent.com/document/product/436/12469)；`name/cos:PutObject`、`name/cos:GetObject`、`name/cos:HeadObject` 是三个独立的动作，资源可以写成 `<bucket>/<目录>/*`，见 [授权粒度详情](https://cloud.tencent.com/document/product/436/31923)；按目录授权子账号的写法见 [CAM 文档的按目录授权示例](https://cloud.tencent.com/document/product/598/11084)。自动测试里的 COS 测试替身会按这份策略拒绝请求，覆盖了「只有这份策略时能 init、doctor、push、clone，前缀外被拒，只读策略不能 push」。
+- **未核实**：用这份策略的真实子账号还没在真实 bucket 上跑过（试点时补上）；控制台菜单名称以当时界面为准。
+
+**开子账号的步骤**（管理员在腾讯云控制台操作）：
+
+1. 访问管理 → 用户 → 用户列表 → 新建用户 → 自定义创建，选「可访问资源并接收消息」，访问方式只勾「编程访问」（不需要控制台登录）。用户名建议 `yunbox-<姓名>`。创建时先不关联任何策略。
+2. 访问管理 → 策略 → 新建自定义策略 → **按策略语法创建** → 空白模板，粘贴 `yunbox policy` 的输出。策略名建议 `yunbox-<owner>-<repo>-rw`（只读用 `-ro`），同一个仓库的策略可以给多人复用。
+3. 把策略关联给第 1 步的子账号。需要访问多个仓库时，关联多份策略。
+4. 在子账号详情的「API 密钥」里新建密钥，把 SecretId 和 SecretKey 通过安全渠道发给协作者（不要发在群聊里）。SecretKey 只显示一次。
+5. 协作者运行 `yunbox login`（macOS 存进钥匙串），然后 `git yunbox clone <仓库地址>`；`yunbox doctor` 应显示「COS 权限：可以写入和读取」，只读的人用 `yunbox doctor --read-only`。
+6. 人员离开或密钥泄露：在子账号的「API 密钥」里禁用或删除密钥，立即生效，不需要改仓库。
+
+可选加固（**未实测**）：COS 支持 `cos:x-cos-forbid-overwrite` 条件键（适用于 `PutObject`，见 [条件键说明](https://cloud.tencent.com/document/product/436/71306)），可以给 `PutObject` 加 `"condition": {"string_equal": {"cos:x-cos-forbid-overwrite": "true"}}`，让子账号连「故意覆盖已有对象」都做不到。但开启版本控制的 bucket 上这个请求头不生效（旧版本会保留），而且探测对象 `_yunbox/probe` 需要能覆盖，所以 `yunbox policy` 暂不输出这个条件。
 
 ### 5. 运行角色与密钥
 

@@ -31,7 +31,7 @@ export const initHelp = `用法：git yunbox init [选项]
 在当前 Git 仓库里接入 YunBox。默认直连 COS，不需要任何服务端：
   1. 检查 git 和 git-lfs 版本，执行 git lfs install
   2. 选择 COS bucket（或新建私有 bucket）和目录前缀，写进 .yunboxconfig（不含密钥，提交后团队共享）
-  3. 用本机密钥检查能否在这个前缀写入、读取和删除
+  3. 用本机密钥检查能否在这个前缀写入和读取
   4. 按素材类型生成或合并 .gitattributes（已有规则不会重复添加）
   5. 在本仓库的 .git/config 登记传输代理：git-lfs 用 git-yunbox lfs-agent 直接上传下载
   6. 设置 lfs.locksverify=false（直连模式没有文件锁服务）

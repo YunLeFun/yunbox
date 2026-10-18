@@ -45,6 +45,8 @@ export async function createSandbox(options: { credentialHelper?: boolean } = {}
     if (name.startsWith('TENCENTCLOUD_') || name.startsWith('YUNBOX_'))
       delete env[name]
   }
+  // Keep `yunbox login` away from the developer's real macOS keychain.
+  env.YUNBOX_CREDENTIAL_STORE = 'file'
   delete env.GIT_ASKPASS
   delete env.SSH_ASKPASS
   delete env.GIT_DIR

@@ -1,15 +1,17 @@
 // @env node
 
 import type { CosCredentials } from '@yunbox/core'
+import type { SecretStore, SecretStoreKind, StoredKeys } from './secret-store.ts'
 import { existsSync, readFileSync } from 'node:fs'
-import { chmod, mkdir, rename, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
-import process from 'node:process'
+import { join } from 'node:path'
 import { CliError } from '../context.ts'
+import { defaultSecretStores } from './secret-store.ts'
+
+export { credentialsFilePath } from './secret-store.ts'
 
 /** Where a set of COS credentials came from, for messages; never the values. */
-export type CredentialSource = 'env' | 'file' | 'tccli'
+export type CredentialSource = 'env' | SecretStoreKind | 'tccli'
 
 /** Credentials plus where they came from. */
 export interface ResolvedCredentials {
@@ -19,35 +21,30 @@ export interface ResolvedCredentials {
   description: string
 }
 
-interface StoredCredentials {
-  version: 1
-  secretId: string
-  secretKey: string
-}
-
-/**
- * The per-user credentials file: `$YUNBOX_CONFIG_DIR/credentials.json`, else
- * `%APPDATA%\yunbox\` on Windows, else `$XDG_CONFIG_HOME/yunbox/` or
- * `~/.config/yunbox/`. It lives outside every repository.
- */
-export function credentialsFilePath(env: NodeJS.ProcessEnv): string {
-  if (env.YUNBOX_CONFIG_DIR)
-    return join(env.YUNBOX_CONFIG_DIR, 'credentials.json')
-  if (process.platform === 'win32' && env.APPDATA)
-    return join(env.APPDATA, 'yunbox', 'credentials.json')
-  const base = env.XDG_CONFIG_HOME || join(env.HOME || homedir(), '.config')
-  return join(base, 'yunbox', 'credentials.json')
+function storesFor(env: NodeJS.ProcessEnv, stores: SecretStore[] | undefined): SecretStore[] {
+  if (stores !== undefined)
+    return stores
+  try {
+    return defaultSecretStores(env)
+  }
+  catch (error) {
+    throw new CliError((error as Error).message)
+  }
 }
 
 /**
  * Resolve the user's own COS credentials, in order: `TENCENTCLOUD_SECRETID` /
- * `TENCENTCLOUD_SECRETKEY` (+ `TENCENTCLOUD_SESSIONTOKEN`), the file written by
- * `yunbox login`, then the temporary keys of `tccli auth login`.
+ * `TENCENTCLOUD_SECRETKEY` (+ `TENCENTCLOUD_SESSIONTOKEN`), what `yunbox login`
+ * saved (the macOS keychain, then the file), then the temporary keys of
+ * `tccli auth login`. A store that cannot be read is skipped so that a later
+ * one still works; its error is raised only when nothing else is configured.
  *
+ * @param env Environment with the `TENCENTCLOUD_*` and `YUNBOX_*` settings.
+ * @param stores Defaults to {@link defaultSecretStores}; injected by tests.
  * @returns `undefined` when none is configured.
  * @throws {CliError} when a source exists but is unusable (for example an expired tccli login).
  */
-export function resolveCredentials(env: NodeJS.ProcessEnv): ResolvedCredentials | undefined {
+export async function resolveCredentials(env: NodeJS.ProcessEnv, stores?: SecretStore[]): Promise<ResolvedCredentials | undefined> {
   if (env.TENCENTCLOUD_SECRETID && env.TENCENTCLOUD_SECRETKEY) {
     return {
       credentials: { secretId: env.TENCENTCLOUD_SECRETID, secretKey: env.TENCENTCLOUD_SECRETKEY, sessionToken: env.TENCENTCLOUD_SESSIONTOKEN || undefined },
@@ -55,10 +52,18 @@ export function resolveCredentials(env: NodeJS.ProcessEnv): ResolvedCredentials 
       description: 'TENCENTCLOUD_* 环境变量',
     }
   }
-  const file = credentialsFilePath(env)
-  if (existsSync(file)) {
-    const stored = parseStored(readFileSync(file, 'utf8'), file)
-    return { credentials: { secretId: stored.secretId, secretKey: stored.secretKey }, source: 'file', description: file }
+  let failure: Error | undefined
+  for (const store of storesFor(env, stores)) {
+    let keys: StoredKeys | undefined
+    try {
+      keys = await store.read()
+    }
+    catch (error) {
+      failure ??= error as Error
+      continue
+    }
+    if (keys !== undefined)
+      return { credentials: { secretId: keys.secretId, secretKey: keys.secretKey }, source: store.kind, description: store.description }
   }
   const tccli = env.YUNBOX_TCCLI_CREDENTIAL || join(env.HOME || homedir(), '.tccli', 'default.credential')
   if (existsSync(tccli)) {
@@ -79,12 +84,14 @@ export function resolveCredentials(env: NodeJS.ProcessEnv): ResolvedCredentials 
       }
     }
   }
+  if (failure !== undefined)
+    throw new CliError(failure.message)
   return undefined
 }
 
 /** Like {@link resolveCredentials}, but explains how to configure credentials when there are none. */
-export function requireCredentials(env: NodeJS.ProcessEnv): ResolvedCredentials {
-  const resolved = resolveCredentials(env)
+export async function requireCredentials(env: NodeJS.ProcessEnv, stores?: SecretStore[]): Promise<ResolvedCredentials> {
+  const resolved = await resolveCredentials(env, stores)
   if (resolved === undefined) {
     throw new CliError([
       '本机还没有配置腾讯云 COS 密钥。任选一种：',
@@ -96,34 +103,60 @@ export function requireCredentials(env: NodeJS.ProcessEnv): ResolvedCredentials 
   return resolved
 }
 
-/** Save a key pair to the per-user credentials file with owner-only permissions. */
-export async function saveCredentials(env: NodeJS.ProcessEnv, credentials: { secretId: string, secretKey: string }): Promise<string> {
-  const file = credentialsFilePath(env)
-  await mkdir(dirname(file), { recursive: true, mode: 0o700 })
-  const temporary = `${file}.${process.pid}.tmp`
-  const document: StoredCredentials = { version: 1, secretId: credentials.secretId, secretKey: credentials.secretKey }
-  await writeFile(temporary, `${JSON.stringify(document, null, 2)}\n`, { mode: 0o600 })
-  // writeFile's mode only applies to new files; make sure a reused name is private too.
-  await chmod(temporary, 0o600)
-  await rename(temporary, file)
-  return file
+/** Outcome of {@link saveCredentials}. */
+export interface SaveResult {
+  /** Where the keys now are. */
+  store: SecretStore
+  /** Preferred stores that failed, with the reason; the keys went to a later one. */
+  skipped: Array<{ store: SecretStore, reason: string }>
+  /** Other stores that held an older copy, now deleted. */
+  cleaned: SecretStore[]
 }
 
-/** Delete the per-user credentials file. Returns whether one existed. */
-export async function deleteCredentials(env: NodeJS.ProcessEnv): Promise<boolean> {
-  const file = credentialsFilePath(env)
-  if (!existsSync(file))
-    return false
-  await rm(file)
-  return true
-}
-
-function parseStored(text: string, file: string): StoredCredentials {
-  try {
-    const value = JSON.parse(text) as Partial<StoredCredentials>
-    if (value.version === 1 && typeof value.secretId === 'string' && typeof value.secretKey === 'string')
-      return value as StoredCredentials
+/**
+ * Save a key pair to the first store that accepts it (the macOS keychain
+ * before the 0600 file), then delete any copy in the other stores so that an
+ * older key cannot shadow the new one and no plain-text copy is left behind.
+ *
+ * @throws {CliError} when no store accepts the keys.
+ */
+export async function saveCredentials(env: NodeJS.ProcessEnv, keys: StoredKeys, stores?: SecretStore[]): Promise<SaveResult> {
+  const all = storesFor(env, stores)
+  const skipped: SaveResult['skipped'] = []
+  for (const store of all) {
+    try {
+      await store.write(keys)
+    }
+    catch (error) {
+      skipped.push({ store, reason: (error as Error).message })
+      continue
+    }
+    const cleaned: SecretStore[] = []
+    for (const other of all) {
+      if (other !== store && await other.delete().catch(() => false))
+        cleaned.push(other)
+    }
+    return { store, skipped, cleaned }
   }
-  catch {}
-  throw new CliError(`凭据文件 ${file} 格式不对。运行 yunbox login 重新保存，或删除它`)
+  throw new CliError(`没有保存：${skipped.map(entry => entry.reason).join('；')}`)
+}
+
+/**
+ * Delete what `yunbox login` saved from every store.
+ *
+ * @returns the stores that held keys, and the ones that could not be cleaned.
+ */
+export async function deleteCredentials(env: NodeJS.ProcessEnv, stores?: SecretStore[]): Promise<{ removed: SecretStore[], failed: Array<{ store: SecretStore, reason: string }> }> {
+  const removed: SecretStore[] = []
+  const failed: Array<{ store: SecretStore, reason: string }> = []
+  for (const store of storesFor(env, stores)) {
+    try {
+      if (await store.delete())
+        removed.push(store)
+    }
+    catch (error) {
+      failed.push({ store, reason: (error as Error).message })
+    }
+  }
+  return { removed, failed }
 }

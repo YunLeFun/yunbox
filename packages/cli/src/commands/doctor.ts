@@ -6,9 +6,10 @@ import type { StepReport } from '../report.ts'
 import type { ServiceUrl } from '../service-url.ts'
 import { parseArgs } from 'node:util'
 import { CliError, print, USAGE_EXIT_CODE } from '../context.ts'
-import { CosDirectClient } from '../cos/client.ts'
+import { CosDirectClient, PROBE_OPERATIONS } from '../cos/client.ts'
 import { resolveCredentials } from '../cos/credentials.ts'
 import { describeLocation, readLocation } from '../cos/location.ts'
+import { defaultSecretStores } from '../cos/secret-store.ts'
 import { fillCredential, findCredentialHelper, rejectCommand, suggestedHelperCommands } from '../credentials.ts'
 import {
   compareVersions,
@@ -336,9 +337,9 @@ async function diagnoseCos(repo: CliContext, location: CosLocation, report: (ste
     report({ status: 'warn', title: 'lfs.locksverify', detail: '直连模式没有文件锁服务，push 时 git-lfs 可能去代码托管平台查询锁', fixes: ['git config lfs.locksverify false'] })
   }
 
-  let resolved: ReturnType<typeof resolveCredentials>
+  let resolved: Awaited<ReturnType<typeof resolveCredentials>>
   try {
-    resolved = resolveCredentials(repo.env)
+    resolved = await resolveCredentials(repo.env)
   }
   catch (error) {
     report({ status: 'fail', title: 'COS 密钥', detail: (error as Error).message, fixes: ['yunbox login', 'tccli auth login'] })
@@ -348,12 +349,16 @@ async function diagnoseCos(repo: CliContext, location: CosLocation, report: (ste
     report({ status: 'fail', title: 'COS 密钥', detail: '这台电脑还没有配置腾讯云密钥', fixes: ['yunbox login   # 保存自己的子账号 SecretId / SecretKey'] })
     return
   }
-  report({ status: 'pass', title: 'COS 密钥', detail: `来自 ${resolved.description}` })
+  // resolveCredentials already validated YUNBOX_CREDENTIAL_STORE, so this cannot throw.
+  if (resolved.source === 'file' && defaultSecretStores(repo.env).some(store => store.kind === 'keychain'))
+    report({ status: 'warn', title: 'COS 密钥', detail: `来自 ${resolved.description}（明文文件）`, fixes: ['yunbox login   # 重新保存到 macOS 钥匙串，会删除这个文件'] })
+  else
+    report({ status: 'pass', title: 'COS 密钥', detail: `来自 ${resolved.description}` })
 
   const client = new CosDirectClient(location, () => resolved.credentials)
   const steps = await client.probe()
-  if (steps.length === 4 && steps.every(step => step.ok)) {
-    report({ status: 'pass', title: 'COS 权限', detail: '可以写入、读取和删除' })
+  if (steps.length === PROBE_OPERATIONS.length && steps.every(step => step.ok)) {
+    report({ status: 'pass', title: 'COS 权限', detail: '可以写入和读取' })
     return
   }
   const failed = steps.find(step => !step.ok)

@@ -3,8 +3,8 @@
 import type { CliContext } from '../context.ts'
 import { parseArgs } from 'node:util'
 import { CosRequestError, listCosBuckets } from '@yunbox/core'
-import { CliError, print, USAGE_EXIT_CODE } from '../context.ts'
-import { credentialsFilePath, deleteCredentials, resolveCredentials, saveCredentials } from '../cos/credentials.ts'
+import { CliError, print, printError, USAGE_EXIT_CODE } from '../context.ts'
+import { deleteCredentials, resolveCredentials, saveCredentials } from '../cos/credentials.ts'
 import { printStep } from '../report.ts'
 import { promptForToken, readTokenFromStdin } from '../token-input.ts'
 
@@ -19,8 +19,16 @@ export const loginHelp = `用法：yunbox login [--secret-id <SecretId>] [--secr
   -h, --help           显示帮助
 
 SecretKey 不接受命令行参数，以免留在 shell 历史里；在终端里会提示输入（不显示）。
-保存位置：${'$'}YUNBOX_CONFIG_DIR，Windows 为 %APPDATA%\\yunbox，其他系统为 ~/.config/yunbox（文件权限 600）。
-设置了 TENCENTCLOUD_SECRETID / TENCENTCLOUD_SECRETKEY 环境变量时，环境变量优先。
+
+保存位置：
+  macOS      登录钥匙串里的「yunbox」项（用系统自带的 security 命令，密钥不经过命令行参数）；
+             钥匙串不可用时改存文件
+  其他系统   文件 credentials.json（权限 600）：${'$'}YUNBOX_CONFIG_DIR，Windows 为 %APPDATA%\\yunbox，
+             其他为 ~/.config/yunbox
+  YUNBOX_CREDENTIAL_STORE=file 强制用文件，=keychain 强制用钥匙串（只限 macOS）
+保存成功后会删除另一处的旧副本。logout 两处都删除。
+
+读取顺序：TENCENTCLOUD_SECRETID / TENCENTCLOUD_SECRETKEY 环境变量 > 钥匙串 > 文件 > tccli auth login。
 `
 
 /** Run `yunbox login`. */
@@ -67,8 +75,16 @@ export async function runLogin(context: CliContext, args: string[]): Promise<num
     }
   }
 
-  const file = await saveCredentials(context.env, { secretId, secretKey })
-  printStep(context, { status: 'pass', title: '已保存', detail: `${file}（只有你自己能读）` })
+  const saved = await saveCredentials(context.env, { secretId, secretKey })
+  for (const { store, reason } of saved.skipped)
+    printStep(context, { status: 'warn', title: `没有存进${store.description}`, detail: reason })
+  printStep(context, {
+    status: 'pass',
+    title: '已保存',
+    detail: saved.store.kind === 'file' ? `${saved.store.description}（权限 600，只有你自己能读）` : saved.store.description,
+  })
+  for (const store of saved.cleaned)
+    printStep(context, { status: 'pass', title: '已删除旧副本', detail: store.description })
   if (context.env.TENCENTCLOUD_SECRETID)
     print(context, '注意：当前设置了 TENCENTCLOUD_SECRETID 环境变量，它会优先于刚保存的密钥')
   return 0
@@ -80,10 +96,15 @@ export async function runLogout(context: CliContext, args: string[]): Promise<nu
     context.stdout.write(loginHelp)
     return 0
   }
-  const removed = await deleteCredentials(context.env)
-  print(context, removed ? `已删除 ${credentialsFilePath(context.env)}` : '这台电脑上没有 yunbox login 保存的密钥')
-  const remaining = resolveCredentials(context.env)
+  const { removed, failed } = await deleteCredentials(context.env)
+  for (const store of removed)
+    print(context, `已删除 ${store.description} 里的密钥`)
+  if (removed.length === 0 && failed.length === 0)
+    print(context, '这台电脑上没有 yunbox login 保存的密钥')
+  for (const { reason } of failed)
+    printError(context, reason)
+  const remaining = await resolveCredentials(context.env).catch(() => undefined)
   if (remaining !== undefined)
     print(context, `仍然可以使用：${remaining.description}`)
-  return 0
+  return failed.length === 0 ? 0 : 1
 }
