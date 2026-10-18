@@ -2,7 +2,7 @@
 
 > 兼容 Git LFS 的素材托管。代码交给 Git，素材交给云匣。
 
-**状态：默认改为直连 COS，不需要任何服务端。已在真实腾讯云 COS 上跑通推送、clone、恢复旧版本和重复推送；Windows 尚未实测，命令行还没发布到 npm。**
+**状态：默认改为直连 COS，不需要任何服务端。已在真实腾讯云 COS 上跑通推送、clone、恢复旧版本和重复推送；命令行和传输代理在 macOS、Linux、Windows（Git for Windows）上都由 CI 实测通过；npm 发布已准备好，等配置发布凭据。**
 
 代码仍托管在 GitHub 等平台，LFS 大文件存到你自己的腾讯云 COS。每个协作者在自己电脑上用 `yunbox login` 保存自己的子账号密钥，git-lfs 通过 YunBox 的传输代理直接上传、下载 COS，**中间没有服务端**。需要集中签发 token 时，也可以改用[服务端模式](#服务端模式)。
 
@@ -206,12 +206,16 @@ YUNBOX_CLOUDBASE_E2E=1 YUNBOX_CLOUDBASE_ENV=<环境 ID> pnpm exec vitest run pac
 
 ### 安装命令行
 
-npm 包名还没定，目前从本仓库打包安装。安装后同时得到 `yunbox` 和 `git-yunbox` 两个命令，`git yunbox <命令>` 和 `yunbox <命令>` 完全一样：
+发布到 npm 之后用 `npm install -g yunbox` 安装（macOS、Linux、Windows 都可以，需要 Node.js 22.18+、Git 2.30+、git-lfs 3.2+）。发布之前从本仓库打包安装。安装后同时得到 `yunbox` 和 `git-yunbox` 两个命令，`git yunbox <命令>` 和 `yunbox <命令>` 完全一样：
 
 ```bash
 pnpm install && pnpm build
-cd packages/cli && pnpm pack && npm install -g ./yunbox-0.0.0.tgz
+cd packages/cli && pnpm pack && npm install -g ./yunbox-0.1.0.tgz
 ```
+
+Windows 上 git-lfs 通过 Git for Windows 自带的 sh 启动传输代理，需要 npm / pnpm 生成的无扩展名 `git-yunbox` 脚本在 PATH 上；`git yunbox init` 找不到它时会改写成 Node.js 的绝对路径。
+
+发布新版本（维护者）：在仓库的 `npm` environment 里配置 `NPM_TOKEN`，然后运行 `pnpm release`，它会修改 `packages/cli` 的版本、提交、打 `v*` tag 并推送，`Release` 工作流随后跑完全部检查并发布到 npm。
 
 `git yunbox --help` 会被 Git 改写成 `git help yunbox`（找 man 手册，会失败），查看帮助请用 `git yunbox help`、`git yunbox init -h` 或 `yunbox --help`。
 

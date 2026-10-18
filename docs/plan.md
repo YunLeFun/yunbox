@@ -282,6 +282,14 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **钥匙串的写法**：钥匙串项是 generic password（service `yunbox`、account `cos`），内容是与文件相同的 JSON。写入时把 `add-generic-password -U … -X <十六进制>` 通过标准输入交给 `security -i`，读取用 `find-generic-password -w`，所以 SecretKey 不出现在任何进程的参数里（`-w <密码>` 会出现在 `ps` 里，`-w` 放最后又会要求终端交互，都不用）。写完立即读回比较；`security` 的错误输出在拼进提示前会去掉十六进制内容。测试通过注入的 `security` 替身检查每次调用的参数里都没有 SecretKey；`YUNBOX_TEST_KEYCHAIN=1` 时在临时钥匙串文件上跑真实 `security`，不碰登录钥匙串。所有命令行测试强制用文件存储。
 - **Windows 凭据管理器暂不做**：不加依赖的办法里，`cmdkey /generic … /pass:` 要把密码放进命令行参数，而且无法读回；PowerShell 用 `Add-Type` 调 `advapi32` 的 `CredWriteW` / `CredReadW` 可以经标准输入传密钥，但每次启动传输代理都要编译一次 C#（预计 1 秒以上），在受限语言模式（AppLocker / WDAC）下不可用；`Windows.Security.Credentials.PasswordVault` 只能在 Windows PowerShell 5.1 里用，PowerShell 7 不行。都没在 Windows 上验证过，所以 Windows 继续用 `%APPDATA%\yunbox\credentials.json`，放到 G2 第 4 项 Windows 实测时再决定。
 
+### Windows 实测与 npm 发布准备（2026-10-18）
+
+- **Windows 用 CI 实测**：没有 Windows 机器，所以新增 `Windows` 工作流，在 GitHub 的 `windows-latest` 上用 Git for Windows 自带的 git-lfs 跑 core 和 CLI 的全部测试，包括直连 COS 的端到端流程。macOS 客户端是 SwiftUI，只能在 Mac 上运行，不在 Windows 范围内。
+- **git-lfs 在 Windows 上也通过 sh 启动传输代理**（trace 里是 `sh -c 'git-yunbox lfs-agent'`），sh 不按 PATHEXT 找 `.cmd`。npm 和 pnpm 在 Windows 上会同时生成无扩展名的 sh 脚本、`.cmd` 和 `.ps1`，所以 `init` 只在找到无扩展名的 `git-yunbox` 时按命令名登记；找不到时写带引号、正斜杠的 Node.js 和脚本绝对路径，避免 `Program Files` 里的空格被 sh 拆开。
+- **Windows 没有可执行位**：Node 读到的文件权限永远没有执行位，`yunbox hook install` 在 Windows 上不再检查它；Git for Windows 通过 sh 运行钩子。
+- **测试沙箱**：Windows 上 `yunbox login` 的密钥文件在 `%APPDATA%`，沙箱现在把 `APPDATA` / `LOCALAPPDATA` 也指到临时目录；写进 `.gitconfig` 的路径改用正斜杠，因为 git 把反斜杠当转义。
+- **npm 发布**：`yunbox` 和 `git-yunbox` 在 npm 上都没有被占用。包里 `@yunbox/core` 已打进 `dist`，没有运行时依赖；`yunbox --version` 读取包版本。发布由推送 `v*` tag 触发，用仓库 `npm` environment 里的 `NPM_TOKEN`，带 npm provenance。
+
 ### 后续风险
 
 - CloudBase 云托管绑定运行角色后是否以 `TENCENTCLOUD_*` 环境变量注入临时密钥**未核实**（云函数是这样做的）。如果不是，需要在服务端增加从平台元数据接口获取密钥的代码，或者临时改用只挂最小权限策略的子账号长期密钥。
@@ -307,6 +315,7 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - `git-yunbox` 必须在 PATH 上，git-lfs 才能启动代理。GUI Git 客户端（如 Fork、SourceTree）的 PATH 可能和终端不同；`init` 在找不到命令时会写入 Node.js 和脚本的绝对路径，但升级 Node.js 后要重新运行 `git yunbox init`。
 - 直连模式没有文件锁，多人同时编辑同一个二进制素材时只能靠约定。
 - ~~密钥文件是明文 JSON（权限 600）。~~ macOS 已改存钥匙串（2026-10-18）；Linux 和 Windows 仍是明文 JSON（Windows 上 600 权限位不起作用，靠 `%APPDATA%` 默认的用户目录权限）。Linux 可以用 libsecret 的 `secret-tool store`（从标准输入读密码），但很多服务器和 CI 没有 Secret Service，暂不做。
+- Windows 上 GUI Git 客户端（Fork、SourceTree、GitHub Desktop）自带或调用的 sh 和 PATH 可能找不到 `git-yunbox`；还没实测。找不到时重新运行 `git yunbox init` 会改写成绝对路径。
 - Windows 下 npm 生成的 `git-yunbox` shim（`git-yunbox.cmd`、`git-yunbox.ps1` 和无扩展名的 sh 脚本）能否被 Git for Windows 的 `git yunbox` 找到，**仍未实测**；自动测试只在 macOS / Linux 上用 sh shim 验证了 `git yunbox` 和 `yunbox` 输出一致。阶段 5 要在 Windows 上实测，不行就改用 Node SEA 或 `bun build --compile` 打成单个可执行文件。
 - 命令行目前只能从仓库 `pnpm pack` 后 `npm install -g` 安装，协作者需要 Node.js 22.18+。npm 包名和发布方式还没定；如果试点里有人没有 Node.js，就需要单文件可执行程序。
 - `.gitattributes` 只生成小写扩展名的规则（`*.png`）。Linux 和 CI 上 Git 默认区分大小写，`HERO.PNG` 这类文件不会走 LFS，会作为普通文件提交进 Git 历史。macOS 和 Windows 上 `core.ignorecase=true` 时能匹配。如果试点素材里常见大写扩展名，要考虑生成 `*.[pP][nN][gG]` 这种规则，或在 `doctor` 里检查已提交的非 LFS 大文件。
