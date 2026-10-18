@@ -2,6 +2,7 @@ import type { Sandbox } from './helpers.ts'
 import { execFile } from 'node:child_process'
 import { chmod, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import process from 'node:process'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createRepository, createSandbox, git, runYunBox } from './helpers.ts'
@@ -77,8 +78,11 @@ describe('composed pre-push hook', () => {
     expect(await readFile(hook, 'utf8')).toContain('user change')
     await git(sandbox, repo, 'config', 'core.hooksPath', '/custom/hooks')
     expect((await runYunBox(sandbox, repo, ['hook', 'install', '--guard', guard])).code).toBe(1)
-    const fresh = await createRepository(sandbox, 'fresh')
-    await chmod(guard, 0o644)
-    expect((await runYunBox(sandbox, fresh, ['hook', 'install', '--guard', guard])).code).toBe(1)
+    // Windows has no execute bit to check; Git for Windows runs hooks through sh.
+    if (process.platform !== 'win32') {
+      const fresh = await createRepository(sandbox, 'fresh')
+      await chmod(guard, 0o644)
+      expect((await runYunBox(sandbox, fresh, ['hook', 'install', '--guard', guard])).code).toBe(1)
+    }
   })
 })

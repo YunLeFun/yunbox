@@ -38,15 +38,14 @@ async function setup(): Promise<{ sandbox: Sandbox, cos: FakeCosServer }> {
   cos.buckets.push({ name: 'team-assets-1250000000', region: 'ap-shanghai' })
   const bin = join(sandbox.root, 'bin')
   await mkdir(bin)
-  // Stand-in for the npm bin; git-lfs finds the .cmd through PATHEXT on Windows.
-  if (process.platform === 'win32') {
+  // Stand-ins for the npm bins. git-lfs runs agents through sh, which needs the extension-less
+  // script; npm also creates a .cmd for cmd.exe and PowerShell on Windows.
+  const posix = (path: string): string => path.replaceAll('\\', '/')
+  const shim = join(bin, 'git-yunbox')
+  await writeFile(shim, `#!/bin/sh\nexec "${posix(process.execPath)}" --no-warnings --import "${tsxLoader}" "${posix(cliSource)}" "$@"\n`)
+  await chmod(shim, 0o755)
+  if (process.platform === 'win32')
     await writeFile(join(bin, 'git-yunbox.cmd'), `@"${process.execPath}" --no-warnings --import "${tsxLoader}" "${cliSource}" %*\r\n`)
-  }
-  else {
-    const shim = join(bin, 'git-yunbox')
-    await writeFile(shim, `#!/bin/sh\nexec "${process.execPath}" --no-warnings --import "${tsxLoader}" "${cliSource}" "$@"\n`)
-    await chmod(shim, 0o755)
-  }
   Object.assign(sandbox.env, {
     PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
     TSX_TSCONFIG_PATH: join(workspaceRoot, 'tsconfig.json'),
