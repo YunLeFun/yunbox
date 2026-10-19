@@ -92,3 +92,36 @@ private let changesJSON = #"""
     await #expect(throws: ContentFailure.self) { try await reader.export(oid: "../../etc/passwd", to: output.appending(path: "bad")) }
     #expect(try FileManager.default.contentsOfDirectory(atPath: output.appending(path: "c").path) == ["logo.png"])
 }
+
+@Test func pairsRemovedAndAddedLinesSideBySide() {
+    let diff = SplitDiff(unified: """
+    @@ -1,4 +1,5 @@ intro
+     # Guide
+    -one
+    -two
+    +1
+     keep
+    +new
+    @@ -10,2 +11,2 @@
+    -old
+    \\ No newline at end of file
+    +fresh
+
+    """)
+    let cell = { (number: Int, text: String, changed: Bool) in DiffCell(number: number, text: text, changed: changed) }
+    #expect(diff.rows == [
+        .hunk("@@ -1,4 +1,5 @@ intro"),
+        .lines(left: cell(1, "# Guide", false), right: cell(1, "# Guide", false)),
+        .lines(left: cell(2, "one", true), right: cell(2, "1", true)),
+        .lines(left: cell(3, "two", true), right: nil),
+        .lines(left: cell(4, "keep", false), right: cell(3, "keep", false)),
+        .lines(left: nil, right: cell(4, "new", true)),
+        .hunk("@@ -10,2 +11,2 @@"),
+        .lines(left: cell(10, "old", true), right: nil),
+        .note("\\ No newline at end of file"),
+        .lines(left: nil, right: cell(11, "fresh", true)),
+    ])
+    #expect(diff.added == 3)
+    #expect(diff.removed == 3)
+    #expect(SplitDiff(unified: "").rows.isEmpty)
+}

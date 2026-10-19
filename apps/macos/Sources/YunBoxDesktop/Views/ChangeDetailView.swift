@@ -270,33 +270,59 @@ private func pixels(_ image: NSImage) -> String {
     return "\(representation.pixelsWide)×\(representation.pixelsHigh)"
 }
 
-/// `git diff` of the two versions, coloured by line type.
+enum TextDiffMode: String, CaseIterable, Identifiable {
+    case unified = "统一"
+    case split = "分栏"
+    var id: String { rawValue }
+}
+
+/// `git diff` of the two versions: one column coloured by line type, or before and after side by side.
 private struct DiffView: View {
     let text: String
     let note: String?
+    @AppStorage("textDiffMode") private var mode = TextDiffMode.unified
     private static let lineLimit = 5000
 
     var body: some View {
-        let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
         VStack(alignment: .leading, spacing: 6) {
             if let note { Label(note, systemImage: "info.circle").font(.caption).foregroundStyle(.secondary) }
             if text.isEmpty {
                 Text("两个版本的内容相同。").foregroundStyle(.secondary)
             } else {
+                let split = SplitDiff(unified: text)
+                HStack {
+                    Picker("差异视图", selection: $mode) {
+                        ForEach(TextDiffMode.allCases) { Text($0.rawValue).tag($0) }
+                    }.pickerStyle(.segmented).labelsHidden().fixedSize()
+                    Spacer()
+                    Text("+\(split.added)").foregroundStyle(.green)
+                    Text("−\(split.removed)").foregroundStyle(.red)
+                }.font(.caption.monospacedDigit())
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(Array(lines.prefix(Self.lineLimit).enumerated()), id: \.offset) { _, line in
-                            DiffLine(line: line)
-                        }
-                        if lines.count > Self.lineLimit {
-                            Text("差异过长，只显示前 \(Self.lineLimit) 行；可用「快速查看」打开完整文件。")
-                                .font(.caption).foregroundStyle(.secondary).padding(6)
+                        switch mode {
+                        case .unified:
+                            let lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+                            ForEach(Array(lines.prefix(Self.lineLimit).enumerated()), id: \.offset) { _, line in
+                                DiffLine(line: line)
+                            }
+                            if lines.count > Self.lineLimit { truncated }
+                        case .split:
+                            ForEach(Array(split.rows.prefix(Self.lineLimit).enumerated()), id: \.offset) { _, row in
+                                SplitDiffLine(row: row)
+                            }
+                            if split.rows.count > Self.lineLimit { truncated }
                         }
                     }.textSelection(.enabled)
                 }
                 .background(.background.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
             }
         }
+    }
+
+    private var truncated: some View {
+        Text("差异过长，只显示前 \(Self.lineLimit) 行；可用「快速查看」打开完整文件。")
+            .font(.caption).foregroundStyle(.secondary).padding(6)
     }
 }
 
@@ -317,6 +343,44 @@ private struct DiffLine: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 6).padding(.vertical, 1)
             .background(background)
+    }
+}
+
+/// One row of the split view; both halves take the height of the taller one when lines wrap.
+private struct SplitDiffLine: View {
+    let row: SplitDiffRow
+
+    var body: some View {
+        switch row {
+        case .hunk(let text):
+            Text(text).font(.system(.caption, design: .monospaced)).foregroundStyle(.blue)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 6).padding(.vertical, 1)
+                .background(.blue.opacity(0.07))
+        case .note(let text):
+            Text(text).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 6).padding(.vertical, 1)
+        case .lines(let left, let right):
+            HStack(spacing: 0) {
+                half(left, tint: .red)
+                Divider()
+                half(right, tint: .green)
+            }.fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func half(_ cell: DiffCell?, tint: Color) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Text(cell.map { String($0.number) } ?? "")
+                .foregroundStyle(.tertiary).frame(width: 34, alignment: .trailing)
+            Text(cell.map { $0.text.isEmpty ? " " : $0.text } ?? "")
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .font(.system(.caption, design: .monospaced))
+        .padding(.horizontal, 6).padding(.vertical, 1)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(cell.map { $0.changed ? tint.opacity(0.16) : Color.clear } ?? Color.secondary.opacity(0.06))
     }
 }
 
