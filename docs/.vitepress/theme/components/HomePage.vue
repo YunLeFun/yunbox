@@ -1,6 +1,7 @@
 <script setup lang="ts">
 /** The landing page: hero, how a push travels, setup, push check, keys, downloads. */
 import { withBase } from 'vitepress'
+import ConfirmDialogMock from './ConfirmDialogMock.vue'
 import CopyCommand from './CopyCommand.vue'
 import DownloadPanel from './DownloadPanel.vue'
 import HeroBox from './HeroBox.vue'
@@ -71,8 +72,13 @@ import TerminalDemo from './TerminalDemo.vue'
           </p>
         </header>
         <InspectorMock />
+        <p class="confirm-lead">
+          用 <code>yunbox hook install --confirm</code> 装上推送钩子后，超出预算的 <code>git push</code> 不会被直接拦下，而是弹出下面的对话框：推到哪个远端、哪些文件超限、每个文件多大，看完再决定取消还是继续。
+        </p>
+        <ConfirmDialogMock />
         <p class="section-foot">
           <a :href="withBase('/inspect')">推送检查的统计口径</a>
+          <a :href="withBase('/inspect#超限确认')">超限时如何确认</a>
           <a :href="withBase('/guide/macos')">macOS 客户端的全部功能</a>
         </p>
       </div>
@@ -153,7 +159,8 @@ import TerminalDemo from './TerminalDemo.vue'
 }
 
 .hero-lead code,
-.section-head code {
+.section-head code,
+.confirm-lead code {
   padding: 0;
   background: none;
   color: var(--yb-label);
@@ -249,6 +256,15 @@ import TerminalDemo from './TerminalDemo.vue'
   line-height: 1.75;
 }
 
+.confirm-lead {
+  max-width: 44em;
+  margin: 64px auto 28px;
+  color: var(--yb-label-2);
+  font-size: 17px;
+  line-height: 1.75;
+  text-align: center;
+}
+
 .section-foot {
   display: flex;
   flex-wrap: wrap;
@@ -298,6 +314,12 @@ import TerminalDemo from './TerminalDemo.vue'
 
   .section-head p {
     font-size: 15px;
+  }
+
+  .confirm-lead {
+    margin-top: 40px;
+    font-size: 15px;
+    text-align: left;
   }
 }
 </style>
