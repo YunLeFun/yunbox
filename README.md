@@ -6,6 +6,7 @@
 
 代码仍托管在 GitHub 等平台，LFS 大文件存到你自己的腾讯云 COS。每个协作者在自己电脑上用 `yunbox login` 保存自己的子账号密钥，git-lfs 通过 YunBox 的传输代理直接上传、下载 COS，**中间没有服务端**。需要集中签发 token 时，也可以改用[服务端模式](#服务端模式)。
 
+- 官网和使用文档：[docs/](./docs/)（VitePress，下载、功能演示和指南）
 - 方案与里程碑：[docs/plan.md](./docs/plan.md)
 - 部署到 CloudBase 云托管：[docs/deploy.md](./docs/deploy.md)
 
@@ -92,11 +93,20 @@ pnpm typecheck
 pnpm test
 ```
 
-工作区目前包含三个私有包：
+工作区目前包含三个包：
 
 - `packages/core`：LFS 协议类型、输入校验、存储接口、本地文件存储和 COS 存储
 - `packages/server`：基于 `node:http` 的 Batch、Verify、PUT 和 GET 服务，以及元数据存储（`metadata.ts` 定义接口，`metadata-local.ts` 和 `metadata-cloudbase.ts` 是两个实现）
 - `packages/cli`（包名 `yunbox`）：协作者使用的 `yunbox` / `git-yunbox` 命令
+
+以及官网 `docs/`（`@yunbox/docs`，VitePress）：首页的演示组件在 `docs/.vitepress/theme/components/`，`deploy.md`、`inspect.md` 直接作为站点页面，`plan.md`、`goal*.md` 是内部规划，不进站点。文档里指向仓库其他位置的相对链接，构建时改写成 GitHub 地址，所以同一份 Markdown 在 GitHub 和官网上都能点。
+
+```bash
+pnpm docs:dev      # 本地预览官网
+pnpm docs:build    # 输出到 docs/.vitepress/dist
+```
+
+`Docs` 工作流在 main 上的 `docs/` 有改动、以及每次 `Release` 结束后构建并发布到 GitHub Pages（需要在仓库设置里把 Pages 的来源设为 GitHub Actions）。下载区在构建时查询最新 release 是否带 macOS 安装包，没有时改为提示从源码构建；`Release` 工作流在 npm 发布成功后创建 GitHub release，并附上通用二进制的 `YunBox-macOS.zip`（ad-hoc 签名，未公证）。
 
 命令行的测试位于 `packages/cli/test/`：用真实的 `git` 和 `git-lfs` 在临时目录里检查 `init` 生成的配置和幂等性，并对本仓库的服务端（本地存储加 token）检查 `doctor` 在通过、缺少凭据、只读 token、无效 token 等情况下的输出和退出码。测试使用独立的 HOME 和 `credential.helper store`，不会碰到本机的钥匙串。
 

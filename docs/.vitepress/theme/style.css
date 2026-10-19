@@ -1,0 +1,58 @@
+/*
+ * Palette taken from the app icon: the box blue, the sky at the top of the
+ * gradient, blueprint paper and navy ink. Amber is reserved for "over budget".
+ */
+:root {
+  --yb-blue: #2563eb;
+  --yb-blue-deep: #1d4ed8;
+  /* Filled controls with white text; stays dark enough in both themes. */
+  --yb-action: #2563eb;
+  --yb-action-hover: #1d4ed8;
+  --yb-sky: #55aaff;
+  --yb-ink: #0f1e3d;
+  --yb-ink-soft: #3d4f73;
+  --yb-paper: #eef3fb;
+  --yb-sheet: #ffffff;
+  --yb-line: #c9d6ee;
+  --yb-amber: #b45309;
+  --yb-amber-wash: #fdf1dc;
+  --yb-green: #15803d;
+  --yb-term-bg: #0f1e3d;
+  --yb-term-ink: #dbe6fb;
+  --yb-term-dim: #8195bb;
+  --yb-radius-sm: 6px;
+  --yb-radius-lg: 14px;
+  --yb-font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+
+  --vp-c-brand-1: var(--yb-blue);
+  --vp-c-brand-2: var(--yb-blue-deep);
+  --vp-c-brand-3: var(--yb-blue);
+  --vp-c-brand-soft: rgb(37 99 235 / 0.12);
+  --vp-font-family-base: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', 'Segoe UI', sans-serif;
+  --vp-font-family-mono: var(--yb-font-mono);
+}
+
+.dark {
+  --yb-blue: #5b8ff9;
+  --yb-blue-deep: #82aafc;
+  --yb-sky: #7cc0ff;
+  --yb-ink: #e4ecfb;
+  --yb-ink-soft: #a9b8d6;
+  --yb-paper: #0c1730;
+  --yb-sheet: #13213f;
+  --yb-line: #263a63;
+  --yb-amber: #f5b14a;
+  --yb-amber-wash: #3a2a10;
+  --yb-green: #4ade80;
+  --yb-term-bg: #070f22;
+
+  --vp-c-brand-1: var(--yb-blue);
+  --vp-c-brand-2: var(--yb-blue-deep);
+  --vp-c-brand-3: #2563eb;
+  --vp-c-brand-soft: rgb(91 143 249 / 0.16);
+}
+
+.VPHome,
+.yb-home {
+  background-color: var(--yb-paper);
+}

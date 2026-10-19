@@ -35,7 +35,7 @@ Codex 的 Run 按钮也调用此脚本。`--logs` / `--telemetry` 打开应用�
 
 应用图标源自 `assets/brand`，是 [YunLeFun/icons](https://github.com/YunLeFun/icons) 中 `assets/apps/yunbox/v1` 的固定副本，以 `manifest.json` 的 SHA-256 校验。Xcode 26+ 下，脚本用 `actool` 把分层的 `YunBox.icon` 编译进 `Assets.car` 并写入 `CFBundleIconName`，macOS 26 据此显示默认、深色、Clear 与着色外观；同时由 `yunbox-app-icon.svg` 渲染 `AppIcon.icns` 作为旧系统兜底。更新图标时先改中心仓库，再运行 `pnpm icons:sync --source /path/to/icons`；`pnpm icons:check` 只校验本地副本。
 
-当前是供本机使用的 ad-hoc 签名构建，尚未完成 Developer ID 签名、公证及跨机器分发。`dist/`、Swift 构建缓存及本机运行路径均不提交。
+当前是 ad-hoc 签名构建，尚未完成 Developer ID 签名和公证。发布版本时，`Release` 工作流用 `YUNBOX_SWIFT_BUILD_ARGS="-c release --arch arm64 --arch x86_64"` 构建通用二进制，打包成 `YunBox-macOS.zip` 附在 GitHub release 上，官网的下载按钮指向它；第一次打开需要在「系统设置 → 隐私与安全性」里放行。`Info.plist` 的版本号取自 `packages/cli/package.json`。`dist/`、Swift 构建缓存及本机运行路径均不提交。
 
 ## 验证
 

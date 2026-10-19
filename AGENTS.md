@@ -16,6 +16,7 @@
 | `packages/server` | `@yunbox/server` | HTTP 服务端（Batch、Verify、本地存储的 PUT/GET） | M1 |
 | `packages/cli` | `yunbox` | `yunbox` / `git-yunbox` 命令：init、doctor、status | M3 |
 | `apps/web` | — | 只读素材列表和图片预览 | M3 |
+| `docs` | `@yunbox/docs` | 官网和使用文档（VitePress）：功能演示、下载、指南；`plan.md`、`goal*.md` 留在这里但不进站点 | 已建 |
 
 模板里用不到的部分（`pkg-placeholder`、`apps/web` 示例等）删掉，M3 时再按需加回来。端到端测试放在 `packages/server/test/` 或根目录 `test/e2e/`，二选一并在 README 说明。
 

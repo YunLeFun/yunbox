@@ -14,6 +14,8 @@
 .env
 .env.*
 *.tgz
-docs
+docs/*
+# The docs site is a workspace package; the frozen-lockfile install needs its manifest.
+!docs/package.json
 Dockerfile
 .dockerignore

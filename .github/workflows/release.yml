@@ -1,7 +1,8 @@
 name: Release
 
 # Publishes the `yunbox` CLI to npm when a v* tag is pushed ("pnpm release"
-# bumps packages/cli/package.json, commits, tags and pushes). Uses npm
+# bumps packages/cli/package.json, commits, tags and pushes), then creates the
+# GitHub release with the macOS client attached. Uses npm
 # trusted publishing (OIDC): no token is stored anywhere. npmjs.com trusts
 # this repository, this workflow file (release.yml) and the `npm`
 # environment; provenance is attached automatically.
@@ -61,3 +62,41 @@ jobs:
         run: |
           pnpm pack --pack-destination "$RUNNER_TEMP"
           npm publish "$RUNNER_TEMP"/yunbox-*.tgz --access public
+
+  # The release itself is created here, after npm publishing succeeded, so a
+  # tag whose checks fail never gets a downloadable app. The app is ad-hoc
+  # signed, not notarized; the site tells users how to open it.
+  macos-app:
+    name: Attach the macOS client to the GitHub release
+    needs: publish
+    runs-on: macos-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # create the release and upload the zip
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build a universal YunBox.app
+        env:
+          YUNBOX_SWIFT_BUILD_ARGS: -c release --arch arm64 --arch x86_64
+        run: |
+          ./script/build_and_run.sh --build
+          lipo -archs dist/YunBox.app/Contents/MacOS/YunBox
+
+      # The docs site links to releases/latest/download/YunBox-macOS.zip.
+      - name: Upload to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ditto -c -k --keepParent dist/YunBox.app dist/YunBox-macOS.zip
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
+          gh release upload "$GITHUB_REF_NAME" dist/YunBox-macOS.zip --clobber

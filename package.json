@@ -16,13 +16,15 @@
   "scripts": {
     "build": "nr -r build",
     "dev": "nr -r --parallel dev",
+    "docs:build": "pnpm --filter @yunbox/docs build",
+    "docs:dev": "pnpm --filter @yunbox/docs dev",
     "icons:check": "node script/sync-app-icon.mjs --check",
     "icons:sync": "node script/sync-app-icon.mjs",
     "lint": "eslint --cache .",
     "release": "bumpp packages/cli/package.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && pnpm --filter @yunbox/docs typecheck"
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",

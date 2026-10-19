@@ -11,9 +11,13 @@ esac
 
 if [ "$MODE" != --build ]; then pkill -x YunBox >/dev/null 2>&1 || true; fi
 cd "$ROOT_DIR"
-pnpm -r run build
-swift build --package-path apps/macos
-BUILD_DIR="$(swift build --package-path apps/macos --show-bin-path)"
+# The docs site is not part of the app.
+pnpm -r --filter '!@yunbox/docs' run build
+# Release packaging passes e.g. "-c release --arch arm64 --arch x86_64" for a universal binary.
+read -r -a SWIFT_ARGS <<< "${YUNBOX_SWIFT_BUILD_ARGS:-}"
+swift build --package-path apps/macos ${SWIFT_ARGS[@]+"${SWIFT_ARGS[@]}"}
+BUILD_DIR="$(swift build --package-path apps/macos ${SWIFT_ARGS[@]+"${SWIFT_ARGS[@]}"} --show-bin-path)"
+APP_VERSION="$(node -p 'require("./packages/cli/package.json").version')"
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources/cli"
 cp "$BUILD_DIR/YunBox" "$APP_BUNDLE/Contents/MacOS/YunBox"
@@ -49,7 +53,7 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<PLIST
   <key>CFBundleName</key><string>YunBox</string>
   <key>CFBundleDisplayName</key><string>云匣 YunBox</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.1.0</string>
+  <key>CFBundleShortVersionString</key><string>$APP_VERSION</string>
   <key>CFBundleVersion</key><string>1</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   $ICON_NAME_KEY
