@@ -17,13 +17,14 @@ export const DEMO_ASSETS: DemoAsset[] = [
   { name: 'opening.mp4', bytes: 1_288_490_188, kind: '视频' },
 ]
 
-const UNITS = ['B', 'KB', 'MB', 'GB']
+const UNITS = ['B', 'KiB', 'MiB', 'GiB']
 
 /**
- * Format a byte count with 1024-based units, matching the CLI.
+ * Format a byte count the way the macOS client does: 1024-based units with
+ * at most two decimals and no trailing zeros.
  *
  * @param bytes - Byte count
- * @returns A short label such as `412 MB`
+ * @returns A short label such as `531.48 KiB` or `10 MiB`
  */
 export function formatBytes(bytes: number): string {
   let value = bytes
@@ -32,8 +33,7 @@ export function formatBytes(bytes: number): string {
     value /= 1024
     unit++
   }
-  const digits = unit === 0 || value >= 100 ? 0 : 1
-  return `${value.toFixed(digits)} ${UNITS[unit]}`
+  return `${Number(value.toFixed(2))} ${UNITS[unit]}`
 }
 
 /**

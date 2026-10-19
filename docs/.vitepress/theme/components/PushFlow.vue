@@ -6,6 +6,7 @@
  */
 import { computed, ref } from 'vue'
 import { DEMO_ASSETS, demoOid, formatBytes, pointerFor } from '../demo-assets'
+import SymbolIcon from './SymbolIcon.vue'
 
 const PREFIX = 'yunbox/team/game'
 const pushed = DEMO_ASSETS.slice(0, 3)
@@ -15,7 +16,7 @@ const pointerBytes = computed(() => pushed.reduce((sum, asset) => sum + pointerF
 const assetBytes = computed(() => pushed.reduce((sum, asset) => sum + asset.bytes, 0))
 const keys = computed(() => pushed.map((asset) => {
   const oid = demoOid(asset.name)
-  return `${PREFIX}/${oid.slice(0, 2)}/${oid.slice(2, 4)}/${oid.slice(0, 12)}…`
+  return `${PREFIX}/${oid.slice(0, 2)}/${oid.slice(2, 4)}/${oid.slice(0, 10)}…`
 }))
 
 function push(): void {
@@ -32,16 +33,18 @@ function push(): void {
 
 <template>
   <div class="flow" :class="`flow-${state}`">
-    <div class="machine">
-      <p class="machine-title">
+    <div class="node machine">
+      <p class="node-title">
+        <span class="node-icon"><SymbolIcon name="laptopcomputer" /></span>
         你的电脑
       </p>
-      <ol class="machine-steps">
+      <ol class="steps">
         <li><code>git push</code></li>
         <li><code>git-lfs</code> 找出 {{ pushed.length }} 个素材</li>
         <li><code>git-yunbox lfs-agent</code> 用本机密钥签名</li>
       </ol>
       <button class="push" type="button" :disabled="state === 'moving'" @click="push">
+        <SymbolIcon name="arrow.up.doc" />
         {{ state === 'done' ? '再推送一次' : '推送一次' }}
       </button>
     </div>
@@ -51,14 +54,16 @@ function push(): void {
         <span class="parcel parcel-small" />
         <span class="track-label">提交和指针，{{ formatBytes(pointerBytes) }}</span>
       </div>
-      <div class="dest">
-        <p class="dest-title">
+      <div class="node dest">
+        <p class="node-title">
+          <span class="node-icon node-icon-grey"><SymbolIcon name="arrow.triangle.branch" /></span>
           代码托管
         </p>
         <p class="dest-sub">
-          GitHub、GitLab、工蜂……照旧
+          GitHub、GitLab、工蜂，照旧使用
         </p>
         <p class="dest-result">
+          <SymbolIcon name="checkmark.circle.fill" class="ok" />
           收到 1 个提交，{{ pushed.length }} 个指针文件
         </p>
       </div>
@@ -68,10 +73,14 @@ function push(): void {
       <div class="track">
         <span class="parcel parcel-big" />
         <span class="track-label">素材本体，{{ formatBytes(assetBytes) }}</span>
-        <span class="no-server">这里没有服务端</span>
+        <span class="no-server">
+          <SymbolIcon name="square.on.square.dashed" />
+          中间没有服务端
+        </span>
       </div>
-      <div class="dest dest-cos">
-        <p class="dest-title">
+      <div class="node dest">
+        <p class="node-title">
+          <span class="node-icon"><SymbolIcon name="icloud" /></span>
           你的 COS bucket
         </p>
         <p class="dest-sub">
@@ -79,6 +88,7 @@ function push(): void {
         </p>
         <ul class="dest-result keys">
           <li v-for="key in keys" :key="key">
+            <SymbolIcon name="checkmark.circle.fill" class="ok" />
             <code>{{ key }}</code>
           </li>
         </ul>
@@ -90,9 +100,16 @@ function push(): void {
 <style scoped>
 .flow {
   display: grid;
-  grid-template-columns: minmax(220px, 280px) 1fr;
+  grid-template-columns: minmax(240px, 290px) minmax(0, 1fr);
   grid-template-rows: auto auto;
-  gap: 18px 0;
+  gap: 16px 0;
+}
+
+.node {
+  padding: 18px 20px;
+  border-radius: var(--yb-radius-panel);
+  background: var(--yb-window);
+  box-shadow: 0 0 0 0.5px var(--yb-separator), 0 2px 8px -2px rgb(0 0 0 / 0.08);
 }
 
 .machine {
@@ -100,102 +117,126 @@ function push(): void {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 20px;
-  border: 1.5px solid var(--yb-ink);
-  border-radius: var(--yb-radius-lg);
-  background: var(--yb-sheet);
 }
 
-.machine-title,
-.dest-title {
+.node-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin: 0;
-  color: var(--yb-ink);
-  font-weight: 700;
+  color: var(--yb-label);
+  font-weight: 600;
   font-size: 16px;
 }
 
-.machine-steps {
+.node-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: linear-gradient(#55aaff, #2563eb);
+  color: #fff;
+  font-size: 17px;
+}
+
+.node-icon-grey {
+  background: linear-gradient(#8e8e93, #636366);
+}
+
+.steps {
   margin: 0;
-  padding-left: 1.3em;
-  color: var(--yb-ink-soft);
+  padding-left: 1.2em;
+  color: var(--yb-label-2);
   font-size: 14px;
   line-height: 1.6;
 }
 
-.machine-steps li + li {
+.steps li + li {
   margin-top: 6px;
 }
 
-.machine-steps code,
+.steps code,
 .keys code {
+  padding: 0;
+  background: none;
+  color: var(--yb-label);
   font-family: var(--yb-font-mono);
   font-size: 12.5px;
-  color: var(--yb-ink);
-  background: none;
-  padding: 0;
 }
 
 .push {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   margin-top: auto;
   align-self: flex-start;
-  padding: 8px 18px;
+  padding: 7px 16px;
   border-radius: 999px;
-  background: var(--yb-action);
+  background: var(--yb-accent);
   color: #fff;
-  font-weight: 600;
+  font-weight: 500;
   font-size: 14px;
+  transition: background-color 120ms;
+}
+
+.push:hover:not(:disabled) {
+  background: var(--yb-accent-hover);
 }
 
 .push:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
 }
 
 .push:focus-visible {
-  outline: 2px solid var(--yb-ink);
+  outline: 2px solid var(--yb-accent);
   outline-offset: 3px;
 }
 
 .lane {
   min-width: 0;
   display: grid;
-  grid-template-columns: 1fr minmax(200px, 260px);
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
   align-items: center;
 }
 
 .track {
   position: relative;
-  height: 64px;
+  height: 70px;
 }
 
 .track::before {
   content: '';
   position: absolute;
   inset: 50% 0 auto;
-  border-top: 2px solid var(--yb-line);
+  border-top: 1.5px solid var(--yb-separator);
 }
 
 .lane-assets .track::before {
-  border-top-color: var(--yb-blue);
+  border-top-color: var(--yb-accent);
 }
 
 .track-label {
   position: absolute;
-  top: 4px;
-  left: 18px;
-  color: var(--yb-ink-soft);
+  top: 6px;
+  left: 20px;
+  color: var(--yb-label-2);
   font-size: 13px;
 }
 
 .no-server {
   position: absolute;
   left: 50%;
-  bottom: -2px;
+  bottom: 0;
   translate: -50% 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 2px 10px;
-  border: 1.5px dashed var(--yb-ink-soft);
-  border-radius: var(--yb-radius-sm);
-  background: var(--yb-paper);
-  color: var(--yb-ink-soft);
+  border-radius: 999px;
+  background: var(--yb-bg-alt);
+  box-shadow: 0 0 0 0.5px var(--yb-separator);
+  color: var(--yb-label-2);
   font-size: 12px;
   white-space: nowrap;
 }
@@ -206,21 +247,21 @@ function push(): void {
   left: 0;
   translate: 0 -50%;
   opacity: 0;
-  background: var(--yb-blue);
 }
 
 .parcel-small {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: var(--yb-ink-soft);
+  background: var(--yb-label-3);
 }
 
 .parcel-big {
-  width: 30px;
-  height: 22px;
-  border-radius: 4px;
-  box-shadow: 0 0 0 4px var(--vp-c-brand-soft);
+  width: 28px;
+  height: 20px;
+  border-radius: 5px;
+  background: linear-gradient(#55aaff, #2563eb);
+  box-shadow: 0 2px 8px rgb(37 99 235 / 0.4);
 }
 
 .flow-moving .parcel {
@@ -240,47 +281,59 @@ function push(): void {
     opacity: 1;
   }
   100% {
-    left: calc(100% - 30px);
+    left: calc(100% - 28px);
     opacity: 0;
   }
 }
 
 .dest {
   min-width: 0;
-  padding: 14px 16px;
-  border: 1.5px solid var(--yb-line);
-  border-radius: var(--yb-radius-lg);
-  background: var(--yb-sheet);
-  transition: border-color 200ms;
-}
-
-.dest-cos {
-  border-color: var(--yb-blue);
+  padding: 16px 18px;
 }
 
 .dest-sub {
-  margin: 2px 0 0;
-  color: var(--yb-ink-soft);
+  margin: 6px 0 0 40px;
+  color: var(--yb-label-2);
   font-size: 13px;
 }
 
 .dest-result {
-  margin: 10px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 0 40px;
   padding: 0;
   list-style: none;
-  color: var(--yb-ink);
+  color: var(--yb-label);
   font-size: 13px;
   visibility: hidden;
 }
 
-.flow-done .dest-result {
-  visibility: visible;
+.keys {
+  display: grid;
+  gap: 4px;
 }
 
 .keys li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.keys code {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 11.5px;
+}
+
+.ok {
+  color: var(--yb-green);
+}
+
+.flow-done .dest-result {
+  visibility: visible;
 }
 
 /* Phones: the machine on top, the two lanes side by side below it. */
@@ -307,11 +360,11 @@ function push(): void {
   .track::before {
     inset: 0 auto 0 20px;
     border-top: 0;
-    border-left: 2px solid var(--yb-line);
+    border-left: 1.5px solid var(--yb-separator);
   }
 
   .lane-assets .track::before {
-    border-left-color: var(--yb-blue);
+    border-left-color: var(--yb-accent);
   }
 
   .track-label {
@@ -322,7 +375,6 @@ function push(): void {
 
   .no-server {
     left: 34px;
-    right: auto;
     bottom: 18px;
     translate: none;
     white-space: normal;
@@ -338,8 +390,13 @@ function push(): void {
     padding: 12px;
   }
 
-  .keys li {
-    font-size: 11px;
+  .node-title {
+    font-size: 14px;
+  }
+
+  .dest-sub,
+  .dest-result {
+    margin-left: 0;
   }
 
   @keyframes travel {
@@ -351,7 +408,7 @@ function push(): void {
       opacity: 1;
     }
     100% {
-      top: calc(100% - 22px);
+      top: calc(100% - 20px);
       opacity: 0;
     }
   }

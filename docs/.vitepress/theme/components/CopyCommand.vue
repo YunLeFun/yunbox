@@ -8,6 +8,7 @@
  * ```
  */
 import { ref } from 'vue'
+import SymbolIcon from './SymbolIcon.vue'
 
 const props = defineProps<{
   /** The command, without a prompt */
@@ -34,6 +35,7 @@ async function copy(): Promise<void> {
   <div class="copy">
     <code class="copy-text"><span class="prompt" aria-hidden="true">$ </span>{{ command }}</code>
     <button type="button" class="copy-button" :aria-label="`复制命令 ${command}`" @click="copy">
+      <SymbolIcon :name="copied ? 'checkmark.circle.fill' : 'doc.on.doc'" />
       {{ copied ? '已复制' : '复制' }}
     </button>
   </div>
@@ -44,43 +46,48 @@ async function copy(): Promise<void> {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 6px 6px 14px;
-  border-radius: var(--yb-radius-sm);
-  background: var(--yb-term-bg);
   min-width: 0;
+  padding: 5px 5px 5px 14px;
+  border-radius: 10px;
+  background: var(--yb-code-bg);
+  box-shadow: inset 0 0 0 0.5px var(--yb-separator);
 }
 
 .copy-text {
   flex: 1;
   min-width: 0;
   overflow-x: auto;
-  white-space: nowrap;
-  color: var(--yb-term-ink);
+  padding: 0;
   background: none;
+  color: var(--yb-label);
   font-family: var(--yb-font-mono);
   font-size: 13px;
-  padding: 0;
+  white-space: nowrap;
 }
 
 .prompt {
-  color: var(--yb-sky);
+  color: var(--yb-label-3);
 }
 
 .copy-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   flex: none;
-  padding: 4px 12px;
-  border-radius: 4px;
-  background: rgb(255 255 255 / 0.1);
-  color: var(--yb-term-ink);
+  padding: 4px 10px;
+  border-radius: 7px;
+  background: var(--yb-window);
+  box-shadow: 0 0 0 0.5px var(--yb-separator), 0 1px 1.5px rgb(0 0 0 / 0.08);
+  color: var(--yb-label);
   font-size: 12px;
 }
 
 .copy-button:hover {
-  background: rgb(255 255 255 / 0.18);
+  color: var(--yb-accent);
 }
 
 .copy-button:focus-visible {
-  outline: 2px solid var(--yb-sky);
+  outline: 2px solid var(--yb-accent);
   outline-offset: 1px;
 }
 </style>

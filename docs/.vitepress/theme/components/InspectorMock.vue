@@ -1,11 +1,13 @@
 <script setup lang="ts">
 /**
- * A working model of the macOS client's push check: the same budgets,
- * filters and wording as the real window, on a sample push where a PNG
- * slipped into Git instead of LFS.
+ * A working copy of the macOS client's window: the push check with the
+ * same budgets, filters and wording, and the COS sheet behind the status
+ * capsule. The sample push has a PNG that slipped into Git instead of LFS.
  */
 import { computed, ref } from 'vue'
 import { demoOid, formatBytes } from '../demo-assets'
+import MacWindow from './MacWindow.vue'
+import SymbolIcon from './SymbolIcon.vue'
 
 interface Row {
   path: string
@@ -28,13 +30,29 @@ const ROWS: Row[] = ([
 
 // Git pack is compressed; this sample estimate stays a little under the raw blob sizes.
 const GIT_PACK = Math.round(1.24 * MIB)
-const lfsBytes = ROWS.filter(row => row.storage === 'LFS').reduce((sum, row) => sum + row.bytes, 0)
-const lfsCount = ROWS.filter(row => row.storage === 'LFS').length
+const lfsRows = ROWS.filter(row => row.storage === 'LFS')
+const lfsBytes = lfsRows.reduce((sum, row) => sum + row.bytes, 0)
+
+const budgets = [
+  { title: 'Git pack', icon: 'arrow.up.doc' as const, value: GIT_PACK, limit: LIMITS.git, footnote: '压缩后的预计上传量' },
+  { title: 'LFS 候选', icon: 'shippingbox' as const, value: lfsBytes, limit: LIMITS.lfs, footnote: `${lfsRows.length} 个素材对象` },
+]
+
+const DOCTOR = [
+  { title: 'git', detail: '2.47.1' },
+  { title: 'git-lfs', detail: '3.6.1' },
+  { title: 'Git 仓库', detail: '/Users/alice/game' },
+  { title: 'LFS 过滤器', detail: '已启用' },
+  { title: '传输代理', detail: 'git-lfs 通过 git-yunbox 直连 COS' },
+  { title: 'COS 密钥', detail: '来自 macOS 钥匙串（yunbox）' },
+  { title: 'COS 权限', detail: '可以写入和读取' },
+]
 
 const kind = ref<'全部' | 'Git' | 'LFS'>('全部')
 const onlyExceeded = ref(false)
 const query = ref('')
 const selected = ref(ROWS[3].path)
+const sheetOpen = ref(false)
 
 const visible = computed(() => ROWS.filter(row =>
   (kind.value === '全部' || row.storage === kind.value)
@@ -43,245 +61,334 @@ const visible = computed(() => ROWS.filter(row =>
 ))
 const detail = computed(() => ROWS.find(row => row.path === selected.value))
 
-const budgets = [
-  { title: 'Git pack', value: GIT_PACK, limit: LIMITS.git, footnote: '压缩后的预计上传量' },
-  { title: 'LFS 候选', value: lfsBytes, limit: LIMITS.lfs, footnote: `${lfsCount} 个素材对象` },
-]
-
 function ratio(value: number, limit: number): string {
   return `${Math.min(value / limit, 1) * 100}%`
-}
-
-function fileName(path: string): string {
-  return path.slice(path.lastIndexOf('/') + 1)
 }
 </script>
 
 <template>
-  <div class="window" role="group" aria-label="macOS 客户端推送检查示意">
-    <div class="titlebar">
-      <span class="lights" aria-hidden="true"><i /><i /><i /></span>
-      <span class="title">game</span>
-      <span class="cos-pill">直连 COS · 正常</span>
-    </div>
-    <div class="body">
-      <aside class="recents" aria-label="最近的仓库">
-        <p class="recents-head">
-          最近的仓库
-        </p>
-        <p class="recent recent-active">
-          game <kbd>⌘1</kbd>
-        </p>
-        <p class="recent">
-          life <kbd>⌘2</kbd>
-        </p>
-        <p class="recent">
-          art-library <kbd>⌘3</kbd>
-        </p>
-      </aside>
+  <MacWindow label="macOS 客户端示意：推送检查" title="推送检查">
+    <template #sidebar>
+      <p class="side-head">
+        最近的仓库
+      </p>
+      <p class="repo repo-active">
+        <SymbolIcon name="folder" class="repo-icon" />
+        <span class="repo-text">game<small>team</small></span>
+        <kbd>⌘1</kbd>
+      </p>
+      <p class="repo">
+        <SymbolIcon name="folder" class="repo-icon" />
+        <span class="repo-text">life<small>YunYouJun</small></span>
+        <kbd>⌘2</kbd>
+      </p>
+      <p class="repo">
+        <SymbolIcon name="folder" class="repo-icon" />
+        <span class="repo-text">art-library<small>team</small></span>
+        <kbd>⌘3</kbd>
+      </p>
+      <p class="side-foot">
+        <SymbolIcon name="shippingbox" /> YunBox
+        <SymbolIcon name="gearshape" class="side-gear" />
+      </p>
+    </template>
 
-      <section class="report">
-        <div class="report-head">
-          <span class="status">超过预算</span>
-          <span class="muted">单文件预算 {{ formatBytes(LIMITS.file) }}</span>
-        </div>
+    <template #toolbar>
+      <SymbolIcon name="folder.badge.plus" />
+      <SymbolIcon name="doc.on.doc" />
+      <SymbolIcon name="arrow.clockwise" />
+    </template>
 
-        <div class="budgets">
-          <div v-for="budget in budgets" :key="budget.title" class="budget" :class="{ over: budget.value > budget.limit }">
-            <p class="budget-title">
-              {{ budget.title }}
-            </p>
-            <p class="budget-value">
-              {{ formatBytes(budget.value) }}
-            </p>
-            <div class="meter" aria-hidden="true">
-              <span :style="{ width: ratio(budget.value, budget.limit) }" />
-            </div>
-            <p class="muted small">
-              预算 {{ formatBytes(budget.limit) }}，{{ budget.footnote }}
-            </p>
+    <header class="repo-head">
+      <div>
+        <p class="repo-title">
+          game
+        </p>
+        <p class="repo-path">
+          /Users/alice/game
+        </p>
+      </div>
+      <button class="capsule" type="button" @click="sheetOpen = true">
+        <SymbolIcon name="icloud" />
+        直连 COS · 正常
+      </button>
+      <span class="checked">检查于 14:21</span>
+    </header>
+
+    <section class="report">
+      <div class="report-head">
+        <span class="status">
+          <SymbolIcon name="exclamationmark.circle.fill" />
+          超过预算
+        </span>
+        <span class="muted">单文件预算 {{ formatBytes(LIMITS.file) }}</span>
+        <span class="bordered">预算设置</span>
+      </div>
+
+      <div class="budgets">
+        <div v-for="budget in budgets" :key="budget.title" class="budget">
+          <p class="budget-title">
+            <SymbolIcon :name="budget.icon" />
+            {{ budget.title }}
+            <SymbolIcon v-if="budget.value > budget.limit" name="exclamationmark.circle.fill" class="budget-over" />
+          </p>
+          <p class="budget-value">
+            {{ formatBytes(budget.value) }}
+          </p>
+          <div class="meter" :class="{ 'meter-over': budget.value > budget.limit }" aria-hidden="true">
+            <span :style="{ width: ratio(budget.value, budget.limit) }" />
           </div>
+          <p class="budget-foot">
+            <span>{{ budget.footnote }}</span>
+            <span>预算 {{ formatBytes(budget.limit) }}</span>
+          </p>
         </div>
+      </div>
+      <p class="caption">
+        LFS 尚未查询远端，实际上传量未知；远端已有对象可能跳过。
+      </p>
 
-        <div class="controls">
-          <div class="segmented" role="radiogroup" aria-label="文件类型">
-            <button
-              v-for="option in (['全部', 'Git', 'LFS'] as const)" :key="option" type="button" role="radio"
-              :aria-checked="kind === option" @click="kind = option"
-            >
-              {{ option }}
-            </button>
+      <div class="controls">
+        <span class="control-label">文件类型</span>
+        <div class="segmented" role="radiogroup" aria-label="文件类型">
+          <button
+            v-for="option in (['全部', 'Git', 'LFS'] as const)" :key="option" type="button" role="radio"
+            :aria-checked="kind === option" @click="kind = option"
+          >
+            {{ option }}
+          </button>
+        </div>
+        <label class="check"><input v-model="onlyExceeded" type="checkbox"> 仅超限</label>
+        <label class="search">
+          <SymbolIcon name="magnifyingglass" />
+          <input v-model="query" type="search" placeholder="搜索路径或对象 ID" aria-label="搜索路径或对象 ID">
+        </label>
+      </div>
+
+      <p class="table-title">
+        <strong>文件明细</strong>
+        <span>{{ visible.length }} / {{ ROWS.length }} 个对象 · 按大小降序</span>
+      </p>
+      <div class="table" role="table" aria-label="文件明细">
+        <div class="tr th" role="row">
+          <span role="columnheader">文件</span>
+          <span role="columnheader">类型</span>
+          <span role="columnheader">原始大小</span>
+          <span role="columnheader">预算</span>
+        </div>
+        <button
+          v-for="row in visible" :key="row.path" type="button" role="row" class="tr"
+          :class="{ 'tr-active': row.path === selected }" @click="selected = row.path"
+        >
+          <span role="cell" class="cell-file">
+            <SymbolIcon :name="row.storage === 'LFS' ? 'shippingbox' : 'doc'" />
+            <span>{{ row.path }}</span>
+          </span>
+          <span role="cell" class="cell-dim">{{ row.storage }}</span>
+          <span role="cell" class="cell-num">{{ formatBytes(row.bytes) }}</span>
+          <span role="cell" :class="row.bytes > LIMITS.file ? 'cell-over' : 'cell-dim'">{{ row.bytes > LIMITS.file ? '超限' : '—' }}</span>
+        </button>
+        <p v-if="visible.length === 0" class="empty">
+          没有符合条件的文件，换个筛选条件试试。
+        </p>
+      </div>
+
+      <div v-if="detail" class="detail">
+        <p class="detail-head">
+          {{ detail.storage }} · {{ detail.bytes.toLocaleString('zh-CN') }} 字节
+        </p>
+        <p class="mono">
+          {{ demoOid(detail.path).slice(0, 40) }}…
+        </p>
+        <p v-if="detail.storage === 'Git' && detail.path.endsWith('.png')" class="hint">
+          <SymbolIcon name="info.circle" />
+          这张图片进了 Git 而不是 LFS，Git pack 因此超出预算。检查 .gitattributes 有没有跟踪 *.png。
+        </p>
+        <p v-else-if="detail.bytes > LIMITS.file" class="hint">
+          <SymbolIcon name="info.circle" />
+          超过单文件预算 {{ formatBytes(LIMITS.file) }}，预算可以在设置里按仓库调整。
+        </p>
+      </div>
+    </section>
+
+    <template #overlay>
+      <div v-if="sheetOpen" class="sheet-backdrop" @click.self="sheetOpen = false">
+        <div class="sheet" role="dialog" aria-label="COS 直连">
+          <div class="sheet-head">
+            <strong>COS 直连</strong>
+            <span class="bordered">重新检查</span>
           </div>
-          <label class="check"><input v-model="onlyExceeded" type="checkbox"> 仅超限</label>
-          <input v-model="query" class="search" type="search" placeholder="搜索路径或对象 ID" aria-label="搜索路径或对象 ID">
-        </div>
-
-        <div class="split">
-          <ul class="rows" aria-label="文件明细，按大小降序">
-            <li v-for="row in visible" :key="row.path">
-              <button
-                type="button" class="row" :class="{ 'row-active': row.path === selected, 'row-over': row.bytes > LIMITS.file }"
-                @click="selected = row.path"
-              >
-                <span class="tag" :class="`tag-${row.storage}`">{{ row.storage }}</span>
-                <span class="row-name">{{ fileName(row.path) }}</span>
-                <span class="row-size">{{ formatBytes(row.bytes) }}</span>
-              </button>
-            </li>
-            <li v-if="visible.length === 0" class="empty">
-              没有符合条件的文件，换个筛选条件试试。
+          <p class="location">
+            <SymbolIcon name="icloud" />
+            team-assets-1250000000（ap-shanghai）/yunbox/team/game/
+          </p>
+          <ul class="steps">
+            <li v-for="step in DOCTOR" :key="step.title">
+              <SymbolIcon name="checkmark.circle.fill" class="step-ok" />
+              <span><strong>{{ step.title }}</strong><small>{{ step.detail }}</small></span>
             </li>
           </ul>
-          <div v-if="detail" class="detail">
-            <p class="detail-kind">
-              {{ detail.storage }} · {{ detail.bytes.toLocaleString('zh-CN') }} 字节
-            </p>
-            <p class="muted small">
-              对象 ID
-            </p>
-            <p class="mono">
-              {{ demoOid(detail.path).slice(0, 24) }}…
-            </p>
-            <p class="muted small">
-              路径
-            </p>
-            <p class="mono">
-              {{ detail.path }}
-            </p>
-            <p v-if="detail.storage === 'Git' && detail.path.endsWith('.png')" class="hint">
-              这张图片进了 Git 而不是 LFS，所以 Git pack 超了预算。检查 .gitattributes 是否跟踪 *.png。
-            </p>
-            <p v-else-if="detail.bytes > LIMITS.file" class="hint">
-              超过单文件预算 {{ formatBytes(LIMITS.file) }}。预算可以在设置里按仓库调整。
-            </p>
+          <div class="sheet-foot">
+            <span>密钥只保存在这台电脑上（钥匙串），仓库里只记录 bucket、地域和前缀。</span>
+            <button type="button" class="bordered" @click="sheetOpen = false">
+              完成
+            </button>
           </div>
         </div>
-        <p class="muted small">
-          LFS 尚未查询远端，实际上传量未知；远端已有对象可能跳过。
-        </p>
-      </section>
-    </div>
-  </div>
+      </div>
+    </template>
+  </MacWindow>
 </template>
 
 <style scoped>
-.window {
-  border: 1px solid var(--yb-line);
-  border-radius: 12px;
-  background: var(--yb-sheet);
-  box-shadow: 0 24px 60px -30px rgb(15 30 61 / 0.45);
-  overflow: hidden;
-  font-size: 13px;
-  color: var(--yb-ink);
-}
-
-.titlebar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--yb-line);
-  background: var(--yb-paper);
-}
-
-.lights {
-  display: flex;
-  gap: 7px;
-}
-
-.lights i {
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  background: #ff5f57;
-}
-
-.lights i:nth-child(2) {
-  background: #febc2e;
-}
-
-.lights i:nth-child(3) {
-  background: #28c840;
-}
-
-.title {
+/* Sidebar */
+.side-head {
+  margin: 0 8px 6px;
+  color: var(--yb-label-3);
+  font-size: 11px;
   font-weight: 600;
 }
 
-.cos-pill {
-  margin-left: auto;
-  padding: 2px 10px;
-  border-radius: 999px;
-  background: rgb(21 128 61 / 0.12);
-  color: var(--yb-green);
-  font-size: 12px;
-}
-
-.body {
-  display: grid;
-  grid-template-columns: 150px 1fr;
-}
-
-.recents {
-  padding: 14px 10px;
-  border-right: 1px solid var(--yb-line);
-  background: var(--yb-paper);
-}
-
-.recents-head {
-  margin: 0 6px 8px;
-  color: var(--yb-ink-soft);
-  font-size: 11.5px;
-}
-
-.recent {
+.repo {
   display: flex;
-  justify-content: space-between;
-  margin: 0;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 2px;
   padding: 5px 8px;
   border-radius: 6px;
 }
 
-.recent-active {
-  background: var(--yb-action);
-  color: #fff;
+.repo-active {
+  background: var(--yb-fill-strong);
+}
+
+.repo-icon {
+  color: var(--yb-accent);
+  font-size: 15px;
+}
+
+.repo-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.repo-text small {
+  color: var(--yb-label-3);
+  font-size: 10.5px;
 }
 
 kbd {
+  color: var(--yb-label-3);
   font-family: inherit;
   font-size: 11px;
-  opacity: 0.6;
 }
 
+.side-foot {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: auto 8px 0;
+  padding-top: 24px;
+  color: var(--yb-label-2);
+  font-weight: 600;
+}
+
+.side-gear {
+  margin-left: auto;
+}
+
+/* Repository header */
+.repo-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 22px 14px;
+  border-bottom: 0.5px solid var(--yb-separator);
+}
+
+.repo-head > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.repo-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.repo-path {
+  margin: 2px 0 0;
+  color: var(--yb-label-2);
+  font-size: 11px;
+}
+
+.capsule {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--yb-fill-strong);
+  color: var(--yb-label);
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color 120ms;
+}
+
+.capsule:hover {
+  background: var(--yb-accent-soft);
+}
+
+.capsule :deep(.symbol) {
+  color: var(--yb-green);
+}
+
+.checked {
+  color: var(--yb-label-3);
+  font-size: 11px;
+}
+
+/* Report */
 .report {
   display: grid;
-  gap: 14px;
-  padding: 18px 20px;
-  min-width: 0;
+  gap: 12px;
+  padding: 16px 22px 20px;
 }
 
 .report-head {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
+  gap: 10px;
 }
 
 .status {
-  color: var(--yb-amber);
-  font-weight: 700;
-  font-size: 15px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: auto;
+  color: var(--yb-orange-text);
+  font-weight: 600;
 }
 
-.status::before {
-  content: '!';
-  display: inline-grid;
-  place-items: center;
-  width: 17px;
-  height: 17px;
-  margin-right: 6px;
-  border-radius: 50%;
-  background: var(--yb-amber);
-  color: var(--yb-sheet);
+.status :deep(.symbol),
+.budget-over {
+  color: var(--yb-orange);
+}
+
+.muted {
+  color: var(--yb-label-2);
+  font-size: 12px;
+}
+
+.bordered {
+  padding: 2px 10px;
+  border-radius: 5px;
+  background: var(--yb-window);
+  box-shadow: 0 0 0 0.5px var(--yb-separator), 0 1px 1.5px rgb(0 0 0 / 0.08);
+  color: var(--yb-label);
   font-size: 12px;
 }
 
@@ -293,233 +400,387 @@ kbd {
 
 .budget {
   padding: 12px 14px;
-  border: 1px solid var(--yb-line);
-  border-radius: 10px;
+  border-radius: 8px;
+  background: var(--yb-fill);
+  border: 0.5px solid var(--yb-separator);
 }
 
-.budget.over {
-  border-color: var(--yb-amber);
-  background: var(--yb-amber-wash);
-}
-
-.budget-title,
-.budget-value {
+.budget p {
   margin: 0;
 }
 
 .budget-title {
-  color: var(--yb-ink-soft);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--yb-label-2);
+}
+
+.budget-over {
+  margin-left: auto;
 }
 
 .budget-value {
-  font-size: 20px;
-  font-weight: 700;
+  margin: 8px 0 12px !important;
+  font-size: 24px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
 .meter {
   height: 5px;
-  margin: 8px 0 6px;
   border-radius: 3px;
-  background: var(--yb-line);
+  background: var(--yb-fill-strong);
   overflow: hidden;
 }
 
 .meter span {
   display: block;
   height: 100%;
-  background: var(--yb-blue);
+  background: var(--yb-label-3);
 }
 
-.over .meter span {
-  background: var(--yb-amber);
+.meter-over span {
+  background: var(--yb-orange);
 }
 
-.muted {
-  color: var(--yb-ink-soft);
+.budget-foot {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px !important;
+  color: var(--yb-label-2);
+  font-size: 11px;
+}
+
+.caption {
   margin: 0;
-}
-
-.small {
-  font-size: 12px;
+  color: var(--yb-label-2);
+  font-size: 11px;
 }
 
 .controls {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+}
+
+.control-label {
+  color: var(--yb-label);
 }
 
 .segmented {
   display: inline-flex;
-  padding: 2px;
-  border-radius: 7px;
-  background: var(--yb-paper);
-  border: 1px solid var(--yb-line);
+  padding: 1px;
+  border-radius: 6px;
+  background: var(--yb-fill-strong);
 }
 
 .segmented button {
-  padding: 3px 14px;
+  padding: 2px 13px;
   border-radius: 5px;
-  color: var(--yb-ink);
+  color: var(--yb-label);
+  font-size: 12.5px;
 }
 
 .segmented button[aria-checked='true'] {
-  background: var(--yb-sheet);
-  box-shadow: 0 1px 2px rgb(15 30 61 / 0.18);
-  font-weight: 600;
+  background: var(--yb-window);
+  box-shadow: 0 0 0 0.5px var(--yb-separator), 0 1px 2px rgb(0 0 0 / 0.12);
 }
 
 .check {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .search {
-  flex: 1 1 160px;
-  max-width: 240px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 220px;
   margin-left: auto;
-  padding: 4px 10px;
-  border: 1px solid var(--yb-line);
+  padding: 3px 8px;
   border-radius: 6px;
-  background: var(--yb-sheet);
-  color: var(--yb-ink);
+  background: var(--yb-fill);
+  box-shadow: inset 0 0 0 0.5px var(--yb-separator);
+  color: var(--yb-label-3);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  color: var(--yb-label);
+  font-size: 12.5px;
 }
 
 .segmented button:focus-visible,
-.row:focus-visible,
-.search:focus-visible,
-.check input:focus-visible {
-  outline: 2px solid var(--yb-blue);
+.tr:focus-visible,
+.capsule:focus-visible,
+.check input:focus-visible,
+.sheet button:focus-visible,
+.search:focus-within {
+  outline: 2px solid var(--yb-accent);
   outline-offset: 1px;
 }
 
-.split {
-  display: grid;
-  grid-template-columns: 1.3fr 1fr;
-  gap: 14px;
-  min-height: 236px;
+.table-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 4px 0 -4px;
 }
 
-.rows {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  border: 1px solid var(--yb-line);
-  border-radius: 8px;
+.table-title span {
+  color: var(--yb-label-2);
+  font-size: 11px;
+}
+
+.table {
+  border-radius: 6px;
+  border: 0.5px solid var(--yb-separator);
   overflow: hidden;
+  min-height: 190px;
 }
 
-.row {
+.tr {
   display: grid;
-  grid-template-columns: 38px 1fr auto;
+  grid-template-columns: minmax(0, 1fr) 54px 88px 52px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 4px 12px;
+  text-align: left;
+  color: var(--yb-label);
+  font-size: 12.5px;
+}
+
+.tr:nth-child(odd):not(.th) {
+  background: var(--yb-fill);
+}
+
+.th {
+  padding: 5px 12px;
+  border-bottom: 0.5px solid var(--yb-separator);
+  color: var(--yb-label-2);
+  font-size: 11.5px;
+}
+
+.tr-active,
+.tr-active:nth-child(odd) {
+  background: var(--yb-accent) !important;
+  color: #fff;
+}
+
+.tr-active .cell-dim,
+.tr-active .cell-over {
+  color: rgb(255 255 255 / 0.85);
+}
+
+.cell-file {
+  display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
-  padding: 7px 10px;
-  text-align: left;
-  color: var(--yb-ink);
-  border-bottom: 1px solid var(--yb-line);
+  min-width: 0;
 }
 
-.rows li:last-child .row {
-  border-bottom: 0;
-}
-
-.row-active {
-  background: var(--vp-c-brand-soft);
-}
-
-.row-over .row-size {
-  color: var(--yb-amber);
-  font-weight: 600;
-}
-
-.row-name {
+.cell-file span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.row-size {
-  font-variant-numeric: tabular-nums;
+.cell-file :deep(.symbol) {
+  color: var(--yb-label-3);
 }
 
-.tag {
-  justify-self: start;
-  padding: 0 6px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.tag-Git {
-  background: var(--yb-paper);
-  color: var(--yb-ink-soft);
-  border: 1px solid var(--yb-line);
-}
-
-.tag-LFS {
-  background: var(--yb-action);
+.tr-active .cell-file :deep(.symbol) {
   color: #fff;
 }
 
+.cell-dim {
+  color: var(--yb-label-2);
+}
+
+.cell-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.cell-over {
+  color: var(--yb-orange-text);
+  font-weight: 600;
+}
+
 .empty {
+  margin: 0;
   padding: 18px 12px;
-  color: var(--yb-ink-soft);
+  color: var(--yb-label-2);
 }
 
 .detail {
   display: grid;
-  align-content: start;
   gap: 4px;
-  min-width: 0;
+  min-height: 74px;
 }
 
 .detail p {
   margin: 0;
 }
 
-.detail-kind {
-  font-weight: 700;
-  margin-bottom: 8px !important;
+.detail-head {
+  font-weight: 600;
 }
 
 .mono {
+  color: var(--yb-label-2);
   font-family: var(--yb-font-mono);
-  font-size: 12px;
+  font-size: 11.5px;
   word-break: break-all;
-  margin-bottom: 6px !important;
 }
 
 .hint {
-  margin-top: 8px !important;
-  padding: 8px 10px;
-  border-radius: 6px;
-  background: var(--yb-amber-wash);
-  color: var(--yb-ink);
-  line-height: 1.5;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 4px !important;
+  color: var(--yb-label-2);
+  font-size: 12px;
+}
+
+.hint :deep(.symbol) {
+  margin-top: 2px;
+}
+
+/* COS sheet */
+.sheet-backdrop {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  display: grid;
+  place-items: start center;
+  padding-top: 46px;
+  background: rgb(0 0 0 / 0.18);
+  animation: fade 160ms ease-out;
+}
+
+.sheet {
+  width: min(92%, 520px);
+  padding: 18px 20px 14px;
+  border-radius: 12px;
+  background: var(--yb-window);
+  box-shadow: var(--yb-shadow-window);
+  animation: drop 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 15px;
+}
+
+.location {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0 4px;
+  color: var(--yb-label-2);
+  font-size: 12px;
+}
+
+.steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.steps li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 0;
+}
+
+.steps span {
+  display: grid;
+}
+
+.steps small {
+  color: var(--yb-label-2);
+  font-size: 11.5px;
+}
+
+.step-ok {
+  margin-top: 1px;
+  color: var(--yb-green);
+  font-size: 15px;
+}
+
+.sheet-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 0.5px solid var(--yb-separator);
+  color: var(--yb-label-2);
+  font-size: 11.5px;
+}
+
+.sheet-foot .bordered {
+  margin-left: auto;
+  flex: none;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes drop {
+  from {
+    transform: translateY(-12px);
+    opacity: 0;
+  }
 }
 
 @media (max-width: 760px) {
-  .body {
-    grid-template-columns: 1fr;
+  .repo-head {
+    flex-wrap: wrap;
+    padding: 14px 16px 12px;
   }
 
-  .recents {
+  .checked {
     display: none;
   }
 
-  .split,
+  .report {
+    padding: 14px 16px 18px;
+  }
+
   .budgets {
     grid-template-columns: 1fr;
   }
 
   .search {
-    max-width: none;
+    flex-basis: 100%;
     margin-left: 0;
+  }
+
+  .tr {
+    grid-template-columns: minmax(0, 1fr) 76px 40px;
+  }
+
+  .tr > :nth-child(2) {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet,
+  .sheet-backdrop {
+    animation: none;
   }
 }
 </style>

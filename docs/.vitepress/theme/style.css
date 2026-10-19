@@ -1,58 +1,105 @@
 /*
- * Palette taken from the app icon: the box blue, the sky at the top of the
- * gradient, blueprint paper and navy ink. Amber is reserved for "over budget".
+ * The site follows the macOS client: system greys, hairline separators,
+ * SF/PingFang at medium weights, the app icon's blue as the only accent.
+ * Orange and green are the app's own "over budget" and "OK" colours.
  */
 :root {
-  --yb-blue: #2563eb;
-  --yb-blue-deep: #1d4ed8;
-  /* Filled controls with white text; stays dark enough in both themes. */
-  --yb-action: #2563eb;
-  --yb-action-hover: #1d4ed8;
+  --yb-bg: #ffffff;
+  --yb-bg-alt: #f5f5f7;
+  --yb-window: #ffffff;
+  --yb-sidebar: rgb(232 232 237 / 0.86);
+  --yb-toolbar: rgb(246 246 248 / 0.92);
+  --yb-fill: rgb(0 0 0 / 0.035);
+  --yb-fill-strong: rgb(0 0 0 / 0.06);
+  --yb-separator: rgb(0 0 0 / 0.1);
+  --yb-label: #1d1d1f;
+  --yb-label-2: #6e6e73;
+  --yb-label-3: #8e8e93;
+  --yb-accent: #2563eb;
+  --yb-accent-hover: #1d4ed8;
+  --yb-accent-soft: rgb(37 99 235 / 0.1);
   --yb-sky: #55aaff;
-  --yb-ink: #0f1e3d;
-  --yb-ink-soft: #3d4f73;
-  --yb-paper: #eef3fb;
-  --yb-sheet: #ffffff;
-  --yb-line: #c9d6ee;
-  --yb-amber: #b45309;
-  --yb-amber-wash: #fdf1dc;
-  --yb-green: #15803d;
-  --yb-term-bg: #0f1e3d;
-  --yb-term-ink: #dbe6fb;
-  --yb-term-dim: #8195bb;
-  --yb-radius-sm: 6px;
-  --yb-radius-lg: 14px;
-  --yb-font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+  --yb-green: #28a745;
+  --yb-orange: #f08c00;
+  --yb-orange-text: #b25c00;
+  --yb-red: #ff3b30;
+  --yb-code-bg: #f5f5f7;
+  --yb-term-bg: #ffffff;
+  --yb-term-text: #1d1d1f;
+  --yb-term-dim: #8e8e93;
+  --yb-term-green: #1f8a3a;
+  --yb-term-prompt: #2563eb;
+  --yb-shadow-window: 0 0 0 0.5px rgb(0 0 0 / 0.16), 0 10px 24px -6px rgb(0 0 0 / 0.12), 0 32px 64px -24px rgb(0 0 0 / 0.22);
+  --yb-shadow-icon: 0 1px 2px rgb(15 40 110 / 0.18), 0 12px 32px -8px rgb(37 99 235 / 0.45);
+  --yb-radius-control: 6px;
+  --yb-radius-card: 12px;
+  --yb-radius-panel: 18px;
+  --yb-font: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', 'Segoe UI', sans-serif;
+  --yb-font-mono: ui-monospace, 'SF Mono', Menlo, 'JetBrains Mono', Consolas, monospace;
 
-  --vp-c-brand-1: var(--yb-blue);
-  --vp-c-brand-2: var(--yb-blue-deep);
-  --vp-c-brand-3: var(--yb-blue);
-  --vp-c-brand-soft: rgb(37 99 235 / 0.12);
-  --vp-font-family-base: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', 'Segoe UI', sans-serif;
+  --vp-font-family-base: var(--yb-font);
   --vp-font-family-mono: var(--yb-font-mono);
+  --vp-c-brand-1: var(--yb-accent);
+  --vp-c-brand-2: var(--yb-accent-hover);
+  --vp-c-brand-3: var(--yb-accent);
+  --vp-c-brand-soft: var(--yb-accent-soft);
+  --vp-c-bg: var(--yb-bg);
+  --vp-c-bg-alt: var(--yb-bg-alt);
+  --vp-c-bg-soft: var(--yb-bg-alt);
+  --vp-c-text-1: var(--yb-label);
+  --vp-c-text-2: var(--yb-label-2);
+  --vp-c-text-3: var(--yb-label-3);
+  --vp-c-divider: var(--yb-separator);
+  --vp-c-gutter: var(--yb-separator);
+  --vp-code-block-bg: var(--yb-code-bg);
+  --vp-nav-bg-color: rgb(255 255 255 / 0.78);
+  --vp-button-brand-bg: var(--yb-accent);
 }
 
 .dark {
-  --yb-blue: #5b8ff9;
-  --yb-blue-deep: #82aafc;
-  --yb-sky: #7cc0ff;
-  --yb-ink: #e4ecfb;
-  --yb-ink-soft: #a9b8d6;
-  --yb-paper: #0c1730;
-  --yb-sheet: #13213f;
-  --yb-line: #263a63;
-  --yb-amber: #f5b14a;
-  --yb-amber-wash: #3a2a10;
-  --yb-green: #4ade80;
-  --yb-term-bg: #070f22;
+  --yb-bg: #000000;
+  --yb-bg-alt: #111113;
+  --yb-window: #1e1e20;
+  --yb-sidebar: rgb(44 44 48 / 0.9);
+  --yb-toolbar: rgb(38 38 41 / 0.94);
+  --yb-fill: rgb(255 255 255 / 0.05);
+  --yb-fill-strong: rgb(255 255 255 / 0.09);
+  --yb-separator: rgb(255 255 255 / 0.12);
+  --yb-label: #f5f5f7;
+  --yb-label-2: #a1a1a6;
+  --yb-label-3: #7c7c80;
+  --yb-accent: #4c8dff;
+  --yb-accent-hover: #6aa1ff;
+  --yb-accent-soft: rgb(76 141 255 / 0.16);
+  --yb-green: #32d74b;
+  --yb-orange: #ff9f0a;
+  --yb-orange-text: #ffb340;
+  --yb-red: #ff453a;
+  --yb-code-bg: #1c1c1e;
+  --yb-term-bg: #1e1e20;
+  --yb-term-text: #e5e5ea;
+  --yb-term-dim: #8e8e93;
+  --yb-term-green: #32d74b;
+  --yb-term-prompt: #6aa1ff;
+  --yb-shadow-window: 0 0 0 0.5px rgb(255 255 255 / 0.14), 0 32px 64px -24px rgb(0 0 0 / 0.8);
+  --yb-shadow-icon: 0 12px 32px -8px rgb(37 99 235 / 0.55);
 
-  --vp-c-brand-1: var(--yb-blue);
-  --vp-c-brand-2: var(--yb-blue-deep);
-  --vp-c-brand-3: #2563eb;
-  --vp-c-brand-soft: rgb(91 143 249 / 0.16);
+  --vp-nav-bg-color: rgb(0 0 0 / 0.72);
 }
 
-.VPHome,
+/* Translucent toolbar, like a macOS window's title bar. */
+.VPNavBar .content-body,
+.VPNavBar .title {
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+}
+
+.VPNavBar:not(.has-sidebar) .divider-line,
+.VPNavBar.home .divider-line {
+  background-color: var(--yb-separator);
+}
+
 .yb-home {
-  background-color: var(--yb-paper);
+  background-color: var(--yb-bg);
+  -webkit-font-smoothing: antialiased;
 }

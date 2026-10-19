@@ -7,6 +7,7 @@ import HeroBox from './HeroBox.vue'
 import InspectorMock from './InspectorMock.vue'
 import KeyBoundary from './KeyBoundary.vue'
 import PushFlow from './PushFlow.vue'
+import SymbolIcon from './SymbolIcon.vue'
 import TerminalDemo from './TerminalDemo.vue'
 </script>
 
@@ -24,8 +25,11 @@ import TerminalDemo from './TerminalDemo.vue'
             <code>git push</code>、<code>git clone</code>，中间不经过任何服务端。
           </p>
           <div class="hero-actions">
-            <a class="btn btn-primary" href="#download">下载 macOS 客户端</a>
-            <a class="btn btn-ghost" :href="withBase('/guide/')">快速开始</a>
+            <a class="btn btn-primary" href="#download">
+              <SymbolIcon name="arrow.down.circle" />
+              下载 macOS 客户端
+            </a>
+            <a class="btn btn-secondary" :href="withBase('/guide/')">快速开始</a>
           </div>
           <div class="hero-install">
             <CopyCommand command="npm install -g yunbox" />
@@ -36,7 +40,7 @@ import TerminalDemo from './TerminalDemo.vue'
       </div>
     </section>
 
-    <section class="section">
+    <section class="section section-alt">
       <div class="wrap">
         <header class="section-head">
           <h2>一次推送，分两条路走</h2>
@@ -46,31 +50,35 @@ import TerminalDemo from './TerminalDemo.vue'
       </div>
     </section>
 
-    <section class="section section-sheet">
+    <section class="section">
       <div class="wrap">
         <header class="section-head">
           <h2>接入只要几条命令</h2>
           <p>管理员给仓库接一次 COS，再给每位协作者开一个子账号。协作者登录后 clone，素材自动下载。哪里不对，先跑 <code>yunbox doctor</code>，每一项都附修复命令。</p>
         </header>
-        <TerminalDemo />
+        <div class="narrow">
+          <TerminalDemo />
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt">
+      <div class="wrap">
+        <header class="section-head">
+          <h2>推送之前，先看看有多大</h2>
+          <p>
+            macOS 客户端和 <code>yunbox inspect --push</code> 用同一套检查：分别统计 Git pack 和 LFS 候选量，按大小列出每个文件，超出预算的标出来。下面的窗口可以直接操作。
+          </p>
+        </header>
+        <InspectorMock />
+        <p class="section-foot">
+          <a :href="withBase('/inspect')">推送检查的统计口径</a>
+          <a :href="withBase('/guide/macos')">macOS 客户端的全部功能</a>
+        </p>
       </div>
     </section>
 
     <section class="section">
-      <div class="wrap inspector-grid">
-        <header class="section-head inspector-copy">
-          <h2>推送之前，先看看有多大</h2>
-          <p>macOS 客户端和 <code>yunbox inspect --push</code> 用同一套检查：分别统计 Git pack 和 LFS 候选量，按大小列出每个文件，超出预算的标出来。漏进 Git 的大图、意外提交的视频，在推送前就能发现。</p>
-          <p>右边这个窗口可以操作：切换类型、只看超限、搜索路径，点一行看详情。</p>
-          <p>
-            <a class="text-link" :href="withBase('/inspect')">推送检查的统计口径</a>
-          </p>
-        </header>
-        <InspectorMock />
-      </div>
-    </section>
-
-    <section class="section section-sheet">
       <div class="wrap">
         <header class="section-head">
           <h2>密钥不离开你的电脑</h2>
@@ -80,7 +88,7 @@ import TerminalDemo from './TerminalDemo.vue'
       </div>
     </section>
 
-    <section id="download" class="section">
+    <section id="download" class="section section-alt">
       <div class="wrap">
         <header class="section-head">
           <h2>下载云匣</h2>
@@ -94,25 +102,30 @@ import TerminalDemo from './TerminalDemo.vue'
 
 <style scoped>
 .yb-home {
-  color: var(--yb-ink);
+  color: var(--yb-label);
 }
 
 .wrap {
-  max-width: 1152px;
+  max-width: 1080px;
   margin: 0 auto;
   padding: 0 24px;
 }
 
+.narrow {
+  max-width: 880px;
+  margin: 0 auto;
+}
+
 .hero {
-  padding: 56px 0 72px;
-  background-image: radial-gradient(var(--yb-line) 1px, transparent 1px);
-  background-size: 22px 22px;
-  border-bottom: 1.5px solid var(--yb-ink);
+  padding: 72px 0 88px;
+  background:
+    radial-gradient(ellipse 60% 70% at 78% 30%, rgb(85 170 255 / 0.14), transparent 70%),
+    var(--yb-bg);
 }
 
 .hero-grid {
   display: grid;
-  grid-template-columns: 1.1fr 1fr;
+  grid-template-columns: 1.05fr 1fr;
   align-items: center;
   gap: 56px;
 }
@@ -120,36 +133,32 @@ import TerminalDemo from './TerminalDemo.vue'
 .hero-title {
   display: grid;
   margin: 0;
-  color: var(--yb-ink);
-  font-size: clamp(34px, 5.6vw, 72px);
-  font-weight: 900;
-  line-height: 1.08;
-  letter-spacing: -0.02em;
+  color: var(--yb-label);
+  font-size: clamp(36px, 5.4vw, 64px);
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.025em;
 }
 
 .hero-title span {
   white-space: nowrap;
 }
 
-.hero-title span:last-child {
-  padding-left: 1em;
-}
-
 .hero-lead {
-  max-width: 34em;
-  margin: 28px 0 0;
-  color: var(--yb-ink-soft);
-  font-size: 18px;
-  line-height: 1.8;
+  max-width: 32em;
+  margin: 24px 0 0;
+  color: var(--yb-label-2);
+  font-size: 19px;
+  line-height: 1.7;
 }
 
 .hero-lead code,
 .section-head code {
-  font-family: var(--yb-font-mono);
-  font-size: 0.88em;
-  color: var(--yb-ink);
-  background: none;
   padding: 0;
+  background: none;
+  color: var(--yb-label);
+  font-family: var(--yb-font-mono);
+  font-size: 0.86em;
 }
 
 .hero-actions {
@@ -160,114 +169,108 @@ import TerminalDemo from './TerminalDemo.vue'
 }
 
 .btn {
-  padding: 12px 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 22px;
   border-radius: 999px;
-  font-weight: 700;
   font-size: 16px;
+  font-weight: 500;
   text-decoration: none;
-  transition: background-color 150ms;
+  transition: background-color 120ms, color 120ms;
 }
 
 .btn-primary {
-  background: var(--yb-action);
+  background: var(--yb-accent);
   color: #fff;
 }
 
 .btn-primary:hover {
-  background: var(--yb-action-hover);
+  background: var(--yb-accent-hover);
 }
 
-.btn-ghost {
-  border: 1.5px solid var(--yb-ink);
-  color: var(--yb-ink);
+.btn-secondary {
+  background: var(--yb-fill-strong);
+  color: var(--yb-label);
 }
 
-.btn-ghost:hover {
-  background: var(--yb-sheet);
+.btn-secondary:hover {
+  background: var(--yb-accent-soft);
+  color: var(--yb-accent);
 }
 
 .btn:focus-visible,
-.text-link:focus-visible {
-  outline: 2px solid var(--yb-ink);
+.section-foot a:focus-visible {
+  outline: 2px solid var(--yb-accent);
   outline-offset: 3px;
 }
 
 .hero-install {
-  max-width: 360px;
+  max-width: 340px;
   margin-top: 28px;
 }
 
 .hero-install p {
-  margin: 8px 0 0;
-  color: var(--yb-ink-soft);
+  margin: 8px 0 0 2px;
+  color: var(--yb-label-3);
   font-size: 13px;
 }
 
 .section {
-  padding: 88px 0;
+  padding: 96px 0;
+  background: var(--yb-bg);
 }
 
-.section-sheet {
-  background: var(--yb-sheet);
-  border-block: 1px solid var(--yb-line);
-}
-
-.section-sheet :deep(.tab[aria-selected='true']) {
-  background: var(--yb-paper);
+.section-alt {
+  background: var(--yb-bg-alt);
 }
 
 .section-head {
-  max-width: 40em;
-  margin-bottom: 40px;
+  max-width: 44em;
+  margin: 0 auto 48px;
+  text-align: center;
 }
 
 .section-head h2 {
   margin: 0;
   padding: 0;
   border: 0;
-  color: var(--yb-ink);
+  color: var(--yb-label);
   font-size: clamp(28px, 3.6vw, 40px);
-  font-weight: 800;
-  line-height: 1.25;
-  letter-spacing: -0.01em;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
 }
 
 .section-head p {
   margin: 16px 0 0;
-  color: var(--yb-ink-soft);
-  font-size: 16px;
-  line-height: 1.8;
+  color: var(--yb-label-2);
+  font-size: 17px;
+  line-height: 1.75;
 }
 
-.inspector-grid {
-  display: grid;
-  grid-template-columns: minmax(260px, 0.75fr) 1.6fr;
-  align-items: start;
-  gap: 48px;
+.section-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 28px;
+  margin: 32px 0 0;
 }
 
-.inspector-copy {
-  margin-bottom: 0;
-  position: sticky;
-  top: calc(var(--vp-nav-height) + 32px);
+.section-foot a {
+  color: var(--yb-accent);
+  font-size: 15px;
+  text-decoration: none;
 }
 
-.text-link {
-  color: var(--yb-blue);
-  font-weight: 600;
+.section-foot a:hover {
   text-decoration: underline;
-  text-underline-offset: 3px;
 }
 
 @media (max-width: 960px) {
-  .hero-grid,
-  .inspector-grid {
+  .hero-grid {
     grid-template-columns: 1fr;
-    gap: 40px;
-  }
-
-  .inspector-copy {
-    position: static;
+    gap: 48px;
   }
 }
 
@@ -277,11 +280,7 @@ import TerminalDemo from './TerminalDemo.vue'
   }
 
   .hero {
-    padding: 32px 0 48px;
-  }
-
-  .hero-title span:last-child {
-    padding-left: 0;
+    padding: 36px 0 56px;
   }
 
   .hero-lead {
@@ -289,7 +288,16 @@ import TerminalDemo from './TerminalDemo.vue'
   }
 
   .section {
-    padding: 56px 0;
+    padding: 64px 0;
+  }
+
+  .section-head {
+    margin-bottom: 32px;
+    text-align: left;
+  }
+
+  .section-head p {
+    font-size: 15px;
   }
 }
 </style>

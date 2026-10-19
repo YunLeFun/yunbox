@@ -3,7 +3,8 @@
  * Replays the three everyday YunBox sessions in a terminal. Output lines are
  * the CLI's own wording (`✓ title：detail`), with sample bucket names.
  */
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import MacWindow from './MacWindow.vue'
 
 interface Line {
   /** `cmd` is typed after a prompt; `out` appears at once */
@@ -77,6 +78,7 @@ const SESSIONS: Session[] = [
 ]
 
 const active = ref(SESSIONS[0].id)
+const activeSession = computed(() => SESSIONS.find(entry => entry.id === active.value)!)
 const shown = ref<Line[]>([])
 const typing = ref('')
 const root = ref<HTMLElement>()
@@ -130,109 +132,93 @@ onBeforeUnmount(() => {
 
 <template>
   <div ref="root" class="term-wrap">
-    <div class="tabs" role="tablist" aria-label="命令行示例">
+    <div class="segmented" role="tablist" aria-label="命令行示例">
       <button
         v-for="session in SESSIONS"
         :id="`term-tab-${session.id}`"
         :key="session.id"
-        class="tab"
         role="tab"
         type="button"
         :aria-selected="active === session.id"
         aria-controls="term-panel"
         @click="replay(session.id)"
       >
-        <span class="tab-label">{{ session.label }}</span>
-        <span class="tab-who">{{ session.who }}</span>
+        {{ session.label }}
       </button>
     </div>
-    <div id="term-panel" class="term" role="tabpanel" :aria-labelledby="`term-tab-${active}`">
-      <div class="term-bar" aria-hidden="true">
-        <i /><i /><i />
+    <p class="who">
+      {{ activeSession.who }}
+    </p>
+    <MacWindow label="终端" title="zsh — game">
+      <div id="term-panel" role="tabpanel" :aria-labelledby="`term-tab-${active}`">
+        <pre class="term-body"><template v-for="(line, index) in shown" :key="index"><span v-if="line.type === 'cmd'" class="line"><span class="prompt">~/game % </span>{{ line.text }}</span><span v-else class="line" :class="[line.type, line.tone]">{{ line.text }}</span>
+</template><span v-if="typing" class="line"><span class="prompt">~/game % </span>{{ typing }}<span class="caret" /></span></pre>
       </div>
-      <pre class="term-body"><template v-for="(line, index) in shown" :key="index"><span v-if="line.type === 'cmd'" class="line"><span class="prompt">$ </span>{{ line.text }}</span><span v-else class="line" :class="[line.type, line.tone]">{{ line.text }}</span>
-</template><span v-if="typing" class="line"><span class="prompt">$ </span>{{ typing }}<span class="caret" /></span></pre>
-    </div>
+    </MacWindow>
   </div>
 </template>
 
 <style scoped>
 .term-wrap {
   display: grid;
-  grid-template-columns: minmax(200px, 260px) 1fr;
-  gap: 20px;
+  justify-items: center;
+  gap: 14px;
 }
 
-.tabs {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.term-wrap > :deep(.mac-window) {
+  width: 100%;
 }
 
-.tab {
-  display: grid;
-  gap: 2px;
-  padding: 12px 14px;
-  border-left: 3px solid transparent;
-  text-align: left;
-  border-radius: 0 var(--yb-radius-sm) var(--yb-radius-sm) 0;
+.segmented {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 9px;
+  background: var(--yb-fill-strong);
+  max-width: 100%;
+  overflow-x: auto;
 }
 
-.tab[aria-selected='true'] {
-  border-left-color: var(--yb-blue);
-  background: var(--yb-sheet);
+.segmented button {
+  flex: none;
+  padding: 6px 18px;
+  border-radius: 7px;
+  color: var(--yb-label);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
-.tab:focus-visible {
-  outline: 2px solid var(--yb-blue);
-  outline-offset: 2px;
+.segmented button[aria-selected='true'] {
+  background: var(--yb-window);
+  box-shadow: 0 0 0 0.5px var(--yb-separator), 0 1px 3px rgb(0 0 0 / 0.12);
 }
 
-.tab-label {
-  color: var(--yb-ink);
-  font-weight: 600;
-  font-size: 15px;
+.segmented button:focus-visible {
+  outline: 2px solid var(--yb-accent);
+  outline-offset: 1px;
 }
 
-.tab-who {
-  color: var(--yb-ink-soft);
-  font-size: 13px;
-}
-
-.term {
-  min-width: 0;
-  border-radius: var(--yb-radius-lg);
-  background: var(--yb-term-bg);
-  overflow: hidden;
-}
-
-.term-bar {
-  display: flex;
-  gap: 6px;
-  padding: 12px 14px 0;
-}
-
-.term-bar i {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #34466e;
+.who {
+  margin: 0 0 6px;
+  color: var(--yb-label-2);
+  font-size: 14px;
 }
 
 .term-body {
   margin: 0;
   padding: 14px 18px 20px;
-  min-height: 330px;
-  color: var(--yb-term-ink);
+  min-height: 340px;
+  background: var(--yb-term-bg);
+  color: var(--yb-term-text);
   font-family: var(--yb-font-mono);
-  font-size: 13px;
+  font-size: 12.5px;
   line-height: 1.7;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .prompt {
-  color: var(--yb-sky);
+  color: var(--yb-term-prompt);
   user-select: none;
 }
 
@@ -242,11 +228,11 @@ onBeforeUnmount(() => {
 }
 
 .pass {
-  color: #9be7b4;
+  color: var(--yb-term-green);
 }
 
 .warn {
-  color: #f5c46b;
+  color: var(--yb-orange-text);
 }
 
 .caret {
@@ -254,7 +240,8 @@ onBeforeUnmount(() => {
   width: 0.55em;
   height: 1.1em;
   vertical-align: text-bottom;
-  background: var(--yb-term-ink);
+  background: var(--yb-term-text);
+  opacity: 0.6;
   animation: blink 1s steps(2) infinite;
 }
 
@@ -265,32 +252,13 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 760px) {
-  .term-wrap {
-    grid-template-columns: 1fr;
-  }
-
-  .tabs {
-    flex-direction: row;
-    overflow-x: auto;
-  }
-
-  .tab {
-    flex: 1 0 auto;
-    border-left: 0;
-    border-bottom: 3px solid transparent;
-    border-radius: var(--yb-radius-sm) var(--yb-radius-sm) 0 0;
-  }
-
-  .tab[aria-selected='true'] {
-    border-bottom-color: var(--yb-blue);
-  }
-
-  .tab-who {
-    display: none;
+  .segmented button {
+    padding: 6px 12px;
+    font-size: 13px;
   }
 
   .term-body {
-    font-size: 12px;
+    font-size: 11.5px;
     min-height: 300px;
   }
 }

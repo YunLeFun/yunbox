@@ -1,14 +1,23 @@
 <script setup lang="ts">
 /**
- * What is committed and shared versus what never leaves a member's machine,
- * shown as the actual files.
+ * What is committed and shared versus what never leaves a member's
+ * machine, shown as the actual files, followed by the storage guarantees.
  */
+import SymbolIcon from './SymbolIcon.vue'
+
+const FACTS = [
+  { icon: 'lock', title: '不覆盖', body: '上传带 x-cos-forbid-overwrite，已经存在的对象不会被改写。' },
+  { icon: 'doc.on.doc', title: '只传一次', body: '对象按 SHA-256 内容寻址，同样的文件全组只上传一次。' },
+  { icon: 'checkmark.shield', title: '下载校验', body: '核对大小和 SHA-256，被替换或损坏的对象不会交给 git-lfs。' },
+  { icon: 'key', title: '最小权限', body: '子账号只有这个前缀的读写，不能列出 bucket，也不能删除。' },
+] as const
 </script>
 
 <template>
   <div class="boundary">
-    <div class="side">
+    <section class="side">
       <p class="side-title">
+        <span class="tile tile-grey"><SymbolIcon name="arrow.triangle.branch" /></span>
         提交进仓库，全组共享
       </p>
       <p class="file-name">
@@ -27,10 +36,11 @@
       <p class="side-note">
         只记录素材放在哪里，没有任何密钥。不同项目可以用不同 bucket，也可以共用一个 bucket、各用一个前缀。
       </p>
-    </div>
+    </section>
 
-    <div class="side side-private">
+    <section class="side">
       <p class="side-title">
+        <span class="tile"><SymbolIcon name="key" /></span>
         只在你自己的电脑上
       </p>
       <p class="file-name">
@@ -47,25 +57,16 @@ SecretKey  ••••••••••••••••••••</code></
       <p class="side-note">
         每人一个子账号，只能读写这个前缀。有人离开项目，<code>yunbox subaccount delete</code> 之后对方的密钥立即失效。Linux 和 Windows 上密钥存在只有本人可读的文件里。
       </p>
-    </div>
+    </section>
   </div>
 
   <dl class="facts">
-    <div>
-      <dt>不覆盖</dt>
-      <dd>上传带 <code>x-cos-forbid-overwrite</code>，已经存在的对象不会被改写。</dd>
-    </div>
-    <div>
-      <dt>只传一次</dt>
-      <dd>对象按 SHA-256 内容寻址，同样的文件全组只上传一次。</dd>
-    </div>
-    <div>
-      <dt>下载校验</dt>
-      <dd>核对大小和 SHA-256，被替换或损坏的对象不会交给 git-lfs。</dd>
-    </div>
-    <div>
-      <dt>最小权限</dt>
-      <dd>子账号只有这个前缀的读写，不能列出 bucket，也不能删除。</dd>
+    <div v-for="fact in FACTS" :key="fact.title">
+      <dt>
+        <SymbolIcon :name="fact.icon" class="fact-icon" />
+        {{ fact.title }}
+      </dt>
+      <dd>{{ fact.body }}</dd>
     </div>
   </dl>
 </template>
@@ -74,81 +75,104 @@ SecretKey  ••••••••••••••••••••</code></
 .boundary {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  border: 1.5px solid var(--yb-ink);
-  border-radius: var(--yb-radius-lg);
-  overflow: hidden;
-  background: var(--yb-sheet);
+  gap: 20px;
 }
 
 .side {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 24px;
   min-width: 0;
-}
-
-.side-private {
-  border-left: 1.5px dashed var(--yb-ink);
-  background: var(--yb-paper);
+  padding: 22px 24px;
+  border-radius: var(--yb-radius-panel);
+  background: var(--yb-window);
+  box-shadow: 0 0 0 0.5px var(--yb-separator), 0 2px 8px -2px rgb(0 0 0 / 0.08);
 }
 
 .side-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin: 0 0 6px;
-  color: var(--yb-ink);
-  font-weight: 700;
+  color: var(--yb-label);
+  font-weight: 600;
   font-size: 17px;
+}
+
+.tile {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: linear-gradient(#55aaff, #2563eb);
+  color: #fff;
+  font-size: 17px;
+}
+
+.tile-grey {
+  background: linear-gradient(#8e8e93, #636366);
 }
 
 .file-name {
   margin: 8px 0 0;
-  color: var(--yb-ink-soft);
-  font-size: 13px;
+  color: var(--yb-label-2);
+  font-size: 12.5px;
+  font-weight: 500;
 }
 
 .file {
   margin: 0;
   padding: 12px 14px;
-  border-radius: var(--yb-radius-sm);
-  background: var(--yb-term-bg);
-  color: var(--yb-term-ink);
+  border-radius: 10px;
+  background: var(--yb-code-bg);
+  box-shadow: inset 0 0 0 0.5px var(--yb-separator);
+  color: var(--yb-label);
   font-family: var(--yb-font-mono);
   font-size: 12.5px;
   line-height: 1.6;
-  tab-size: 4;
   overflow-x: auto;
 }
 
 .side-note {
   margin: 10px 0 0;
-  color: var(--yb-ink-soft);
+  color: var(--yb-label-2);
   font-size: 14px;
   line-height: 1.7;
 }
 
-.side-note code,
-.facts code {
+.side-note code {
+  padding: 0;
+  background: none;
+  color: var(--yb-label);
   font-family: var(--yb-font-mono);
   font-size: 0.9em;
-  color: var(--yb-ink);
 }
 
 .facts {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 24px;
-  margin: 32px 0 0;
+  gap: 28px;
+  margin: 40px 0 0;
 }
 
 .facts dt {
-  color: var(--yb-ink);
-  font-weight: 700;
-  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  color: var(--yb-label);
+  font-weight: 600;
+}
+
+.fact-icon {
+  color: var(--yb-accent);
+  font-size: 19px;
 }
 
 .facts dd {
   margin: 0;
-  color: var(--yb-ink-soft);
+  color: var(--yb-label-2);
   font-size: 14px;
   line-height: 1.7;
 }
@@ -158,19 +182,19 @@ SecretKey  ••••••••••••••••••••</code></
     grid-template-columns: 1fr;
   }
 
-  .side-private {
-    border-left: 0;
-    border-top: 1.5px dashed var(--yb-ink);
-  }
-
   .facts {
     grid-template-columns: 1fr 1fr;
   }
 }
 
 @media (max-width: 520px) {
+  .side {
+    padding: 18px;
+  }
+
   .facts {
     grid-template-columns: 1fr;
+    gap: 20px;
   }
 }
 </style>
