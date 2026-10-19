@@ -1,15 +1,20 @@
-import type { PushInspection } from './inspect.ts'
+import type { InspectionChange, PushInspection } from './inspect.ts'
+import { Buffer } from 'node:buffer'
 import { describe, expect, it } from 'vitest'
-import { describeRemote, describeSource, remoteWebUrl, renderConfirmationHtml } from './confirm.ts'
+import { describeRemote, describeSource, previewVersions, remoteWebUrl, renderConfirmationHtml } from './confirm.ts'
 
-function report(path: string): PushInspection {
+function change(path: string, overrides: Partial<InspectionChange> = {}): InspectionChange {
+  return { path, status: 'added', storage: 'git', beforeBytes: null, afterBytes: 2048, beforeOid: null, afterOid: 'a'.repeat(40), versions: 1, pushBytes: 2048, exceedsFileLimit: true, ...overrides }
+}
+
+function report(path: string, changes = [change(path)]): PushInspection {
   const file = { oid: 'a'.repeat(40), bytes: 2048, paths: [path], exceedsFileLimit: true }
   return {
     schemaVersion: 1,
     status: 'exceeded',
     limits: { gitBytes: 1024, lfsBytes: 1024, fileBytes: 1024 },
     warnings: ['<warning>'],
-    changes: [{ path, status: 'added', storage: 'git', beforeBytes: null, afterBytes: 2048, versions: 1, pushBytes: 2048, exceedsFileLimit: true }],
+    changes,
     git: { packBytes: 4096, packComplete: true, packCapBytes: 10 * 1024 * 1024, exceedsLimit: true, blobBytes: 2048, blobCount: 1, pointerBytes: 0, files: [file] },
     lfs: { candidateBytes: 0, candidateCount: 0, remoteChecked: false, uploadBytes: null, exceedsLimit: false, files: [] },
   }
@@ -90,5 +95,47 @@ describe('renderConfirmationHtml', () => {
     expect(list).toBeGreaterThan(html.indexOf('<thead>'))
     expect(list).toBeGreaterThan(html.indexOf('class="meters"'))
     expect(html.slice(list)).toContain('docs/</span>')
+  })
+
+  it('links rows with a pushed version to their preview, and only those', () => {
+    const html = renderConfirmationHtml(report('art/logo.png', [
+      change('art/logo.png', { status: 'modified', beforeOid: 'b'.repeat(64), afterOid: 'c'.repeat(64), storage: 'lfs' }),
+      change('art/old.png', { status: 'deleted', afterBytes: null, afterOid: null }),
+      change('art/<b>.png'),
+    ]))
+    expect(html).toContain('<tr class="over preview"><td><i class="badge modified">修改</i></td><td><a class="path" href="yunbox-preview:0" target="_blank" title="art/logo.png">')
+    expect(html).toContain('<div class="path" title="art/old.png">')
+    expect(html).toContain('href="yunbox-preview:2" target="_blank" title="art/&#60;b&#62;.png"><span class="dir">art/</span><span class="name">&#60;b&#62;.png</span>')
+    expect(html).toContain('点击文件预览')
+    // Still no script and nothing to load: the click goes to the dialog's UI delegate.
+    expect(html).not.toContain('<script')
+    expect(html).toContain('content="default-src \'none\'; style-src \'unsafe-inline\'"')
+    expect(renderConfirmationHtml(report('a.bin', [change('a.bin', { status: 'deleted', afterOid: null })]))).not.toContain('点击文件预览')
+  })
+})
+
+describe('previewVersions', () => {
+  it('shows a modification before and after, and the pushed version otherwise', () => {
+    const before = 'b'.repeat(64)
+    const after = 'c'.repeat(40)
+    expect(previewVersions(change('art/logo.png', { status: 'modified', beforeOid: before, afterOid: after }))).toEqual([
+      { oid: before, name: 'logo（推送前）.png' },
+      { oid: after, name: 'logo（推送后）.png' },
+    ])
+    expect(previewVersions(change('art/logo.png', { status: 'modified', beforeOid: null, afterOid: after }))).toEqual([{ oid: after, name: 'logo（推送后）.png' }])
+    expect(previewVersions(change('README', { afterOid: after }))).toEqual([{ oid: after, name: 'README' }])
+    expect(previewVersions(change('gone.png', { status: 'deleted', afterOid: null }))).toEqual([])
+    expect(previewVersions(change('scratch.png', { status: 'transient', afterOid: null }))).toEqual([])
+  })
+
+  it('never passes on a malformed oid or an unsafe file name', () => {
+    expect(previewVersions(change('a.png', { afterOid: '../../etc/passwd' }))).toEqual([])
+    expect(previewVersions(change('dir/..', { afterOid: 'a'.repeat(40) }))[0]!.name).toBe('file..')
+    expect(previewVersions(change('x/\x1B[31m.png', { afterOid: 'a'.repeat(40) }))[0]!.name).toBe('\\x1b[31m.png')
+    const long = previewVersions(change(`${'素'.repeat(200)}.png`, { status: 'modified', beforeOid: 'a'.repeat(40) }))
+    for (const { name } of long) {
+      expect(Buffer.byteLength(name)).toBeLessThanOrEqual(255)
+      expect(name.endsWith('.png')).toBe(true)
+    }
   })
 })

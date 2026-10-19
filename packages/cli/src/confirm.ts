@@ -2,8 +2,9 @@ import type { CliContext } from './context.ts'
 import type { InspectionChange, PushInspection } from './inspect.ts'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
-import { open } from 'node:fs/promises'
-import { basename } from 'node:path'
+import { mkdtemp, open, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { basename, join, resolve } from 'node:path'
 import process from 'node:process'
 import { inspectGit } from './inspect-git.ts'
 import { CHANGE_LABELS, compactBytes, describeSizeChange, exceededReasons } from './inspect.ts'
@@ -64,15 +65,30 @@ i { font-style: normal; }
 .tag { margin-left: 6px; padding: 0 5px; border-radius: 4px; font-size: 10px; color: var(--muted); border: 1px solid var(--line); }
 .tag.over { color: var(--over); border-color: var(--over); }
 .empty { text-align: center; color: var(--muted); padding: 18px; }
+/* A previewable row is one link stretched over the whole row; clicking it opens Quick Look.
+   WebKit ignores position: relative on table rows, but a transform makes the row contain the link. */
+tr.preview { transform: translate(0); }
+tr.preview:hover td { background: var(--card); }
+a.path { color: inherit; text-decoration: none; cursor: default; }
+a.path::after { content: ""; position: absolute; inset: 0; }
+a.path:focus-visible { outline: none; }
+tr.preview:has(a.path:focus-visible) td { background: color-mix(in srgb, var(--accent) 14%, transparent); }
 .notes { margin: 10px 2px 0; padding-left: 16px; color: var(--muted); font-size: 11px; }
 `
 
 /**
  * JXA run through `osascript`: a native alert with the HTML report embedded, so it needs
  * no app bundle. argv: title, reasons, web view height, optional snapshot path (debug aid:
- * capture the window to a PNG, then cancel), JSON `{ root, web }` for the link buttons.
- * stdin: the HTML. Prints `continue` or `cancel`. The link buttons open Finder, an editor,
- * the remote's web page or the YunBox client without closing the alert.
+ * capture the window to a PNG, then cancel), JSON `{ root, web, preview }` for the link
+ * buttons and row previews. stdin: the HTML. Prints `continue` or `cancel`. The link
+ * buttons open Finder, an editor, the remote's web page or the YunBox client without
+ * closing the alert.
+ *
+ * Previews need no script in the page: a previewable row is a `target="_blank"` link to
+ * `yunbox-preview:<row>`, which WebKit hands to the UI delegate as a new-window request.
+ * The delegate opens no window; it copies the row's versions (`preview.items[row]`) from
+ * the LFS store or `git cat-file` into `preview.dir` and shows them in Quick Look. The
+ * directory is removed when the alert closes.
  */
 const DIALOG_SCRIPT = `
 ObjC.import('Cocoa')
@@ -95,6 +111,74 @@ function run(argv) {
   web.setValueForKey(false, 'drawsBackground')
   web.loadHTMLStringBaseURL(html, $.nil)
   const links = JSON.parse(argv[4] || '{}')
+  const preview = links.preview
+  let previewer
+  if (preview) {
+    ObjC.import('Quartz')
+    const files = $.NSFileManager.defaultManager
+    let items = []
+    ObjC.registerSubclass({ name: 'YunBoxPreviewItems', protocols: ['QLPreviewPanelDataSource'], methods: {
+      'numberOfPreviewItemsInPreviewPanel:': { types: ['long', ['id']], implementation: () => items.length },
+      'previewPanel:previewItemAtIndex:': { types: ['id', ['id', 'long']], implementation: (panel, index) => items[index] },
+    } })
+    const source = $.YunBoxPreviewItems.alloc.init
+    // The pushed version, not the worktree file: they can differ.
+    const extract = (version, folder) => {
+      const path = folder.stringByAppendingPathComponent(version.name)
+      if (files.fileExistsAtPath(path))
+        return path
+      if (preview.lfs) {
+        const stored = $(preview.lfs).stringByAppendingPathComponent([version.oid.slice(0, 2), version.oid.slice(2, 4), version.oid].join('/'))
+        if (files.fileExistsAtPath(stored))
+          return files.copyItemAtPathToPathError(stored, path, null) ? path : undefined
+      }
+      if (!files.createFileAtPathContentsAttributes(path, $.NSData.data, $.nil))
+        return undefined
+      const output = $.NSFileHandle.fileHandleForWritingAtPath(path)
+      const task = $.NSTask.alloc.init
+      task.executableURL = $.NSURL.fileURLWithPath('/usr/bin/env')
+      task.arguments = $(['git', 'cat-file', 'blob', version.oid])
+      task.standardOutput = output
+      task.standardError = $.NSFileHandle.fileHandleWithNullDevice
+      let done = task.launchAndReturnError(null)
+      if (done) {
+        task.waitUntilExit
+        done = task.terminationStatus === 0
+      }
+      output.closeFile
+      if (done)
+        return path
+      files.removeItemAtPathError(path, null)
+    }
+    ObjC.registerSubclass({ name: 'YunBoxPreview', methods: {
+      'webView:createWebViewWithConfiguration:forNavigationAction:windowFeatures:': { types: ['id', ['id', 'id', 'id', 'id']], implementation: (view, configuration, action) => {
+        const row = /^yunbox-preview:(\\d+)$/.exec(ObjC.unwrap(action.request.URL.absoluteString))?.[1]
+        const versions = row === undefined ? undefined : preview.items[Number(row)]
+        if (versions) {
+          const folder = $(preview.dir).stringByAppendingPathComponent(row)
+          files.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(folder, true, $.nil, null)
+          items = versions.map(version => extract(version, folder)).filter(Boolean).map(path => $.NSURL.fileURLWithPath(path))
+          if (items.length) {
+            const panel = $.QLPreviewPanel.sharedPreviewPanel
+            panel.dataSource = source
+            panel.reloadData
+            // Start on the pushed version; the left arrow goes back to the one before.
+            panel.currentPreviewItemIndex = items.length - 1
+            // The alert is modal; without this the panel would not take the arrow keys or Esc.
+            panel.worksWhenModal = true
+            panel.makeKeyAndOrderFront($.nil)
+          }
+          else {
+            $.NSBeep()
+          }
+        }
+        // Never a new window: the click only previews.
+        return $.nil
+      } },
+    } })
+    previewer = $.YunBoxPreview.alloc.init
+    web.UIDelegate = previewer
+  }
   const workspace = $.NSWorkspace.sharedWorkspace
   const installed = id => { const url = workspace.URLForApplicationWithBundleIdentifier(id); return url.isNil() ? undefined : url }
   const openWith = (url, application) => workspace.openURLsWithApplicationAtURLConfigurationCompletionHandler($([url]), application, $.NSWorkspaceOpenConfiguration.configuration, $.nil)
@@ -143,9 +227,51 @@ function run(argv) {
     $.NSRunLoop.currentRunLoop.addTimerForMode(timer, $.NSModalPanelRunLoopMode)
   }
   app.activateIgnoringOtherApps(true)
-  return alert.runModal === $.NSAlertSecondButtonReturn ? 'continue' : 'cancel'
+  const answer = alert.runModal
+  if (preview) {
+    if ($.QLPreviewPanel.sharedPreviewPanelExists)
+      $.QLPreviewPanel.sharedPreviewPanel.orderOut($.nil)
+    $.NSFileManager.defaultManager.removeItemAtPathError(preview.dir, null)
+  }
+  return answer === $.NSAlertSecondButtonReturn ? 'continue' : 'cancel'
 }
 `
+
+/** One version of a changed file that the dialog can show in Quick Look. */
+export interface PreviewVersion {
+  /** `afterOid` or `beforeOid` of the change: an LFS payload or a Git blob. */
+  oid: string
+  /** File name Quick Look shows as the title; never contains `/`. */
+  name: string
+}
+
+/**
+ * Versions to preview for a change: before and after for a modification (before first, so
+ * the arrow keys step through time), only the pushed version otherwise, nothing when the
+ * path is gone at the pushed tip.
+ */
+export function previewVersions(change: InspectionChange): PreviewVersion[] {
+  const valid = (oid: string | null): oid is string => oid !== null && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(oid)
+  if (!valid(change.afterOid))
+    return []
+  const name = visible(change.path.slice(change.path.lastIndexOf('/') + 1))
+  if (change.status !== 'modified')
+    return [{ oid: change.afterOid, name: fileName(name) }]
+  return [
+    ...(valid(change.beforeOid) ? [{ oid: change.beforeOid, name: fileName(name, '推送前') }] : []),
+    { oid: change.afterOid, name: fileName(name, '推送后') },
+  ]
+}
+
+/** `name（tag）.ext`, kept under the 255-byte file name limit. */
+function fileName(name: string, tag?: string): string {
+  const extension = /\.[^.\s]{1,16}$/.exec(name)?.[0] ?? ''
+  let stem = [...name.slice(0, name.length - extension.length)]
+  while (Buffer.byteLength(stem.join('')) > 180)
+    stem = stem.slice(0, -1)
+  const result = `${stem.join('')}${tag ? `（${tag}）` : ''}${extension}`
+  return result === '' || result === '.' || result === '..' ? `file${result}` : result
+}
 
 /** Both ends of a push, as the confirmation names and links them. */
 interface PushEnds {
@@ -228,8 +354,7 @@ export function describeSource(root: string, options: { updates?: string, branch
 
 /** Self-contained report page for the confirmation dialog: no scripts, no network. */
 export function renderConfirmationHtml(report: PushInspection): string {
-  const changes = report.changes.filter(change => change.versions > 0)
-  const shown = changes.slice(0, DIALOG_ROWS)
+  const { changes, shown } = listedChanges(report)
   const hidden = changes.slice(DIALOG_ROWS)
   const largest = Math.max(1, ...shown.map(change => change.pushBytes))
   const largestFile = Math.max(0, ...[...report.git.files, ...report.lfs.files].map(file => file.bytes))
@@ -241,7 +366,8 @@ export function renderConfirmationHtml(report: PushInspection): string {
     meter('LFS 候选', report.lfs.candidateBytes, report.limits.lfsBytes, report.lfs.exceedsLimit, `${report.lfs.candidateCount} 个素材，远端已有的会跳过`),
     meter('最大单文件', largestFile, report.limits.fileBytes, [...report.git.files, ...report.lfs.files].some(file => file.exceedsFileLimit), '原始大小'),
   ]
-  const rows = shown.map(change => row(change, largest)).join('')
+  const rows = shown.map((change, index) => row(change, largest, previewVersions(change).length ? index : undefined)).join('')
+  const previewable = shown.some(change => previewVersions(change).length)
   const unpathed = [...report.git.files, ...report.lfs.files].filter(file => file.paths.length === 0)
   const notes = [
     ...report.warnings,
@@ -254,7 +380,7 @@ export function renderConfirmationHtml(report: PushInspection): string {
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
 <style>${STYLE}</style></head><body>
 <section class="meters">${meters.join('')}</section>
-<div class="caption"><strong>变更文件</strong><span>${changes.length} 个文件${counts.map(([status, count]) => ` · <i class="badge ${status}">${CHANGE_LABELS[status]}</i> ${count}`).join('')}</span><span class="spacer"></span><span>按本次上传大小排序</span></div>
+<div class="caption"><strong>变更文件</strong><span>${changes.length} 个文件${counts.map(([status, count]) => ` · <i class="badge ${status}">${CHANGE_LABELS[status]}</i> ${count}`).join('')}</span><span class="spacer"></span><span>${previewable ? '点击文件预览 · ' : ''}按本次上传大小排序</span></div>
 <div class="columns"><table>${COLUMNS}<thead><tr><th>状态</th><th>文件</th><th class="num">大小变化</th><th class="num">本次上传</th></tr></thead></table></div>
 <div class="list"><table>${COLUMNS}<tbody>${rows || '<tr><td colspan="4" class="empty">没有新的文件内容</td></tr>'}</tbody></table>
 <ul class="notes">${notes.map(note => `<li>${escapeHtml(note)}</li>`).join('')}</ul></div>
@@ -314,15 +440,47 @@ function confirmUi(env: NodeJS.ProcessEnv): ConfirmUi {
   return value === 'dialog' || value === 'terminal' || value === 'none' ? value : 'auto'
 }
 
+/** Changes with uploaded content, and the ones the dialog lists. */
+function listedChanges(report: PushInspection): { changes: InspectionChange[], shown: InspectionChange[] } {
+  const changes = report.changes.filter(change => change.versions > 0)
+  return { changes, shown: changes.slice(0, DIALOG_ROWS) }
+}
+
 async function askDialog(context: CliContext, report: PushInspection, push: PushEnds): Promise<boolean | undefined> {
-  const rows = Math.min(DIALOG_ROWS, report.changes.filter(change => change.versions > 0).length)
-  const height = Math.min(560, Math.max(300, 210 + rows * 29))
+  const { shown } = listedChanges(report)
+  const height = Math.min(560, Math.max(300, 210 + shown.length * 29))
   const title = push.target ? `推送到 ${push.target} 超过限额` : '推送超过限额'
   const info = [push.source, ...exceededReasons(report)].join('\n')
-  const links = JSON.stringify({ root: push.root, web: push.web })
-  const args = ['-l', 'JavaScript', '-e', DIALOG_SCRIPT, title, info, String(height), context.env.YUNBOX_CONFIRM_SNAPSHOT ?? '', links]
+  const items = shown.map(previewVersions)
+  // Private (0700) and removed when the dialog closes; the dialog removes it too.
+  const dir = items.some(versions => versions.length) ? await mkdtemp(join(tmpdir(), 'yunbox-preview-')) : undefined
+  try {
+    const preview = dir && { dir, lfs: await lfsObjects(context), items }
+    const links = JSON.stringify({ root: push.root, web: push.web, preview })
+    const args = ['-l', 'JavaScript', '-e', DIALOG_SCRIPT, title, info, String(height), context.env.YUNBOX_CONFIRM_SNAPSHOT ?? '', links]
+    // Previews read objects with `git cat-file`: never prompt or fetch for a missing one.
+    return await runDialog(args, { ...context.env, GIT_TERMINAL_PROMPT: '0', GIT_NO_LAZY_FETCH: '1', GIT_OPTIONAL_LOCKS: '0' }, context.cwd, renderConfirmationHtml(report))
+  }
+  finally {
+    if (dir)
+      await rm(dir, { recursive: true, force: true })
+  }
+}
+
+/** The local LFS object store, `<common git dir>/lfs/objects`. */
+async function lfsObjects(context: CliContext): Promise<string | undefined> {
+  try {
+    const common = (await inspectGit(context, ['rev-parse', '--git-common-dir'])).output.toString('utf8').replace(/\r?\n$/, '')
+    return common ? resolve(context.cwd, common, 'lfs', 'objects') : undefined
+  }
+  catch {
+    return undefined
+  }
+}
+
+function runDialog(args: string[], env: NodeJS.ProcessEnv, cwd: string, html: string): Promise<boolean | undefined> {
   return new Promise((resolve) => {
-    const child = spawn('osascript', args, { cwd: context.cwd, env: context.env, stdio: ['pipe', 'pipe', 'ignore'] })
+    const child = spawn('osascript', args, { cwd, env, stdio: ['pipe', 'pipe', 'ignore'] })
     const chunks: Buffer[] = []
     child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
     child.stdin.on('error', () => {})
@@ -332,7 +490,7 @@ async function askDialog(context: CliContext, report: PushInspection, push: Push
       // Anything but a clear answer (no window server, scripting disabled) falls back to the terminal.
       resolve(code === 0 && (answer === 'continue' || answer === 'cancel') ? answer === 'continue' : undefined)
     })
-    child.stdin.end(renderConfirmationHtml(report))
+    child.stdin.end(html)
   })
 }
 
@@ -376,7 +534,8 @@ function meter(label: string, value: number, limit: number, exceeded: boolean, n
     + `<div class="note"><span>${escapeHtml(note)}</span><span>${percent}</span></div></div>`
 }
 
-function row(change: InspectionChange, largest: number): string {
+/** One table row; `preview` is the row index the preview link names, if it has versions to show. */
+function row(change: InspectionChange, largest: number, preview?: number): string {
   const slash = change.path.lastIndexOf('/')
   const directory = slash < 0 ? '' : change.path.slice(0, slash + 1)
   const name = change.path.slice(slash + 1)
@@ -386,8 +545,14 @@ function row(change: InspectionChange, largest: number): string {
     change.exceedsFileLimit ? '<i class="tag over">超限</i>' : '',
   ].join('')
   const hint = change.status === 'transient' ? ' title="在本次推送的提交中新增后又删除，内容仍会上传"' : change.status === 'deleted' && change.pushBytes ? ' title="已删除，但中间的历史版本仍会上传"' : ''
-  return `<tr${change.exceedsFileLimit ? ' class="over"' : ''}><td><i class="badge ${change.status}"${hint}>${CHANGE_LABELS[change.status]}</i></td>`
-    + `<td><div class="path" title="${escapeHtml(visible(change.path))}"><span class="dir">${escapeHtml(visible(directory))}</span><span class="name">${escapeHtml(visible(name))}</span>${tags}</div></td>`
+  const classes = [change.exceedsFileLimit ? 'over' : '', preview === undefined ? '' : 'preview'].filter(Boolean).join(' ')
+  const path = `<span class="dir">${escapeHtml(visible(directory))}</span><span class="name">${escapeHtml(visible(name))}</span>${tags}`
+  const title = escapeHtml(visible(change.path))
+  const cell = preview === undefined
+    ? `<div class="path" title="${title}">${path}</div>`
+    : `<a class="path" href="yunbox-preview:${preview}" target="_blank" title="${title}">${path}</a>`
+  return `<tr${classes ? ` class="${classes}"` : ''}><td><i class="badge ${change.status}"${hint}>${CHANGE_LABELS[change.status]}</i></td>`
+    + `<td>${cell}</td>`
     + `<td class="num diff">${escapeHtml(describeSizeChange(change))}</td>`
     + `<td class="num push"><span>${compactBytes(change.pushBytes)}</span><div class="bar"><div style="width:${Math.max(2, change.pushBytes / largest * 100).toFixed(1)}%"></div></div></td></tr>`
 }

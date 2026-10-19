@@ -33,6 +33,14 @@ export interface InspectionChange {
   beforeBytes: number | null
   /** Size at the pushed tip; `null` when the path is deleted. */
   afterBytes: number | null
+  /**
+   * Content before the pushed commits: the LFS payload oid (SHA-256, stored at
+   * `.git/lfs/objects/<aa>/<bb>/<oid>`) for LFS files, else the Git blob oid.
+   * `null` when `beforeBytes` is. Additive to schema version 1.
+   */
+  beforeOid: string | null
+  /** Content at the pushed tip, like `beforeOid`; `null` when `afterBytes` is. */
+  afterOid: string | null
   /** Content versions of this path that the push uploads: Git objects not on the remote, or LFS candidates. */
   versions: number
   /** Raw bytes of those versions, before compression; shared content counts for every path that uses it. */
@@ -320,10 +328,11 @@ async function readChanges(context: CliContext, events: Map<string, PathEvent[]>
   const extra = await readKnownBlobs(context, [...unknown])
   const blobs = new Map([...sources.blobs, ...extra.map(blob => [blob.oid, blob] as const)])
   const pointers = new Map([...sources.pointers, ...await readPointers(context, extra)])
-  const size = (oid: string | undefined): { bytes: number, storage: 'git' | 'lfs' } | undefined => {
+  // An LFS pointer stands for its payload; a blob missing locally (partial clone) is unknown.
+  const content = (oid: string | undefined): { oid: string, bytes: number, storage: 'git' | 'lfs' } | undefined => {
     const pointer = oid === undefined ? undefined : pointers.get(oid)
     const blob = oid === undefined ? undefined : blobs.get(oid)
-    return pointer ? { bytes: pointer.bytes, storage: 'lfs' as const } : blob ? { bytes: blob.bytes, storage: 'git' as const } : undefined
+    return pointer ? { ...pointer, storage: 'lfs' as const } : blob ? { ...blob, storage: 'git' as const } : undefined
   }
   const changes: InspectionChange[] = []
   for (const [path, list] of events) {
@@ -341,9 +350,11 @@ async function readChanges(context: CliContext, events: Map<string, PathEvent[]>
     changes.push({
       path,
       status: before ? after ? 'modified' : 'deleted' : after ? 'added' : 'transient',
-      storage: size(latest)?.storage ?? 'git',
-      beforeBytes: size(before)?.bytes ?? null,
-      afterBytes: size(after)?.bytes ?? null,
+      storage: content(latest)?.storage ?? 'git',
+      beforeBytes: content(before)?.bytes ?? null,
+      afterBytes: content(after)?.bytes ?? null,
+      beforeOid: content(before)?.oid ?? null,
+      afterOid: content(after)?.oid ?? null,
       versions: uploaded.size,
       pushBytes: sumBytes([...uploaded.values()].map(bytes => ({ bytes }))),
       exceedsFileLimit: [...uploaded.values()].some(bytes => bytes > sources.fileBytes),

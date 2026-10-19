@@ -2,7 +2,7 @@ import type { PushInspection } from '../src/inspect.ts'
 import type { Sandbox } from './helpers.ts'
 import { Buffer } from 'node:buffer'
 import { createHash, randomBytes } from 'node:crypto'
-import { rm, writeFile } from 'node:fs/promises'
+import { readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -92,12 +92,13 @@ describe('push inspection', () => {
     await commit(sandbox, repo)
     const result = await runYunBox(sandbox, repo, ['inspect', '--push', '--base', base, '--json', '--file-limit', '4k'])
     const report = JSON.parse(result.stdout) as PushInspection
+    const blob = (ref: string) => git(sandbox, repo, 'rev-parse', ref)
     expect(report.changes).toEqual([
-      { path: 'art.psd', status: 'modified', storage: 'lfs', beforeBytes: 4096, afterBytes: 8192, versions: 1, pushBytes: 8192, exceedsFileLimit: true },
-      { path: 'edited.bin', status: 'modified', storage: 'git', beforeBytes: 1000, afterBytes: 2000, versions: 2, pushBytes: 5000, exceedsFileLimit: false },
-      { path: 'scratch.bin', status: 'transient', storage: 'git', beforeBytes: null, afterBytes: null, versions: 1, pushBytes: 5000, exceedsFileLimit: true },
-      { path: 'added.txt', status: 'added', storage: 'git', beforeBytes: null, afterBytes: 4, versions: 1, pushBytes: 4, exceedsFileLimit: false },
-      { path: 'removed.txt', status: 'deleted', storage: 'git', beforeBytes: 4, afterBytes: null, versions: 0, pushBytes: 0, exceedsFileLimit: false },
+      { path: 'art.psd', status: 'modified', storage: 'lfs', beforeBytes: 4096, afterBytes: 8192, beforeOid: pointer(4096, 'v1').oid, afterOid: pointer(8192, 'v2').oid, versions: 1, pushBytes: 8192, exceedsFileLimit: true },
+      { path: 'edited.bin', status: 'modified', storage: 'git', beforeBytes: 1000, afterBytes: 2000, beforeOid: await blob(`${base}:edited.bin`), afterOid: await blob('HEAD:edited.bin'), versions: 2, pushBytes: 5000, exceedsFileLimit: false },
+      { path: 'scratch.bin', status: 'transient', storage: 'git', beforeBytes: null, afterBytes: null, beforeOid: null, afterOid: null, versions: 1, pushBytes: 5000, exceedsFileLimit: true },
+      { path: 'added.txt', status: 'added', storage: 'git', beforeBytes: null, afterBytes: 4, beforeOid: null, afterOid: await blob('HEAD:added.txt'), versions: 1, pushBytes: 4, exceedsFileLimit: false },
+      { path: 'removed.txt', status: 'deleted', storage: 'git', beforeBytes: 4, afterBytes: null, beforeOid: await blob(`${base}:removed.txt`), afterOid: null, versions: 0, pushBytes: 0, exceedsFileLimit: false },
     ])
     const text = await runYunBox(sandbox, repo, ['inspect', '--push', '--base', base, '--file-limit', '4k'])
     expect(text.stdout).toContain('[超限] 修改')
@@ -221,6 +222,24 @@ describe('push inspection', () => {
     expect(report.lfs.candidateBytes).toBe(2048)
     expect(report.lfs.files[0]?.paths).toEqual(['real.bin'])
     expect(report.git.files.some(file => file.paths.includes('real.bin'))).toBe(false)
+  })
+
+  it('identifies LFS versions by payload oid, so they can be read from the local LFS store', async () => {
+    const { sandbox, repo } = await fixture()
+    await git(sandbox, repo, 'lfs', 'install', '--local')
+    await git(sandbox, repo, 'lfs', 'track', '*.png')
+    const before = randomBytes(2048)
+    const after = randomBytes(3072)
+    await writeFile(join(repo, 'logo.png'), before)
+    const base = await commit(sandbox, repo)
+    await writeFile(join(repo, 'logo.png'), after)
+    await commit(sandbox, repo)
+    const result = await runYunBox(sandbox, repo, ['inspect', '--push', '--base', base, '--json'])
+    const change = (JSON.parse(result.stdout) as PushInspection).changes.find(change => change.path === 'logo.png')!
+    expect(change).toMatchObject({ status: 'modified', storage: 'lfs', beforeBytes: 2048, afterBytes: 3072 })
+    const stored = (oid: string) => readFile(join(repo, '.git', 'lfs', 'objects', oid.slice(0, 2), oid.slice(2, 4), oid))
+    expect(await stored(change.beforeOid!)).toEqual(before)
+    expect(await stored(change.afterOid!)).toEqual(after)
   })
 
   it('returns JSON errors without echoing credentials or invalid parameter values', async () => {

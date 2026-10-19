@@ -42,7 +42,8 @@ git config yunbox.inspectFileBytes 10m
 | `git.packBytes` / `packComplete` | 完整估算值；不完整时 `packBytes` 为 `packCapBytes + 1`，代表下界 |
 | `git.blobBytes` / `blobCount` / `pointerBytes` | Git blob 原始大小与数量（含指针），以及其中指针的大小 |
 | `git.exceedsLimit` / `lfs.exceedsLimit` | 各自总量是否超过预算；单文件超限另见每条明细 |
-| `changes` | 每个变更路径一条：`{ path, status, storage, beforeBytes, afterBytes, versions, pushBytes, exceedsFileLimit }`。`status` 为 `added`、`modified`、`deleted` 或 `transient`；`storage` 为 `git` 或 `lfs`；路径不存在或旧对象不在本地时大小为 `null`；`versions` 为 `0` 表示没有新内容需要上传（如删除）。新增字段，`schemaVersion` 仍为 `1` |
+| `changes` | 每个变更路径一条：`{ path, status, storage, beforeBytes, afterBytes, beforeOid, afterOid, versions, pushBytes, exceedsFileLimit }`。`status` 为 `added`、`modified`、`deleted` 或 `transient`；`storage` 为 `git` 或 `lfs`；路径不存在或旧对象不在本地时大小为 `null`；`versions` 为 `0` 表示没有新内容需要上传（如删除）。新增字段，`schemaVersion` 仍为 `1` |
+| `changes[].beforeOid` / `afterOid` | 推送前、推送后的内容 ID，用于读取对应版本：LFS 文件为素材的 SHA-256（本地位于 `.git/lfs/objects/<前 2 位>/<3–4 位>/<oid>`，可能尚未下载），普通文件为 Git blob ID（`git cat-file blob <oid>`）。与对应的大小同时为 `null`。不要从工作区读取，工作区可能与推送的提交不同。新增字段，`schemaVersion` 仍为 `1` |
 | `git.files` / `lfs.files` | 完整对象列表，每条为 `{ oid, bytes, paths, exceedsFileLimit }`，按大小降序 |
 | `lfs.candidateBytes` / `candidateCount` | 去重后的 LFS 候选大小和数量 |
 | `lfs.remoteChecked` / `uploadBytes` | 当前固定为 `false` / `null`，不能把未知上传量当成 `0` |
@@ -53,7 +54,7 @@ git config yunbox.inspectFileBytes 10m
 
 `--confirm` 在超限时询问是否继续：确认后退出码为 `0`，取消或无人可问时为 `1`。不能与 `--json` 合用。
 
-- **macOS**：弹出原生对话框（通过 `osascript` 运行，无需安装应用）。标题写明推送目标（如 `github.com/owner/repo`，不含凭据），下面一行是本地仓库名和推送的分支。按钮行可以在 Finder 中显示仓库、用已安装的编辑器（Cursor、VS Code、Zed 或 Sublime Text）打开、在 YunBox 客户端中查看完整信息（已安装时），或在浏览器中打开远端仓库页面；这些按钮不会关闭对话框。再往下是 Git pack、LFS 候选、最大单文件三项预算的用量条，以及逐个文件的表格：状态、目录与文件名、推送前后大小及差值、版本数和本次上传大小条，超限文件标红。文件很多时只有表格滚动，用量条和表头保持不动。默认按钮为「取消」。对话框最多列出 300 个文件，其余见 `--json`。
+- **macOS**：弹出原生对话框（通过 `osascript` 运行，无需安装应用）。标题写明推送目标（如 `github.com/owner/repo`，不含凭据），下面一行是本地仓库名和推送的分支。按钮行可以在 Finder 中显示仓库、用已安装的编辑器（Cursor、VS Code、Zed 或 Sublime Text）打开、在 YunBox 客户端中查看完整信息（已安装时），或在浏览器中打开远端仓库页面；这些按钮不会关闭对话框。再往下是 Git pack、LFS 候选、最大单文件三项预算的用量条，以及逐个文件的表格：状态、目录与文件名、推送前后大小及差值、版本数和本次上传大小条，超限文件标红。点击推送后仍存在的文件，用「快速查看」预览推送的版本：修改的文件同时打开推送前和推送后两个版本，用左右方向键切换，新增的文件只显示新版本；预览不会关闭对话框，按 Esc 关闭预览。预览内容取自 Git 对象或本地 LFS 存储（`.git/lfs/objects`），而不是工作区，因为工作区可能与推送的提交不同；它们复制到仅当前用户可读的临时目录，对话框关闭时删除。本地没有的 LFS 旧版本无法预览。报告页面不含脚本，内容安全策略仍为 `default-src 'none'`。文件很多时只有表格滚动，用量条和表头保持不动。默认按钮为「取消」。对话框最多列出 300 个文件，其余见 `--json`。
 - **其他环境**：通过控制终端（`/dev/tty`）询问 `[y/N]`，终端上方是同样的文本报告。SSH 会话直接使用终端。
 - **无法询问**（无窗口、无终端、Windows）：阻止推送并提示。
 
