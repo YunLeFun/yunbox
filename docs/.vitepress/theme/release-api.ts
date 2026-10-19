@@ -1,4 +1,4 @@
-import type { ReleaseSnapshot } from './release.data'
+import type { ReleaseSnapshot } from './release.data.ts'
 
 /** Asset name the Release workflow uploads for the macOS client. */
 export const MACOS_ASSET = 'YunBox-macOS.zip'

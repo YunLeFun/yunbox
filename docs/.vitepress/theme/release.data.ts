@@ -16,7 +16,7 @@ export { data }
 
 export default defineLoader({
   async load(): Promise<ReleaseSnapshot> {
-    const { fetchLatestRelease } = await import('./release-api')
+    const { fetchLatestRelease } = await import('./release-api.ts')
     // In CI the workflow token avoids the anonymous rate limit.
     const token = process.env.GITHUB_TOKEN
     return fetchLatestRelease(token === undefined ? {} : { Authorization: `Bearer ${token}` })
