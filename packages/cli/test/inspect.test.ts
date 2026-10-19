@@ -75,6 +75,52 @@ describe('push inspection', () => {
     expect(result.stdout).not.toContain('untracked.bin')
   })
 
+  it('reports each changed path with its status, sizes before and after, and uploaded versions', async () => {
+    const { sandbox, repo } = await fixture()
+    await writeFile(join(repo, 'edited.bin'), randomBytes(1000))
+    await writeFile(join(repo, 'removed.txt'), 'old\n')
+    await writeFile(join(repo, 'art.psd'), pointer(4096, 'v1').text)
+    const base = await commit(sandbox, repo)
+    await writeFile(join(repo, 'edited.bin'), randomBytes(3000))
+    await writeFile(join(repo, 'art.psd'), pointer(8192, 'v2').text)
+    await writeFile(join(repo, 'scratch.bin'), randomBytes(5000))
+    await rm(join(repo, 'removed.txt'))
+    await commit(sandbox, repo)
+    await writeFile(join(repo, 'edited.bin'), randomBytes(2000))
+    await writeFile(join(repo, 'added.txt'), 'new\n')
+    await rm(join(repo, 'scratch.bin'))
+    await commit(sandbox, repo)
+    const result = await runYunBox(sandbox, repo, ['inspect', '--push', '--base', base, '--json', '--file-limit', '4k'])
+    const report = JSON.parse(result.stdout) as PushInspection
+    expect(report.changes).toEqual([
+      { path: 'art.psd', status: 'modified', storage: 'lfs', beforeBytes: 4096, afterBytes: 8192, versions: 1, pushBytes: 8192, exceedsFileLimit: true },
+      { path: 'edited.bin', status: 'modified', storage: 'git', beforeBytes: 1000, afterBytes: 2000, versions: 2, pushBytes: 5000, exceedsFileLimit: false },
+      { path: 'scratch.bin', status: 'transient', storage: 'git', beforeBytes: null, afterBytes: null, versions: 1, pushBytes: 5000, exceedsFileLimit: true },
+      { path: 'added.txt', status: 'added', storage: 'git', beforeBytes: null, afterBytes: 4, versions: 1, pushBytes: 4, exceedsFileLimit: false },
+      { path: 'removed.txt', status: 'deleted', storage: 'git', beforeBytes: 4, afterBytes: null, versions: 0, pushBytes: 0, exceedsFileLimit: false },
+    ])
+    const text = await runYunBox(sandbox, repo, ['inspect', '--push', '--base', base, '--file-limit', '4k'])
+    expect(text.stdout).toContain('[超限] 修改')
+    expect(text.stdout).toContain('"edited.bin"  1000 B → 1.95 KiB（+1000 B）  2 个版本')
+    expect(text.stdout).toContain('临时')
+    // Nothing of a deleted path is uploaded, so the ranking leaves it out.
+    expect(text.stdout).not.toContain('removed.txt')
+  })
+
+  it('asks before an exceeded push and blocks when nobody can confirm', async () => {
+    const { sandbox, repo } = await fixture()
+    await writeFile(join(repo, 'big.bin'), randomBytes(8192))
+    await commit(sandbox, repo)
+    const blocked = await runYunBox(sandbox, repo, ['inspect', '--push', '--file-limit', '4k', '--confirm'])
+    expect(blocked.code).toBe(1)
+    expect(blocked.stdout).toContain('"big.bin"')
+    expect(blocked.stderr).toContain('无法请求确认')
+    expect((await runYunBox(sandbox, repo, ['inspect', '--push', '--confirm'])).code).toBe(0)
+    const json = await runYunBox(sandbox, repo, ['inspect', '--push', '--confirm', '--json'])
+    expect(json.code).toBe(2)
+    expect(JSON.parse(json.stdout).error.message).toContain('--confirm')
+  })
+
   it('excludes the supplied base from both Git and LFS ranges', async () => {
     const { sandbox, repo } = await fixture()
     await writeFile(join(repo, 'old.bin'), randomBytes(32 * 1024))

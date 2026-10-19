@@ -1,6 +1,7 @@
 import type { CliContext } from '../context.ts'
 import { Buffer } from 'node:buffer'
 import { parseArgs } from 'node:util'
+import { confirmPush } from '../confirm.ts'
 import { inspectGit, InspectionError, resolveInspectionRange } from '../inspect-git.ts'
 import { formatInspection, inspectPush } from '../inspect.ts'
 
@@ -20,6 +21,7 @@ export const inspectHelp = `用法：yunbox inspect --push [选项]
   --file-limit <size> 单文件原始大小限额（默认 10m，适用于 Git 和 LFS）
   --top <number>      文本排行条数（默认 10）；JSON 始终包含全部明细
   --json              输出 schemaVersion=1 的 JSON，包括错误
+  --confirm           超限时询问是否继续（macOS 原生对话框，否则终端）；确认后退出码为 0
   -h, --help          显示帮助
 
 size 支持字节及 k/m/g、KiB/MiB/GiB（1024 进制）。退出码：0 未超限，1 超限，2 检查失败。
@@ -42,6 +44,7 @@ export async function runInspect(context: CliContext, args: string[]): Promise<n
       'file-limit': { type: 'string' },
       'top': { type: 'string' },
       'json': { type: 'boolean' },
+      'confirm': { type: 'boolean' },
       'help': { type: 'boolean', short: 'h' },
     } })
     if (values.help) {
@@ -50,6 +53,8 @@ export async function runInspect(context: CliContext, args: string[]): Promise<n
     }
     if (!values.push || (values.stdin && (values.base !== undefined || values.head !== undefined)))
       throw new InspectionError('请指定 --push；--stdin 不能与 --base / --head 同时使用')
+    if (values.confirm && json)
+      throw new InspectionError('--confirm 不能与 --json 同时使用')
     if (values.remote?.startsWith('-') || values.remote === '')
       throw new InspectionError('无效的远端名称')
     const top = Number(values.top ?? '10')
@@ -66,6 +71,11 @@ export async function runInspect(context: CliContext, args: string[]): Promise<n
     const range = await resolveInspectionRange(repo, { updates, base: values.base, head: values.head, remote: values.remote })
     const report = await inspectPush(repo, range, limits)
     context.stdout.write(values.json ? `${JSON.stringify(report)}\n` : formatInspection(report, top))
+    if (report.status === 'exceeded' && values.confirm) {
+      const confirmed = await confirmPush(repo, report, { remote: values.remote, updates, head: values.head })
+      context.stderr.write(confirmed ? '已确认，继续推送。\n' : '已取消推送。\n')
+      return confirmed ? 0 : 1
+    }
     return report.status === 'exceeded' ? 1 : 0
   }
   catch (error) {

@@ -76,6 +76,7 @@ describe('composed pre-push hook', () => {
     await writeFile(hook, '#!/bin/sh\n# user change\n')
     expect((await runYunBox(sandbox, repo, ['hook', 'uninstall'])).code).toBe(1)
     expect(await readFile(hook, 'utf8')).toContain('user change')
+    expect((await runYunBox(sandbox, repo, ['hook', 'install', '--guard', guard, '--confirm'])).code).toBe(2)
     await git(sandbox, repo, 'config', 'core.hooksPath', '/custom/hooks')
     expect((await runYunBox(sandbox, repo, ['hook', 'install', '--guard', guard])).code).toBe(1)
     // Windows has no execute bit to check; Git for Windows runs hooks through sh.

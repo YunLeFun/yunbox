@@ -51,6 +51,8 @@ export async function createSandbox(options: { credentialHelper?: boolean } = {}
   }
   // Keep `yunbox login` away from the developer's real macOS keychain.
   env.YUNBOX_CREDENTIAL_STORE = 'file'
+  // Never open a real push confirmation dialog or read the developer's terminal.
+  env.YUNBOX_CONFIRM_UI = 'none'
   delete env.GIT_ASKPASS
   delete env.SSH_ASKPASS
   delete env.GIT_DIR

@@ -17,11 +17,12 @@ interface HookState {
   hadOriginal: boolean
 }
 
-export const hookHelp = `用法：yunbox hook install [--guard <absolute-path>] | yunbox hook uninstall
+export const hookHelp = `用法：yunbox hook install [--confirm | --guard <absolute-path>] | yunbox hook uninstall
 
 安装串行 pre-push 包装层：检查通过后才执行原有钩子（包括 git-lfs 上传）。
 原钩子保留在 pre-push.yunbox-original，uninstall 恢复它。不会修改已有 Git 提交。
 默认调用当前已构建的 YunBox CLI，超限时阻止推送。
+--confirm 超限时列出各文件的大小变化并询问是否继续（macOS 原生对话框，否则终端）。
 --guard 指定额外的确认程序，例如 ~/.local/libexec/git-confirm-large-push。
 有自定义 core.hooksPath 或非普通文件钩子时拒绝安装，避免改动共享配置。
 `
@@ -33,8 +34,8 @@ export async function runHook(context: CliContext, args: string[]): Promise<numb
     return 0
   }
   const [operation, ...rest] = args
-  const { values } = parseArgs({ args: rest, options: { guard: { type: 'string' } } })
-  if (!['install', 'uninstall'].includes(operation!) || (operation === 'uninstall' && values.guard))
+  const { values } = parseArgs({ args: rest, options: { guard: { type: 'string' }, confirm: { type: 'boolean' } } })
+  if (!['install', 'uninstall'].includes(operation!) || (operation === 'uninstall' && (values.guard || values.confirm)) || (values.guard && values.confirm))
     throw new CliError(hookHelp, 2)
   const root = await findRepositoryRoot(context)
   if (!root)
@@ -85,7 +86,7 @@ export async function runHook(context: CliContext, args: string[]): Promise<numb
     const cli = fileURLToPath(new URL('./cli.mjs', import.meta.url))
     if (!(await regularFile(cli)))
       throw new CliError('请先构建并安装 YunBox CLI，或使用 --guard 指定检查程序')
-    command = `${shellQuote(process.execPath)} ${shellQuote(cli)} inspect --push --stdin --remote "$2"`
+    command = `${shellQuote(process.execPath)} ${shellQuote(cli)} inspect --push --stdin --remote "$2"${values.confirm ? ' --confirm' : ''}`
   }
   const hadOriginal = state?.hadOriginal ?? Boolean(hookFile)
   const originalExecutable = isExecutableMode((state ? backupFile : hookFile)?.mode ?? 0)

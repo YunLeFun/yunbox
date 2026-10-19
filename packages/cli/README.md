@@ -38,7 +38,7 @@ git yunbox clone <仓库地址>    # clone 历史 + 登记传输代理 + 下载�
 | `yunbox policy` | 输出子账号的最小权限 CAM 策略 |
 | `yunbox buckets` | 列出本机密钥能看到的 bucket |
 | `yunbox status` | 当前仓库 LFS 对象的数量和总大小 |
-| `yunbox inspect --push` | 推送前检查 Git 和 LFS 的体积 |
+| `yunbox inspect --push` | 推送前检查 Git 和 LFS 的体积，逐个文件列出大小变化；`--confirm` 超限时弹窗确认 |
 
 `git yunbox --help` 会被 Git 改写成 `git help yunbox`，查看帮助请用 `git yunbox help` 或 `yunbox --help`。
 
