@@ -2,10 +2,11 @@ import type { CliContext } from './context.ts'
 import type { InspectionChange, PushInspection } from './inspect.ts'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
-import { mkdtemp, open, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, open, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import process from 'node:process'
+import { escapeHtml, renderDiffHtml, textDiff } from './diff-page.ts'
 import { inspectGit } from './inspect-git.ts'
 import { CHANGE_LABELS, compactBytes, describeSizeChange, exceededReasons } from './inspect.ts'
 
@@ -87,8 +88,9 @@ tr.preview:has(a.path:focus-visible) td { background: color-mix(in srgb, var(--a
  * Previews need no script in the page: a previewable row is a `target="_blank"` link to
  * `yunbox-preview:<row>`, which WebKit hands to the UI delegate as a new-window request.
  * The delegate opens no window; it copies the row's versions (`preview.items[row]`) from
- * the LFS store or `git cat-file` into `preview.dir` and shows them in Quick Look. The
- * directory is removed when the alert closes.
+ * the LFS store or `git cat-file` into `preview.dir` and shows them in Quick Look, along
+ * with a diff page already written there for text files. The directory is removed when
+ * the alert closes.
  */
 const DIALOG_SCRIPT = `
 ObjC.import('Cocoa')
@@ -127,6 +129,9 @@ function run(argv) {
       const path = folder.stringByAppendingPathComponent(version.name)
       if (files.fileExistsAtPath(path))
         return path
+      // Pages written before the dialog opened (a text diff) have no object to extract.
+      if (!version.oid)
+        return undefined
       if (preview.lfs) {
         const stored = $(preview.lfs).stringByAppendingPathComponent([version.oid.slice(0, 2), version.oid.slice(2, 4), version.oid].join('/'))
         if (files.fileExistsAtPath(stored))
@@ -162,7 +167,7 @@ function run(argv) {
             const panel = $.QLPreviewPanel.sharedPreviewPanel
             panel.dataSource = source
             panel.reloadData
-            // Start on the pushed version; the left arrow goes back to the one before.
+            // Start on the last item: the diff of a text file, else the pushed version; the left arrow steps back.
             panel.currentPreviewItemIndex = items.length - 1
             // The alert is modal; without this the panel would not take the arrow keys or Esc.
             panel.worksWhenModal = true
@@ -271,6 +276,31 @@ function fileName(name: string, tag?: string): string {
     stem = stem.slice(0, -1)
   const result = `${stem.join('')}${tag ? `（${tag}）` : ''}${extension}`
   return result === '' || result === '.' || result === '..' ? `file${result}` : result
+}
+
+/** A Quick Look item of a row: a version to extract, or a page already in the row's folder. */
+type PreviewItem = PreviewVersion | { name: string }
+
+/** Text files diffed before the dialog opens, at most; later rows keep their two versions. */
+const DIFF_PAGES = 100
+
+/**
+ * Write a diff page for each modified text file among the listed rows into `dir/<row>/`
+ * and add it after the row's versions, so Quick Look opens on the diff.
+ */
+async function addDiffPages(context: CliContext, dir: string, shown: InspectionChange[], items: PreviewItem[][]): Promise<void> {
+  const rows = shown.map((change, index) => ({ change, index })).filter(({ change }) => change.status === 'modified' && change.storage === 'git').slice(0, DIFF_PAGES)
+  for (let offset = 0; offset < rows.length; offset += 8) {
+    await Promise.all(rows.slice(offset, offset + 8).map(async ({ change, index }) => {
+      const diff = await textDiff(context, change)
+      if (diff === undefined)
+        return
+      const name = fileName(`${visible(change.path.slice(change.path.lastIndexOf('/') + 1))}.html`, '差异')
+      await mkdir(join(dir, String(index)), { recursive: true })
+      await writeFile(join(dir, String(index), name), renderDiffHtml(visible(change.path), diff))
+      items[index]!.push({ name })
+    }))
+  }
 }
 
 /** Both ends of a push, as the confirmation names and links them. */
@@ -451,10 +481,12 @@ async function askDialog(context: CliContext, report: PushInspection, push: Push
   const height = Math.min(560, Math.max(300, 210 + shown.length * 29))
   const title = push.target ? `推送到 ${push.target} 超过限额` : '推送超过限额'
   const info = [push.source, ...exceededReasons(report)].join('\n')
-  const items = shown.map(previewVersions)
+  const items: PreviewItem[][] = shown.map(previewVersions)
   // Private (0700) and removed when the dialog closes; the dialog removes it too.
   const dir = items.some(versions => versions.length) ? await mkdtemp(join(tmpdir(), 'yunbox-preview-')) : undefined
   try {
+    if (dir)
+      await addDiffPages(context, dir, shown, items)
     const preview = dir && { dir, lfs: await lfsObjects(context), items }
     const links = JSON.stringify({ root: push.root, web: push.web, preview })
     const args = ['-l', 'JavaScript', '-e', DIALOG_SCRIPT, title, info, String(height), context.env.YUNBOX_CONFIRM_SNAPSHOT ?? '', links]
@@ -561,8 +593,4 @@ function row(change: InspectionChange, largest: number, preview?: number): strin
 function visible(text: string): string {
   // eslint-disable-next-line no-control-regex
   return text.replace(/[\u0000-\u001F\u007F]/g, character => `\\x${character.charCodeAt(0).toString(16).padStart(2, '0')}`)
-}
-
-function escapeHtml(text: string): string {
-  return text.replace(/[&<>"']/g, character => `&#${character.charCodeAt(0)};`)
 }
