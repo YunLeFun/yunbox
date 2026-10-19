@@ -6,6 +6,8 @@ public struct InspectionReport: Decodable, Sendable {
     public let status: String
     public let limits: Limits
     public let warnings: [String]
+    /// Per-path changes; `nil` in reports from a CLI older than this field.
+    public let changes: [Change]?
     public let git: GitSummary
     public let lfs: LFSSummary
 
@@ -35,11 +37,59 @@ public struct InspectionReport: Decodable, Sendable {
         public let files: [ContentObject]
     }
 
+    /// One path's net change across the pushed commits.
+    public struct Change: Decodable, Sendable {
+        public let path: String
+        /// `added`, `modified`, `deleted` or `transient` (added and deleted again within the push).
+        public let status: String
+        public let storage: String
+        public let beforeBytes: Int64?
+        public let afterBytes: Int64?
+        /// LFS payload SHA-256 for LFS files, Git blob ID otherwise; `nil` from older CLIs too.
+        public let beforeOid: String?
+        public let afterOid: String?
+        public let versions: Int
+        public let pushBytes: Int64
+        public let exceedsFileLimit: Bool
+
+        public var statusLabel: String {
+            switch status {
+            case "added": "新增"
+            case "modified": "修改"
+            case "deleted": "删除"
+            case "transient": "临时"
+            default: status
+            }
+        }
+    }
+
     public struct ContentObject: Decodable, Sendable {
         public let oid: String
         public let bytes: Int64
         public let paths: [String]
         public let exceedsFileLimit: Bool
+    }
+
+    /// The change a content object belongs to: the path it is the pushed version of, else any of its paths.
+    public func change(for row: FileRow) -> Change? {
+        change(for: row, in: changesByPath())
+    }
+
+    /// `change(for:)` of every file row, keyed by row ID.
+    public func changeIndex() -> [String: Change] {
+        let byPath = changesByPath()
+        var index: [String: Change] = [:]
+        for row in files { index[row.id] = change(for: row, in: byPath) }
+        return index
+    }
+
+    private func changesByPath() -> [String: Change] {
+        Dictionary((changes ?? []).map { ($0.path, $0) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    private func change(for row: FileRow, in byPath: [String: Change]) -> Change? {
+        let candidates = row.object.paths.compactMap { byPath[$0] }
+        return candidates.first { $0.afterOid == row.object.oid } ?? candidates.first
     }
 
     public var files: [FileRow] {

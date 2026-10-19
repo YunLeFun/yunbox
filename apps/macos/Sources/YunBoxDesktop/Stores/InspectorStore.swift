@@ -6,7 +6,11 @@ import YunBoxKit
 final class InspectorStore {
     var repository: URL?
     var recents: RecentRepositories
-    var result: InspectionResult?
+    var result: InspectionResult? {
+        didSet { changeIndex = result?.report.changeIndex() ?? [:] }
+    }
+    /// The change each file row belongs to, by row ID.
+    private(set) var changeIndex: [String: InspectionReport.Change] = [:]
     /// True while `result` comes from the on-disk cache and a fresh inspection has not replaced it.
     var isShowingCache = false
     var rows: [FileRow] = []
@@ -32,6 +36,8 @@ final class InspectorStore {
     @ObservationIgnored private let cache = InspectionCache.standard()
     /// Repository path the current `result` belongs to.
     @ObservationIgnored private var resultPath: String?
+    /// Versions exported for previews; private to this user, removed on quit and when switching repositories.
+    @ObservationIgnored private var previewRoot: URL?
 
     init() {
         // Normalize like `select` does (e.g. /private/tmp → /tmp) so a stored path and a reopened one match.
@@ -46,6 +52,9 @@ final class InspectorStore {
             repository = URL(fileURLWithPath: first)
         }
         if let repository { showCachedResult(for: repository.path) }
+        NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.removePreviews() }
+        }
     }
 
     var recentPaths: [String] { recents.paths }
@@ -69,6 +78,7 @@ final class InspectorStore {
         if root.path == "/" { root = url.standardizedFileURL }
         if root == repository, result != nil || isInspecting { return true }
         repository = root
+        removePreviews()
         for dropped in recents.open(root.path) { cache?.remove(path: dropped) }
         saveRecents()
         showCachedResult(for: root.path)
@@ -210,6 +220,29 @@ final class InspectorStore {
             do { try await Task.sleep(for: .seconds(2)) } catch { return }
             copiedJSON = false
         }
+    }
+
+    func change(for row: FileRow) -> InspectionReport.Change? { changeIndex[row.id] }
+
+    /// Reads pushed versions of the current repository with the Git the CLI uses.
+    func contentReader() -> ContentReader? {
+        guard let repository else { return nil }
+        return (try? client())?.contentReader(repository: repository) ?? ContentReader(repository: repository)
+    }
+
+    /// Where the version `oid` is exported under the Quick Look title `name`.
+    func previewFile(oid: String, name: String) throws -> URL {
+        let root = previewRoot ?? FileManager.default.temporaryDirectory.appending(path: "YunBoxPreview-\(UUID().uuidString)", directoryHint: .isDirectory)
+        if previewRoot == nil {
+            try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+            previewRoot = root
+        }
+        return root.appending(path: oid, directoryHint: .isDirectory).appending(path: name)
+    }
+
+    private func removePreviews() {
+        if let previewRoot { try? FileManager.default.removeItem(at: previewRoot) }
+        previewRoot = nil
     }
 
     func reveal(_ row: FileRow) {

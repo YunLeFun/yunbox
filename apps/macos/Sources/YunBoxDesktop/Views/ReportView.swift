@@ -4,8 +4,25 @@ import YunBoxKit
 struct ReportView: View {
     @Bindable var store: InspectorStore
     let report: InspectionReport
+    @State private var summaryHeight: CGFloat = 300
+    @State private var footerHeight: CGFloat = 30
 
+    /// The file list and its detail pane fill the window below the summary; on a short window
+    /// the report scrolls instead of squeezing them.
     var body: some View {
+        GeometryReader { viewport in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    summary.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { summaryHeight = $0 }
+                    FileTableView(store: store)
+                        .frame(height: max(400, viewport.size.height - summaryHeight - footerHeight - 48 - 32))
+                    footer.onGeometryChange(for: CGFloat.self) { $0.size.height } action: { footerHeight = $0 }
+                }.padding(24)
+            }
+        }
+    }
+
+    private var summary: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Label(report.status == "exceeded" ? "超过预算" : "预算内", systemImage: report.status == "exceeded" ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
@@ -34,7 +51,11 @@ struct ReportView: View {
                 Spacer()
                 TextField("搜索路径或对象 ID", text: $store.query).textFieldStyle(.roundedBorder).frame(maxWidth: 240)
             }
-            FileTableView(store: store)
+        }
+    }
+
+    private var footer: some View {
+        VStack(alignment: .leading, spacing: 16) {
             if !report.warnings.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(report.warnings, id: \.self) { warning in
@@ -44,7 +65,7 @@ struct ReportView: View {
             }
             Text("已提交内容 · 同内容去重，历史版本分别统计 · 文件原始大小不等于压缩上传量")
                 .font(.caption2).foregroundStyle(.tertiary)
-        }.padding(24)
+        }
     }
 }
 

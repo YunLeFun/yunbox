@@ -59,14 +59,13 @@ public struct InspectionClient: Sendable {
         return CommandOutput(exitCode: output.exitCode, text: String(decoding: output.data, as: UTF8.self))
     }
 
+    /// Reads pushed versions of `repository` with the same Git the CLI uses.
+    public func contentReader(repository: URL) -> ContentReader {
+        ContentReader(repository: repository, environment: environment())
+    }
+
     private func environment() -> [String: String] {
-        var environment = ProcessInfo.processInfo.environment
-        let standardPath = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
-        environment["PATH"] = "\(node.deletingLastPathComponent().path):\(environment["PATH"] ?? ""):\(standardPath)"
-        environment["GIT_TERMINAL_PROMPT"] = "0"
-        // A selected directory is authoritative, even if launched from a shell with Git overrides.
-        for key in ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"] { environment.removeValue(forKey: key) }
-        return environment
+        toolEnvironment(prepending: node.deletingLastPathComponent().path)
     }
 
     public static func bundled(nodeOverride: String = "", bundle: Bundle = .main) throws -> InspectionClient {
