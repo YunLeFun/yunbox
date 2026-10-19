@@ -181,7 +181,7 @@ yunbox policy --read-only  # 只读：GetObject、HeadObject
 yunbox policy --bucket assets-1250000000 --region ap-guangzhou --prefix yunbox/team/game   # 不在仓库里时
 ```
 
-它读取 `.yunboxconfig`，把策略 JSON 打印到标准输出（可以 `| pbcopy`），**不调用任何 CAM 接口，也不需要密钥**。输出形如：
+它读取 `.yunbox/config`，把策略 JSON 打印到标准输出（可以 `| pbcopy`），**不调用任何 CAM 接口，也不需要密钥**。输出形如：
 
 ```json
 {
@@ -203,7 +203,7 @@ yunbox policy --bucket assets-1250000000 --region ap-guangzhou --prefix yunbox/t
 ```
 
 - **为什么是这三个动作**：传输代理上传前先 `HEAD` 判断对象是否已存在，再带 `x-cos-forbid-overwrite: true` 做 `PUT`；下载是 `GET`。`init` / `doctor` 的读写探测也只用这三个动作，固定写入 `<前缀>/_yunbox/probe`（20 字节，反复覆盖同一个对象）。不授予 `DeleteObject`、`GetBucket`（列出对象）、`GetService`（列出 bucket）和任何 ACL 动作。
-- **没有 `GetService` 的影响**：协作者的 `yunbox login` 会提示「这个子账号不能列出 bucket」，这是正常的；`git yunbox init` 在仓库已有 `.yunboxconfig` 时不需要列出 bucket。第一次接入仓库（选 bucket、新建 bucket）用管理员自己的账号做。
+- **没有 `GetService` 的影响**：协作者的 `yunbox login` 会提示「这个子账号不能列出 bucket」，这是正常的；`git yunbox init` 在仓库已有 `.yunbox/config` 时不需要列出 bucket。第一次接入仓库（选 bucket、新建 bucket）用管理员自己的账号做。
 - **前缀为空时**策略覆盖整个 bucket，`yunbox policy` 会提示。多个仓库共用 bucket 时，每个仓库用自己的前缀（`init` 默认 `yunbox/<owner>/<repo>`），每个子账号只关联它要用的仓库的策略。
 - **已核实**（2026-10-18，腾讯云文档）：资源六段式与 `uid/<APPID>` 写法见 [COS 访问策略语言概述](https://cloud.tencent.com/document/product/436/12469)；`name/cos:PutObject`、`name/cos:GetObject`、`name/cos:HeadObject` 是三个独立的动作，资源可以写成 `<bucket>/<目录>/*`，见 [授权粒度详情](https://cloud.tencent.com/document/product/436/31923)；按目录授权子账号的写法见 [CAM 文档的按目录授权示例](https://cloud.tencent.com/document/product/598/11084)。自动测试里的 COS 测试替身会按这份策略拒绝请求，覆盖了「只有这份策略时能 init、doctor、push、clone，前缀外被拒，只读策略不能 push」。
 - **未核实**：用这份策略的真实子账号还没在真实 bucket 上跑过（试点时补上）；控制台菜单名称以当时界面为准。

@@ -12,7 +12,7 @@ import { cosAppIdOf, CosRequestError, createCosBucket, listCosBuckets } from '@y
 import { CliError, print, USAGE_EXIT_CODE } from '../context.ts'
 import { CosDirectClient, PROBE_OPERATIONS } from '../cos/client.ts'
 import { requireCredentials } from '../cos/credentials.ts'
-import { describeLocation, LOCATION_FILE, normalizeLocation, readLocation, writeLocation } from '../cos/location.ts'
+import { describeLocation, LEGACY_LOCATION_FILE, LOCATION_FILE, normalizeLocation, readLocation, sameLocation, writeLocation } from '../cos/location.ts'
 import { readGitConfig, runGit, runGitChecked } from '../git.ts'
 import { askRequired, createLineReader } from '../prompt.ts'
 import { printStep } from '../report.ts'
@@ -26,7 +26,7 @@ type InstallStep = (context: CliContext, repo: CliContext, root: string, categor
  * `git yunbox init` in COS mode: no YunBox server. git-lfs hands every object
  * to `git-yunbox lfs-agent`, which uploads and downloads directly with the
  * user's own Tencent Cloud keys. The bucket, region and prefix go into the
- * committed `.yunboxconfig`; the agent registration goes into this clone's
+ * committed `.yunbox/config`; the agent registration goes into this clone's
  * `.git/config`, because git-lfs ignores transfer-agent settings in
  * `.lfsconfig` for safety.
  */
@@ -46,9 +46,9 @@ export async function runInitCos(
   const { credentials } = resolved
   const ask = createLineReader(context)
   try {
-    // 1. Where the objects go: .yunboxconfig, options, or an interactive choice.
+    // 1. Where the objects go: .yunbox/config, options, or an interactive choice.
     const existing = await readLocation(repo, root).catch((error: Error) => {
-      throw new CliError(`${LOCATION_FILE} 的配置不对：${error.message}`)
+      throw new CliError(`COS 位置的配置不对：${error.message}`)
     })
     const choosing = values.bucket !== undefined || values.region !== undefined || values.prefix !== undefined || values.create === true || existing === undefined
     let location: CosLocation
@@ -90,12 +90,15 @@ export async function runInitCos(
     // 3. Shared steps, then the COS settings.
     // Joining a repository that is already set up must not change its committed .gitattributes.
     await install(context, repo, root, choosing || values.types !== undefined ? categories : undefined)
+    let removedLegacy = false
     if (existing !== undefined && sameLocation(existing, location)) {
-      printStep(context, { status: 'pass', title: LOCATION_FILE, detail: `已是 ${describeLocation(location)}，未修改` })
+      printStep(context, { status: 'pass', title: 'COS 位置', detail: `已是 ${describeLocation(location)}，未修改` })
     }
     else {
-      await writeLocation(repo, root, location)
+      ({ removedLegacy } = await writeLocation(repo, root, location))
       printStep(context, { status: 'pass', title: LOCATION_FILE, detail: `bucket / region / prefix = ${describeLocation(location)}（不含密钥，提交后团队共享）` })
+      if (removedLegacy)
+        printStep(context, { status: 'pass', title: LEGACY_LOCATION_FILE, detail: `旧版的配置文件已删除，改用 ${LOCATION_FILE}` })
     }
     const leftoverUrl = await readGitConfig(repo, 'lfs.url', join(root, '.lfsconfig'))
     if (leftoverUrl !== undefined) {
@@ -118,7 +121,7 @@ export async function runInitCos(
 
     print(context)
     print(context, '下一步：')
-    print(context, `  git add .gitattributes ${LOCATION_FILE}`)
+    print(context, `  git add .gitattributes ${LOCATION_FILE}${removedLegacy ? ` ${LEGACY_LOCATION_FILE}` : ''}`)
     print(context, '  git commit -m "chore: 用 YunBox 把 LFS 素材直传到 COS"')
     print(context, '  git push')
     print(context)
@@ -233,10 +236,6 @@ async function suggestPrefix(repo: CliContext, root: string): Promise<string> {
   const match = remote.code === 0 ? /[/:]([\w.-]+)\/([\w.-]+?)(?:\.git)?\/?$/.exec(remote.stdout.trim()) : null
   const name = match === null ? basename(root) : `${match[1]}/${match[2]}`
   return `yunbox/${name.replace(/[^\w./-]/g, '-')}`
-}
-
-function sameLocation(a: CosLocation, b: CosLocation): boolean {
-  return a.bucket === b.bucket && a.region === b.region && a.prefix === b.prefix && a.endpoint === b.endpoint
 }
 
 /**

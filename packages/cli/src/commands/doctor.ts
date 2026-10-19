@@ -8,7 +8,7 @@ import { parseArgs } from 'node:util'
 import { CliError, print, USAGE_EXIT_CODE } from '../context.ts'
 import { CosDirectClient, PROBE_OPERATIONS } from '../cos/client.ts'
 import { resolveCredentials } from '../cos/credentials.ts'
-import { describeLocation, readLocation } from '../cos/location.ts'
+import { describeLocation, LEGACY_LOCATION_FILE, LOCATION_FILE, locationFiles, readLocation } from '../cos/location.ts'
 import { defaultSecretStores } from '../cos/secret-store.ts'
 import { fillCredential, findCredentialHelper, rejectCommand, suggestedHelperCommands } from '../credentials.ts'
 import {
@@ -134,7 +134,7 @@ async function diagnose(context: CliContext, report: (step: StepReport) => void,
     location = await readLocation(repo, root)
   }
   catch (error) {
-    report({ status: 'fail', title: '.yunboxconfig', detail: (error as Error).message, fixes: ['git yunbox init --cos --force   # 重新选择 bucket 和前缀'] })
+    report({ status: 'fail', title: 'COS 位置', detail: (error as Error).message, fixes: ['git yunbox init --cos --force   # 重新选择 bucket 和前缀'] })
     return
   }
   if (location !== undefined) {
@@ -361,7 +361,13 @@ function redactUrl(value: string): string {
 
 /** Checks for COS mode: the agent registration, local keys and access to the prefix. */
 async function diagnoseCos(repo: CliContext, location: CosLocation, report: (step: StepReport) => void, readOnly: boolean): Promise<void> {
-  report({ status: 'pass', title: 'COS 位置', detail: `${describeLocation(location)}（来自 .yunboxconfig）` })
+  const files = locationFiles(repo.cwd)
+  report({ status: 'pass', title: 'COS 位置', detail: `${describeLocation(location)}（来自 ${files[0]}）` })
+  if (files.includes(LEGACY_LOCATION_FILE)) {
+    report(files.includes(LOCATION_FILE)
+      ? { status: 'warn', title: LEGACY_LOCATION_FILE, detail: `和 ${LOCATION_FILE} 一致，只供 0.1.x 版本的协作者读取`, fixes: [`git rm ${LEGACY_LOCATION_FILE}   # 协作者都升级后删除`] }
+      : { status: 'warn', title: LEGACY_LOCATION_FILE, detail: `旧版的配置位置，新版本改为 ${LOCATION_FILE}`, fixes: [`mkdir -p .yunbox && git mv ${LEGACY_LOCATION_FILE} ${LOCATION_FILE}`] })
+  }
   const agent = await readGitConfig(repo, 'lfs.standalonetransferagent')
   const agentPath = await readGitConfig(repo, `lfs.customtransfer.${AGENT_NAME}.path`)
   report(agent === AGENT_NAME && agentPath !== undefined
@@ -411,7 +417,7 @@ async function diagnoseCos(repo: CliContext, location: CosLocation, report: (ste
     status: 'fail',
     title: 'COS 权限',
     detail: `${failed?.operation ?? 'PUT'} 返回 ${failed?.status || '无响应'}`,
-    fixes: ['检查 .yunboxconfig 里的 bucket 和 region', '确认子账号有这个前缀的 PutObject、GetObject、HeadObject 权限', 'yunbox login   # 密钥失效时重新保存'],
+    fixes: [`检查 ${LOCATION_FILE} 里的 bucket 和 region`, '确认子账号有这个前缀的 PutObject、GetObject、HeadObject 权限', 'yunbox login   # 密钥失效时重新保存'],
   })
 }
 

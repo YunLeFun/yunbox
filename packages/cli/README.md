@@ -13,7 +13,7 @@ npm install -g yunbox
 ```bash
 yunbox login        # 保存自己的腾讯云 SecretId / SecretKey（macOS 存进钥匙串）
 git yunbox init     # 选择或新建私有 bucket，填目录前缀，自动检查读写权限
-git add .gitattributes .yunboxconfig
+git add .gitattributes .yunbox/config
 git commit -m "chore: 用 YunBox 把 LFS 素材直传到 COS"
 git push
 ```
@@ -32,7 +32,7 @@ git yunbox clone <仓库地址>    # clone 历史 + 登记传输代理 + 下载�
 | 命令 | 作用 |
 |---|---|
 | `yunbox login` / `logout` | 保存 / 删除本机的腾讯云密钥。SecretKey 只从终端提示或标准输入读取 |
-| `git yunbox init` | 接入仓库：`.gitattributes`、`.yunboxconfig`（只有 bucket、地域、前缀，不含密钥）和本机的传输代理 |
+| `git yunbox init` | 接入仓库：`.gitattributes`、`.yunbox/config`（只有 bucket、地域、前缀，不含密钥）和本机的传输代理 |
 | `git yunbox clone` | clone 一个已接入的仓库并下载素材 |
 | `yunbox doctor` | 检查传输代理、密钥和 COS 读写权限，给出修复命令；`--json` 供图形界面使用 |
 | `yunbox policy` | 输出子账号的最小权限 CAM 策略 |

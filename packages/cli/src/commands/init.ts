@@ -4,7 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
 import { CliError, print, USAGE_EXIT_CODE } from '../context.ts'
-import { LOCATION_FILE } from '../cos/location.ts'
+import { locationFiles } from '../cos/location.ts'
 import { approveCredential, assertTokenShape, fillCredential, findCredentialHelper, suggestedHelperCommands } from '../credentials.ts'
 import {
   compareVersions,
@@ -30,13 +30,13 @@ export const initHelp = `用法：git yunbox init [选项]
 
 在当前 Git 仓库里接入 YunBox。默认直连 COS，不需要任何服务端：
   1. 检查 git 和 git-lfs 版本，执行 git lfs install
-  2. 选择 COS bucket（或新建私有 bucket）和目录前缀，写进 .yunboxconfig（不含密钥，提交后团队共享）
+  2. 选择 COS bucket（或新建私有 bucket）和目录前缀，写进 .yunbox/config（不含密钥，提交后团队共享）
   3. 用本机密钥检查能否在这个前缀写入和读取
   4. 按素材类型生成或合并 .gitattributes（已有规则不会重复添加）
   5. 在本仓库的 .git/config 登记传输代理：git-lfs 用 git-yunbox lfs-agent 直接上传下载
   6. 设置 lfs.locksverify=false（直连模式没有文件锁服务）
 
-.yunboxconfig 已存在时（例如别人已经接入、你刚 clone 下来）不会再提问，只做第 3、5、6 步。
+.yunbox/config（或旧版的 .yunboxconfig）已存在时（例如别人已经接入、你刚 clone 下来）不会再提问，只做第 3、5、6 步。
 可以重复执行，不会破坏已有配置。密钥用 yunbox login 保存在本机，不会写进仓库。
 
 直连 COS 的选项：
@@ -46,7 +46,7 @@ export const initHelp = `用法：git yunbox init [选项]
   --create           新建私有 bucket（会先确认，--yes 跳过确认）
   --read-only        只需要拉取：密钥没有写权限时不提示警告
   --yes, -y          跳过确认
-  --force            .yunboxconfig 或 .lfsconfig 里已有不同的配置时替换它
+  --force            .yunbox/config 或 .lfsconfig 里已有不同的配置时替换它
 
 服务端模式（使用 YunBox 服务端和个人 token）：
   --url <地址>       YunBox 仓库地址，例如 https://lfs.example.com/team/assets；
@@ -80,7 +80,9 @@ export async function runInit(context: CliContext, args: string[]): Promise<numb
   const lfsConfigPath = join(root, '.lfsconfig')
   const currentUrl = await readGitConfig(repo, 'lfs.url', lfsConfigPath)
   const cosOptions = values.bucket !== undefined || values.region !== undefined || values.prefix !== undefined || values.create === true
-  const hasCosLocation = await readGitConfig(repo, 'cos.bucket', join(root, LOCATION_FILE)) !== undefined
+  let hasCosLocation = false
+  for (const file of locationFiles(root))
+    hasCosLocation ||= await readGitConfig(repo, 'cos.bucket', join(root, file)) !== undefined
   if (values.cos === true || cosOptions || (values.url === undefined && (hasCosLocation || currentUrl === undefined))) {
     if (values.url !== undefined)
       throw new CliError('--url（服务端模式）和 --cos（直连 COS）只能选一个', USAGE_EXIT_CODE)

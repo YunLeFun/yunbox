@@ -17,7 +17,7 @@ export const AGENT_NAME = 'yunbox'
 export const lfsAgentHelp = `用法：git yunbox lfs-agent
 
 git-lfs 的独立传输代理（standalone transfer agent），由 git-lfs 调用，不需要手动运行。
-它读取 .yunboxconfig 里的 [cos] bucket / region / prefix，用本机配置的腾讯云密钥
+它读取 .yunbox/config（旧版为 .yunboxconfig）里的 [cos] bucket / region / prefix，用本机配置的腾讯云密钥
 直接在 COS 上传和下载 LFS 对象，不经过任何服务端。git yunbox init 会在本仓库的
 .git/config 里登记它。
 `
@@ -71,7 +71,7 @@ export async function runLfsAgent(context: CliContext, args: string[]): Promise<
           throw new Error('不在 Git 仓库里')
         location = await readLocation({ ...context, cwd: root }, root)
         if (location === undefined)
-          throw new Error('仓库里没有 .yunboxconfig，先运行 git yunbox init')
+          throw new Error('仓库里没有 .yunbox/config，先运行 git yunbox init')
         const { credentials } = await requireCredentials(context.env)
         client = new CosDirectClient(location, () => credentials)
         const commonDir = await runGitChecked(context, ['rev-parse', '--git-common-dir'])

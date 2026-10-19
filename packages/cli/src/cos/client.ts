@@ -113,7 +113,7 @@ export class CosDirectClient {
     const response = await this.#send('GET', key)
     if (response.statusCode === 404) {
       response.resume()
-      throw new CosClientError('COS 里没有这个对象：可能还没有人推送它，或者 .yunboxconfig 里的 bucket / 前缀不对', 404)
+      throw new CosClientError('COS 里没有这个对象：可能还没有人推送它，或者 .yunbox/config 里的 bucket / 前缀不对', 404)
     }
     if (response.statusCode !== 200)
       throw this.#error('GET', response.statusCode, await readText(response))
@@ -208,7 +208,7 @@ export class CosDirectClient {
     const hint = status === 403
       ? '：密钥没有这个 bucket / 前缀的权限，或者已经失效（yunbox doctor 可以检查）'
       : status === 404 && code === 'NoSuchBucket'
-        ? '：bucket 不存在，检查 .yunboxconfig 里的 cos.bucket 和 cos.region'
+        ? '：bucket 不存在，检查 .yunbox/config 里的 cos.bucket 和 cos.region'
         : ''
     return new CosClientError(`COS ${operation} 失败，HTTP ${status ?? 0}${code === undefined ? '' : ` ${code}`}${hint}`, status ?? 0)
   }

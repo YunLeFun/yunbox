@@ -3,7 +3,7 @@ import type { Sandbox } from './helpers.ts'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { chmod, mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { delimiter, join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -84,7 +84,7 @@ describe('git-lfs directly to COS, without a server', () => {
     expect(init.stderr).toBe('')
     expect(init.code).toBe(0)
     expect(init.stdout).toContain('可以在 team-assets-1250000000（ap-shanghai）/yunbox/team/game/ 写入和读取')
-    const shared = await readFile(join(repo, '.yunboxconfig'), 'utf8')
+    const shared = await readFile(join(repo, '.yunbox', 'config'), 'utf8')
     expect(shared).toContain('bucket = team-assets-1250000000')
     expect(shared).toContain('prefix = yunbox/team/game')
     expect(shared).not.toMatch(/secret|AKID/i)
@@ -93,7 +93,16 @@ describe('git-lfs directly to COS, without a server', () => {
     expect(await git(sandbox, repo, 'config', '--local', 'lfs.customtransfer.yunbox.path')).toBe('git-yunbox')
     const doctor = await runYunBox(sandbox, repo, ['doctor'])
     expect(doctor.stdout).toContain('COS 权限')
+    expect(doctor.stdout).toContain('（来自 .yunbox/config）')
     expect(doctor.code).toBe(0)
+
+    // A repository set up by 0.1.x keeps working and is told how to move its settings.
+    await rename(join(repo, '.yunbox', 'config'), join(repo, '.yunboxconfig'))
+    const legacy = await runYunBox(sandbox, repo, ['doctor'])
+    expect(legacy.stdout).toContain('（来自 .yunboxconfig）')
+    expect(legacy.stdout).toContain('git mv .yunboxconfig .yunbox/config')
+    expect(legacy.code).toBe(0)
+    await rename(join(repo, '.yunboxconfig'), join(repo, '.yunbox', 'config'))
 
     const first = Buffer.alloc(3 * 1024 * 1024, 7)
     await writeFile(join(repo, 'car.fbx'), first)
@@ -172,7 +181,7 @@ describe('git-lfs directly to COS, without a server', () => {
     const run = await runYunBox(sandbox, repo, ['init', '--bucket', 'team-assets-1250000000', '--region', 'ap-shanghai', '--prefix', 'yunbox/x'])
     expect(run.code).toBe(1)
     expect(run.stderr).toContain('不能访问 team-assets-1250000000（ap-shanghai）/yunbox/x/')
-    await expect(stat(join(repo, '.yunboxconfig'))).rejects.toThrow()
+    await expect(stat(join(repo, '.yunbox'))).rejects.toThrow()
     await expect(git(sandbox, repo, 'config', '--local', 'lfs.standalonetransferagent')).rejects.toThrow()
   })
 

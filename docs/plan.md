@@ -311,6 +311,13 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **提醒**：`yunbox doctor` 和 `git yunbox init` 发现正在用 tccli 临时密钥时，提示换成 `yunbox subaccount create --save`。
 - **实测**：在真实 CAM 上创建临时子账号、保存密钥到临时目录、等待权限生效并读写测试 bucket、`list`、`delete`，最后 CAM 里没有遗留用户和策略。真实的 `ListAttachedUserPolicies` 不返回策略描述，`list` 改为再调用 `GetPolicy` 取描述。
 
+### 共享配置移到 `.yunbox/` 目录（2026-10-19）
+
+- **决定**：COS 位置从仓库根目录的 `.yunboxconfig` 移到 `.yunbox/config`，格式和键不变（git config 格式，`[cos] bucket / region / prefix`）。按使用者的要求，为以后更多需要提交、共享的文件留出目录。
+- **约定**：`.yunbox/` 只放提交到仓库、团队共享的文件，不放密钥、缓存和本机状态。密钥仍在钥匙串或 `~/.config/yunbox`，传输代理的登记仍在每份 clone 的 `.git/config`。服务端本地存储的默认目录 `.yunbox-data` 不变，它不在业务仓库里。
+- **兼容**：新版本先读 `.yunbox/config`，没有时读旧的 `.yunboxconfig`；两个文件同时存在时必须指向同一位置，否则报错并点名两个文件，不会静默选一个，这样团队升级期间可以两份并存。`init` 只写 `.yunbox/config`，写入新位置时删除旧文件；加入已接入的仓库时不改动任何已提交的文件。`doctor` 发现旧文件时给出 `git mv .yunboxconfig .yunbox/config`（只有旧文件）或 `git rm .yunboxconfig`（两份并存）的提示，只是警告，不算失败。
+- **升级顺序**：0.1.x 只认 `.yunboxconfig`，所以已接入的仓库要等协作者都升级到新版本后再迁移，或者迁移期间两份并存。
+
 ### 后续风险
 
 - CloudBase 云托管绑定运行角色后是否以 `TENCENTCLOUD_*` 环境变量注入临时密钥**未核实**（云函数是这样做的）。如果不是，需要在服务端增加从平台元数据接口获取密钥的代码，或者临时改用只挂最小权限策略的子账号长期密钥。

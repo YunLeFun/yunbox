@@ -1,5 +1,7 @@
 import type { CliContext } from '../context.ts'
-import { join } from 'node:path'
+import { existsSync } from 'node:fs'
+import { mkdir, rm } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import { readGitConfig, runGitChecked } from '../git.ts'
 
 const BUCKET_PATTERN = /^[a-z\d][a-z\d-]{0,48}-\d{5,20}$/
@@ -8,7 +10,7 @@ const PREFIX_SEGMENT_PATTERN = /^[\w.-]+$/
 
 /**
  * Where a repository keeps its LFS objects in COS. Stored in the `[cos]`
- * section of `.yunboxconfig` (git config format), which is committed and
+ * section of `.yunbox/config` (git config format), which is committed and
  * shared; it never holds credentials. It is not in `.lfsconfig` because
  * git-lfs warns about every key it does not know there. Objects live at
  * `<prefix>/<oid[0:2]>/<oid[2:4]>/<oid>`.
@@ -48,18 +50,28 @@ export function objectKey(location: CosLocation, oid: string): string {
   return location.prefix === '' ? path : `${location.prefix}/${path}`
 }
 
-/** The shared COS settings file at the repository root. */
-export const LOCATION_FILE = '.yunboxconfig'
+/**
+ * The shared settings file, relative to the repository root. `.yunbox/` holds
+ * only files that are committed and shared with the team; credentials and the
+ * agent registration stay in the user's home and in `.git/config`.
+ */
+export const LOCATION_FILE = '.yunbox/config'
 
-/** Read the `[cos]` section of `<root>/.yunboxconfig`; `undefined` when there is no bucket. */
-export async function readLocation(context: CliContext, root: string): Promise<CosLocation | undefined> {
-  const file = join(root, LOCATION_FILE)
+/** Where versions up to 0.1.x kept the same settings; still read, never written. */
+export const LEGACY_LOCATION_FILE = '.yunboxconfig'
+
+/** Which settings files exist in `root`, relative paths, current one first. */
+export function locationFiles(root: string): string[] {
+  return [LOCATION_FILE, LEGACY_LOCATION_FILE].filter(file => existsSync(join(root, file)))
+}
+
+async function readLocationFile(context: CliContext, file: string): Promise<CosLocation | undefined> {
   const bucket = await readGitConfig(context, 'cos.bucket', file)
   if (bucket === undefined)
     return undefined
   const region = await readGitConfig(context, 'cos.region', file)
   if (region === undefined)
-    throw new TypeError(`${LOCATION_FILE} 里有 cos.bucket 但没有 cos.region`)
+    throw new TypeError('有 cos.bucket 但没有 cos.region')
   const endpoint = await readGitConfig(context, 'cos.endpoint', file)
   return normalizeLocation({
     bucket,
@@ -69,9 +81,39 @@ export async function readLocation(context: CliContext, root: string): Promise<C
   })
 }
 
-/** Write the location into `<root>/.yunboxconfig`, keeping every other setting. */
-export async function writeLocation(context: CliContext, root: string, location: CosLocation): Promise<void> {
+/**
+ * Read the `[cos]` section of `<root>/.yunbox/config`, falling back to the
+ * legacy `<root>/.yunboxconfig`; `undefined` when neither has a bucket. Both
+ * files may exist while a team upgrades, but only with the same location.
+ *
+ * @throws {TypeError} naming the file when a setting is invalid or the two files disagree.
+ */
+export async function readLocation(context: CliContext, root: string): Promise<CosLocation | undefined> {
+  const found: { file: string, location: CosLocation }[] = []
+  for (const file of locationFiles(root)) {
+    try {
+      const location = await readLocationFile(context, join(root, file))
+      if (location !== undefined)
+        found.push({ file, location })
+    }
+    catch (error) {
+      throw new TypeError(`${file}：${(error as Error).message}`)
+    }
+  }
+  const [current, legacy] = found
+  if (current !== undefined && legacy !== undefined && !sameLocation(current.location, legacy.location))
+    throw new TypeError(`${current.file} 和 ${legacy.file} 的 COS 位置不一致（${describeLocation(current.location)} / ${describeLocation(legacy.location)}），确认 ${current.file} 正确后删除 ${legacy.file}`)
+  return current?.location
+}
+
+/**
+ * Write the location into `<root>/.yunbox/config`, keeping every other
+ * setting there, and delete the legacy `.yunboxconfig` so the two cannot
+ * drift apart. Returns whether the legacy file was removed.
+ */
+export async function writeLocation(context: CliContext, root: string, location: CosLocation): Promise<{ removedLegacy: boolean }> {
   const file = join(root, LOCATION_FILE)
+  await mkdir(dirname(file), { recursive: true })
   await runGitChecked(context, ['config', '--file', file, 'cos.bucket', location.bucket])
   await runGitChecked(context, ['config', '--file', file, 'cos.region', location.region])
   await runGitChecked(context, ['config', '--file', file, 'cos.prefix', location.prefix])
@@ -79,6 +121,16 @@ export async function writeLocation(context: CliContext, root: string, location:
     await runGitChecked(context, ['config', '--file', file, '--unset-all', 'cos.endpoint']).catch(() => {})
   else
     await runGitChecked(context, ['config', '--file', file, 'cos.endpoint', location.endpoint])
+  const legacy = join(root, LEGACY_LOCATION_FILE)
+  if (!existsSync(legacy))
+    return { removedLegacy: false }
+  await rm(legacy)
+  return { removedLegacy: true }
+}
+
+/** Whether two locations point at the same objects. */
+export function sameLocation(a: CosLocation, b: CosLocation): boolean {
+  return a.bucket === b.bucket && a.region === b.region && a.prefix === b.prefix && a.endpoint === b.endpoint
 }
 
 /** Describe a location for messages. */

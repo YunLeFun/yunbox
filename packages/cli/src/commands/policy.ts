@@ -73,7 +73,7 @@ async function chooseLocation(context: CliContext, values: PolicyOptions): Promi
   let existing: CosLocation | undefined
   if (root !== undefined) {
     existing = await readLocation({ ...context, cwd: root }, root).catch((error: Error) => {
-      throw new CliError(`${LOCATION_FILE} 的配置不对：${error.message}`)
+      throw new CliError(`COS 位置的配置不对：${error.message}`)
     })
   }
   const bucket = values.bucket ?? existing?.bucket

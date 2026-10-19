@@ -1,4 +1,4 @@
-import { writeFile } from 'node:fs/promises'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { buildCosPolicy, cosObjectResource } from '../src/cos/policy.ts'
@@ -46,11 +46,12 @@ describe('buildCosPolicy', () => {
 })
 
 describe('yunbox policy', () => {
-  it('prints the policy for the repository\'s .yunboxconfig on stdout and guidance on stderr', async () => {
+  it('prints the policy for the repository\'s .yunbox/config on stdout and guidance on stderr', async () => {
     const sandbox = await createSandbox()
     cleanups.push(sandbox.cleanup)
     const repo = await createRepository(sandbox)
-    await writeFile(join(repo, '.yunboxconfig'), `[cos]\n\tbucket = ${location.bucket}\n\tregion = ${location.region}\n\tprefix = ${location.prefix}\n`)
+    await mkdir(join(repo, '.yunbox'))
+    await writeFile(join(repo, '.yunbox', 'config'), `[cos]\n\tbucket = ${location.bucket}\n\tregion = ${location.region}\n\tprefix = ${location.prefix}\n`)
 
     const run = await runYunBox(sandbox, repo, ['policy'])
     expect(run.code).toBe(0)

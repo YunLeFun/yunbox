@@ -23,7 +23,7 @@ git push / clone ──▶ git-lfs ──▶ git-yunbox lfs-agent ──▶ 腾�
 ```bash
 tccli auth login             # 浏览器登录腾讯云（管理员身份，临时密钥约 2 小时）
 git yunbox init              # 列出 bucket → 选一个或新建私有 bucket → 填目录前缀 → 读写探测
-git add .gitattributes .yunboxconfig
+git add .gitattributes .yunbox/config
 git commit -m "chore: 用 YunBox 把 LFS 素材直传到 COS"
 git push
 
@@ -53,7 +53,7 @@ yunbox login                 # 用管理员分配给你的子账号密钥
 git yunbox clone <仓库地址>   # = clone 历史 + git yunbox init + git lfs pull
 ```
 
-- **共享的只有位置**：`.yunboxconfig` 记录 bucket、地域和目录前缀，提交到仓库供团队共享，**不含任何密钥**。不同项目可以用不同 bucket，也可以共用一个 bucket、各用一个前缀（默认 `yunbox/<owner>/<repo>`）。对象键是 `<前缀>/<oid[0:2]>/<oid[2:4]>/<oid>`。
+- **共享的只有位置**：`.yunbox/config` 记录 bucket、地域和目录前缀，提交到仓库供团队共享，**不含任何密钥**。`.yunbox/` 目录只放提交、共享的文件，密钥和传输代理的登记不会写进去。0.1.x 版本用的是仓库根目录的 `.yunboxconfig`，新版本仍然读取它，`yunbox doctor` 会给出迁移命令。不同项目可以用不同 bucket，也可以共用一个 bucket、各用一个前缀（默认 `yunbox/<owner>/<repo>`）。对象键是 `<前缀>/<oid[0:2]>/<oid[2:4]>/<oid>`。
 - **密钥只在各自电脑上**：macOS 上 `yunbox login` 存进登录钥匙串的「yunbox」项（用系统自带的 `security` 命令，SecretKey 经标准输入传入，不出现在命令行参数和进程列表里）；钥匙串不可用时、以及 Linux 和 Windows 上，存在 `~/.config/yunbox/credentials.json`（Windows 为 `%APPDATA%\yunbox`，权限 600）。`YUNBOX_CREDENTIAL_STORE=file` 可以强制用文件。读取顺序是 `TENCENTCLOUD_SECRETID` / `TENCENTCLOUD_SECRETKEY` 环境变量 > 钥匙串 > 文件 > `tccli auth login` 的临时密钥（约 2 小时有效）。`yunbox logout` 同时清理钥匙串和文件。SecretKey 不接受命令行参数。
   - 钥匙串项信任创建它的 `/usr/bin/security`，所以读取时不弹窗；这也意味着同一用户下的其他程序同样能读到它。它防的是明文文件被备份、同步或误传，不防本机的恶意程序。
   - Windows 凭据管理器暂不支持：不加依赖的办法只有 `cmdkey`（密码要放在命令行参数里，且不能读回）或 PowerShell 现场编译调用 `CredWrite` / `CredRead`（每次启动要编译 C#，受限语言模式下不可用），都还没在 Windows 上验证，先继续用文件；`%APPDATA%` 默认只有本人和管理员能访问。
