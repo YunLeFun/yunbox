@@ -75,7 +75,7 @@ git yunbox clone <仓库地址>   # = clone 历史 + git yunbox init + git lfs p
 - 请求超时、并发上限、请求体大小限制、统一的 LFS JSON 错误格式、脱敏的访问日志
 - 真实 `git` 和 `git-lfs` 端到端测试（通过 Git 凭据管理器提供 token）
 - Docker 镜像、免鉴权的健康检查 `GET /_health`、全部来自环境变量的配置和启动时的配置自检
-- 命令行 `git yunbox init` / `yunbox doctor` / `yunbox status`：一条命令接入仓库，自检配置、凭据和读写权限
+- 命令行 `git yunbox init` / `yunbox doctor` / `yunbox status`：一条命令接入仓库，自检配置、凭据和读写权限；`git yunbox types` 按素材类型查看、添加、移除 LFS 规则
 - [推送体积检查](./docs/inspect.md)：`yunbox inspect --push` 分别统计 Git pack 和 LFS 候选量，列出超限文件，支持 JSON；`yunbox hook install` 在原有上传钩子前串行执行检查；`yunbox freeze set "Mo-Fr 09:00-18:00"` 按 opening_hours 写法设置[禁推时段](./docs/guide/freeze.md)（如工作时间），时段内直接中断推送
 - [macOS 原生客户端](./apps/macos/README.md)：选择仓库查看 Git/LFS 预算、搜索超限文件、复制完整 JSON；显示 COS 直连状态，可以在窗口里保存密钥、选择或新建 bucket 一键接入；SwiftUI 界面复用 CLI，可安装到本机 Applications
 
@@ -249,7 +249,7 @@ git yunbox init --url http://127.0.0.1:8080/demo/assets
 它会依次完成：
 
 1. 检查 git（2.30+）和 git-lfs（3.2+）的版本，执行 `git lfs install`。
-2. 按素材类型生成或合并 `.gitattributes`：贴图和图片、设计源文件（PSD 等）、模型和动画、音频、视频、字体、压缩包。已经有规则的扩展名不会重复添加，也不会改动已有规则；已经有文件作为普通文件提交过的扩展名不加规则（会列出这些文件）；`--types texture,model` 可以只跟踪部分类型。
+2. 按素材类型生成或合并 `.gitattributes`：贴图和图片、设计源文件（PSD 等）、模型和动画、音频、视频、字体、压缩包。已经有规则的扩展名不会重复添加，也不会改动已有规则；已经有文件作为普通文件提交过的扩展名不加规则（会列出这些文件）；`--types texture,model` 可以只跟踪部分类型，也可以写预置组合 `game`、`design`、`media`、`all`。以后增删类型用 `git yunbox types`（见[按素材类型管理 LFS 规则](#按素材类型管理-lfs-规则)）。
 3. 把 `lfs.url` 写进 `.lfsconfig`。`.lfsconfig` 只包含服务地址，命令会拒绝带用户名、密码或 token 的地址；除 `127.0.0.1`、`localhost` 以外的地址必须是 https。
 4. 在本仓库设置 `lfs.locksverify=false`：Locks API 尚未实现，这是目前唯一允许关闭的检查。试点期间同一个素材同一时间只能由一个人编辑；进入多人编辑二进制素材的试点前必须补齐 Locks API。
 5. 提示输入 token（输入不显示），用 `git credential approve` 存进 Git 凭据管理器（macOS 的 `osxkeychain`、Git for Windows 的 `manager` 等）。没有配置凭据管理器时会给出配置命令。也可以从标准输入传入，例如 `pbpaste | git yunbox init --token-stdin`。token 不接受命令行参数，以免留在 shell 历史里。
@@ -270,6 +270,19 @@ yunbox doctor
 
 - `yunbox doctor` 逐项检查 git 和 git-lfs 版本、LFS 过滤器、是否在 Git 仓库里、`lfs.url`、HTTPS、`lfs.locksverify`、凭据、服务连通性，并用 download 和 upload 各发一次 batch 请求试探读写权限（不会上传或修改任何数据）。token 无效、已过期或已吊销（401）和没有权限（403）分开报告，每个失败项都附带可以直接照做的修复命令。全部通过时退出码为 0，否则为 1。只需要拉取素材的人用 `yunbox doctor --read-only`，不要求写权限。地址是非本机的 http 时，doctor 不会发送 token。
 - `yunbox status` 根据 `git lfs ls-files` 列出当前提交引用的 LFS 对象数量、总大小和本地已下载的数量，以及当前生效的 `lfs.url`；`--all` 统计所有分支和历史。它不访问网络。
+
+### 按素材类型管理 LFS 规则
+
+`git yunbox types` 只增删 `.gitattributes` 里 YunBox 生成的那一段，手写的规则（包括 `git lfs track` 加的）不会改动，也不改历史、不提交：
+
+| 命令 | 作用 |
+|---|---|
+| `git yunbox types` | 每个类型、每个扩展名现在是否走 LFS（由 `git check-attr` 判断），仓库里有多少这类文件、其中多少是 LFS 指针；并列出作为普通文件提交的素材，包括 Linux 上匹配不到小写规则的 `HERO.PNG`。`--json` 输出 schemaVersion 1，供 macOS 客户端读取 |
+| `git yunbox types add model,audio` | 追加这些类型的规则。会匹配到已作为普通文件提交的文件的规则默认不加，只提示 |
+| `git yunbox types add archive --renormalize` | 规则照加，并对被匹配到的已提交文件执行 `git add --renormalize`，下一次提交起改存为 LFS 指针（历史不变） |
+| `git yunbox types remove video` | 删除 YunBox 为这些类型生成的规则；已经是 LFS 指针的文件只列出并给出处理办法，不自动改 |
+
+类型有 `texture`、`source`、`model`、`audio`、`video`、`font`、`archive`；预置组合 `game`（除压缩包外的全部）、`design`（贴图、设计源文件、字体）、`media`（贴图和音视频）、`all`，可以和类型混写。`git yunbox types -h` 列出每个类型包含的扩展名。
 
 ### 手动配置
 

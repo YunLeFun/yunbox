@@ -216,6 +216,12 @@ export function formatInspection(report: PushInspection, top = 10): string {
   return `${lines.join('\n')}\n`
 }
 
+/** The given blob ids whose content is a Git LFS pointer; objects missing locally are left out. */
+export async function lfsPointerBlobs(context: CliContext, oids: string[]): Promise<Set<string>> {
+  const pointers = await readPointers(context, await readKnownBlobs(context, [...new Set(oids)]))
+  return new Set(pointers.keys())
+}
+
 function revisions(oids: string[]): string {
   return `${oids.join('\n')}\n`
 }

@@ -1,8 +1,9 @@
 import type { CliContext } from '../context.ts'
 import type { ServiceUrl } from '../service-url.ts'
-import { readFile, rm, writeFile } from 'node:fs/promises'
+import { access, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
+import { committedOutsideLfs, extensionOf, filterAttributes, indexEntries } from '../asset-files.ts'
 import { CliError, print, USAGE_EXIT_CODE } from '../context.ts'
 import { locationFiles } from '../cos/location.ts'
 import { approveCredential, assertTokenShape, fillCredential, findCredentialHelper, suggestedHelperCommands } from '../credentials.ts'
@@ -19,7 +20,8 @@ import {
   runGitChecked,
   shellQuote,
 } from '../git.ts'
-import { ASSET_CATEGORIES, mergeGitAttributes, selectCategories } from '../gitattributes.ts'
+import { ASSET_CATEGORIES, ASSET_PRESETS, categoryOfExtension, mergeGitAttributes, selectCategories } from '../gitattributes.ts'
+import { lfsPointerBlobs } from '../inspect.ts'
 import { gitInstallHints, gitLfsInstallHints } from '../install-hints.ts'
 import { printStep } from '../report.ts'
 import { isSecureServiceUrl, parseServiceUrl, ServiceUrlError } from '../service-url.ts'
@@ -57,6 +59,8 @@ export const initHelp = `用法：git yunbox init [选项]
 通用选项：
   --types <类型>     只跟踪这些素材类型，逗号分隔（默认全部）：
                      ${ASSET_CATEGORIES.map(category => `${category.id}（${category.label}）`).join('、')}
+                     也可以写预置组合：${ASSET_PRESETS.map(preset => `${preset.id}（${preset.label}）`).join('、')}
+                     以后增删类型用 git yunbox types
   -h, --help         显示帮助
 `
 
@@ -134,14 +138,24 @@ export async function runInit(context: CliContext, args: string[]): Promise<numb
   return 0
 }
 
-/** `git lfs install` plus merging the asset rules into `.gitattributes`; shared by both modes. */
-export async function installLfsAndAttributes(context: CliContext, repo: CliContext, root: string, categories: ReturnType<typeof selectCategories> | undefined): Promise<void> {
+/** Options for {@link installLfsAndAttributes}. */
+export interface AssetRuleOptions {
+  /**
+   * Also add rules that catch files committed as ordinary files, and stage
+   * those files again as LFS pointers (`git add --renormalize`). History is
+   * left as it is.
+   */
+  renormalize?: boolean
+}
+
+/** `git lfs install` plus merging the asset rules into `.gitattributes`; shared by both modes and `yunbox types add`. */
+export async function installLfsAndAttributes(context: CliContext, repo: CliContext, root: string, categories: ReturnType<typeof selectCategories> | undefined, options: AssetRuleOptions = {}): Promise<void> {
   const install = await runGit(repo, ['lfs', 'install'])
   if (install.code !== 0) {
     const reason = firstLine(install.stderr) || firstLine(install.stdout)
     const hint = /hook already exists/i.test(`${install.stdout}${install.stderr}`)
       ? '仓库里已有其他工具的 Git 钩子。运行 git lfs update --manual，按提示把 git-lfs 的命令加进已有钩子后重试'
-      : '按上面的错误修复后重新运行 git yunbox init'
+      : '按上面的错误修复后重试'
     throw new CliError(`git lfs install 失败：${reason}\n${hint}`)
   }
   printStep(context, { status: 'pass', title: 'git lfs install', detail: '已启用 LFS 过滤器和本仓库的钩子' })
@@ -162,7 +176,7 @@ export async function installLfsAndAttributes(context: CliContext, repo: CliCont
   let captured = new Map<string, string[]>()
   if (merge.content !== existingAttributes) {
     captured = await committedOutsideLfs(repo, attributesPath, merge.content, [...merge.added.values()].flat())
-    if (captured.size > 0)
+    if (captured.size > 0 && !options.renormalize)
       merge = mergeGitAttributes(existingAttributes, categories, { exclude: new Set(captured.keys()) })
     if (merge.content !== existingAttributes)
       await writeFile(attributesPath, merge.content)
@@ -179,15 +193,17 @@ export async function installLfsAndAttributes(context: CliContext, repo: CliCont
       ? '已包含全部素材规则，未修改'
       : `新增 ${addedCount} 条规则（${categories.filter(category => merge.added.has(category.id)).map(category => `${category.label} ${merge.added.get(category.id)!.length}`).join('、')}）`,
   })
-  if (captured.size > 0) {
+  if (captured.size > 0 && !options.renormalize) {
     const patterns = [...captured.keys()]
+    const ids = [...new Set(patterns.map(pattern => categoryOfExtension(pattern.slice('*.'.length))!.id))]
     printStep(context, {
       status: 'warn',
       title: '.gitattributes',
       detail: `这些类型已有文件作为普通文件提交过，没有为它们加 LFS 规则，否则这些文件会显示为已修改：${[...captured].map(([pattern, files]) => `${pattern}（${files.length === 1 ? files[0] : `${files[0]} 等 ${files.length} 个`}）`).join('、')}`,
       fixes: [
-        `git lfs track ${patterns.map(shellQuote).join(' ')}   # 确实要从下一次提交起改用 LFS 时（历史不变）`,
-        `git add .gitattributes && git add --renormalize -- ${patterns.map(shellQuote).join(' ')}`,
+        `git yunbox types add ${ids.join(',')} --renormalize   # 确实要从下一次提交起改用 LFS 时（历史不变）`,
+        `或者手动：git lfs track ${patterns.map(shellQuote).join(' ')}`,
+        `          git add .gitattributes && git add --renormalize -- ${patterns.map(shellQuote).join(' ')}`,
       ],
     })
   }
@@ -199,53 +215,34 @@ export async function installLfsAndAttributes(context: CliContext, repo: CliCont
       fixes: ['确实需要用 LFS 管理时，手动把对应规则改成 filter=lfs diff=lfs merge=lfs -text'],
     })
   }
+  if (options.renormalize)
+    await renormalizeCommittedAssets(context, repo, root, categories)
 }
 
 /**
- * Tracked files that `merged` would put under the LFS filter although they
- * were committed as ordinary files, grouped by the added pattern that
- * catches them. Git itself decides what matches (case folding, nested
- * `.gitattributes`), so this briefly writes `merged` and asks `git check-attr`.
- * The caller rewrites the file afterwards.
+ * Stage the files of these categories that an LFS rule now catches but whose
+ * staged content is still an ordinary blob, so the next commit stores them as
+ * LFS pointers. Earlier commits keep the ordinary blobs.
  */
-async function committedOutsideLfs(repo: CliContext, attributesPath: string, merged: string, patterns: string[]): Promise<Map<string, string[]>> {
-  const captured = new Map<string, string[]>()
-  const extensions = new Set(patterns.map(pattern => pattern.slice('*.'.length)))
-  const listed = await runGit(repo, ['ls-files', '-z'])
-  if (listed.code !== 0)
-    return captured
-  const candidates = listed.stdout.split('\0').filter(path => extensions.has(extensionOf(path)))
-  if (candidates.length === 0)
-    return captured
-  const before = await filterAttributes(repo, candidates)
-  await writeFile(attributesPath, merged)
-  const after = await filterAttributes(repo, candidates)
-  for (const path of candidates) {
-    if (before.get(path) === 'lfs' || after.get(path) !== 'lfs')
-      continue
-    const pattern = `*.${extensionOf(path)}`
-    captured.set(pattern, [...captured.get(pattern) ?? [], path])
+async function renormalizeCommittedAssets(context: CliContext, repo: CliContext, root: string, categories: ReturnType<typeof selectCategories>): Promise<void> {
+  const extensions = new Set(categories.flatMap(category => category.extensions))
+  const entries = (await indexEntries(repo)).filter(entry => extensions.has(extensionOf(entry.path)))
+  const filters = await filterAttributes(repo, entries.map(entry => entry.path))
+  const pointers = await lfsPointerBlobs(repo, entries.map(entry => entry.oid))
+  const plain = entries.filter(entry => filters.get(entry.path) === 'lfs' && !pointers.has(entry.oid)).map(entry => entry.path)
+  if (plain.length === 0) {
+    printStep(context, { status: 'skip', title: 'git add --renormalize', detail: '没有需要改存为 LFS 的已提交文件' })
+    return
   }
-  return captured
-}
-
-function extensionOf(path: string): string {
-  const name = path.slice(path.lastIndexOf('/') + 1)
-  const dot = name.lastIndexOf('.')
-  return dot <= 0 ? '' : name.slice(dot + 1).toLowerCase()
-}
-
-/** The `filter` attribute of each path, as `git check-attr` sees it now. */
-async function filterAttributes(repo: CliContext, paths: string[]): Promise<Map<string, string>> {
-  // runGitChecked would trim the output, and paths may start or end with spaces.
-  const result = await runGit(repo, ['check-attr', '-z', '--stdin', 'filter'], { input: `${paths.join('\0')}\0` })
-  if (result.code !== 0)
-    throw new CliError(`git check-attr 失败：${firstLine(result.stderr)}`)
-  const fields = result.stdout.split('\0')
-  const values = new Map<string, string>()
-  for (let index = 0; index + 2 < fields.length; index += 3)
-    values.set(fields[index]!, fields[index + 2]!)
-  return values
+  if (await access(join(root, '.gitattributes')).then(() => true, () => false))
+    await runGitChecked(repo, ['add', '--', '.gitattributes'])
+  // Literal pathspecs: file names may contain glob characters such as [ or *.
+  await runGitChecked(repo, ['--literal-pathspecs', 'add', '--renormalize', '--pathspec-from-file=-', '--pathspec-file-nul'], { input: `${plain.join('\0')}\0` })
+  printStep(context, {
+    status: 'pass',
+    title: 'git add --renormalize',
+    detail: `${plain.length} 个已提交的文件改存为 LFS 指针，已和 .gitattributes 一起加入暂存区（历史不变）：${plain.length <= 3 ? plain.join('、') : `${plain.slice(0, 3).join('、')} 等`}`,
+  })
 }
 
 function parseCategories(types: string[] | undefined): ReturnType<typeof selectCategories> {

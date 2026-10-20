@@ -55,14 +55,16 @@ git yunbox init --bucket <名称-APPID> --region <地域> --prefix <前缀>   # 
 ! .gitattributes：这些类型已有文件作为普通文件提交过，没有为它们加 LFS 规则，否则这些文件会显示为已修改：*.zip（build/pack.zip）
 ```
 
-这样迁移只换存储位置，不会顺带改变哪些文件走 LFS。确实想让这些文件从下一次提交起改用 LFS（历史里的旧版本不变），按提示运行：
+这样迁移只换存储位置，不会顺带改变哪些文件走 LFS。`git yunbox types` 会列出所有作为普通文件提交的素材（包括 Linux 上 `*.png` 匹配不到的 `HERO.PNG`）。确实想让这些文件从下一次提交起改用 LFS（历史里的旧版本不变），按提示运行：
 
 ```bash
-git lfs track '*.zip'
-git add .gitattributes && git add --renormalize -- '*.zip'
+git yunbox types add archive --renormalize   # 加上 *.zip 规则，并把这些文件重新加入暂存区
+git commit -m "chore: 压缩包改用 LFS"
 ```
 
-连历史一起改成 LFS 需要 `git lfs migrate import` 改写历史，不在本文范围内。只想加部分类型，用 `git yunbox init --types model,audio` 之类；一条也不想加，提交前 `git checkout -- .gitattributes` 即可。
+不用 YunBox 命令也可以：`git lfs track '*.zip'`，再 `git add .gitattributes && git add --renormalize -- '*.zip'`。
+
+连历史一起改成 LFS 需要 `git lfs migrate import` 改写历史，不在本文范围内。只想加部分类型，用 `git yunbox init --types model,audio` 之类；一条也不想加，提交前 `git checkout -- .gitattributes` 即可；已经提交的类型规则可以用 `git yunbox types remove <类型>` 删掉。
 
 ### 旧服务写在 .lfsconfig 里的情况
 
