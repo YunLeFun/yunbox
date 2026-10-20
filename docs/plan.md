@@ -325,6 +325,7 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **配置用多值 Git 配置 `yunbox.pushFreeze`**，三个位置同时生效：本仓库 `.git/config`、团队共享的 `.yunbox/config`、全局 `~/.gitconfig`。说明和时区（`pushFreezeMessage`、`pushFreezeTimeZone`）按位置分别设置。
 - **硬拦截**：时段内 `--confirm` 不能放行；配置无效时检查失败（退出码 2），同样阻止推送，不会因为写错而悄悄放行。
 - **给 AI 的接口只做 CLI**：命令都不交互、有 `--json`，任何编程助手都能直接调用；不做 MCP，避免多维护一个常驻进程。
+- **快速关闭**：`yunbox freeze off [--for|--until] [--global]` 写 `yunbox.pushFreezePausedUntil`（ISO 时间或 `forever`），所有时段暂不生效、规则保留，到点自动恢复，推送时提示一句；只允许写在个人配置（本仓库或全局），读到团队 `.yunbox/config` 里的值时报错，避免一次提交关掉全队的规则。
 - **风险**：`git push --no-verify` 和没装包装层的 clone 都会绕过，这只是协作约定，不是服务端强制；需要强制时只能放到托管平台（如分支保护）或以后的服务端。
 
 ### 后续风险

@@ -68,6 +68,8 @@ export default defineConfig({
           { text: '快速开始', link: '/guide/' },
           { text: '协作者加入', link: '/guide/collaborators' },
           { text: 'macOS 客户端', link: '/guide/macos' },
+          { text: '禁推时段', link: '/guide/freeze' },
+          { text: '用 AI 编程助手接入', link: '/guide/ai' },
         ],
       },
       {
