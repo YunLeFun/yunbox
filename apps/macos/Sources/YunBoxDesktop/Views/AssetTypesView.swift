@@ -93,8 +93,8 @@ struct AssetTypesSheet: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.trailing, 4)
                 }
+                .sheetScrollMargins()
                 // What the command printed sits below everything else: bring it into view, and again once the
                 // re-read report has changed the content above it.
                 .onChange(of: types.output?.text) { _, text in

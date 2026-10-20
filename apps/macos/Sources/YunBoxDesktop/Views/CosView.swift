@@ -93,6 +93,7 @@ struct CosSheet: View {
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
+            .sheetScrollMargins()
             HStack {
                 Text("密钥只保存在这台电脑上（钥匙串），仓库里只记录 bucket、地域和前缀。")
                     .font(.caption).foregroundStyle(.secondary)
