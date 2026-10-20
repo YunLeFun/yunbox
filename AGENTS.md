@@ -27,6 +27,7 @@
 ## 日常约定
 
 - 用户能感知的改动（新功能、行为变化、修复），在 [`docs/changelog.md`](./docs/changelog.md) 和 [`docs/en/changelog.md`](./docs/en/changelog.md) 的「未发布 / Unreleased」下各写一条，按「新增 / 变更 / 修复」（Added / Changed / Fixed）分组，写给用户看，不写实现细节。两份要列出同样的版本，`pnpm test` 会检查；`pnpm release` 会把它们标上版本号。
+- 官网是中英双语：中文在根路径，英文在 `docs/en/` 下同样的路径（`docs/guide/x.md` 对应 `docs/en/guide/x.md`）。改了使用指南、`inspect.md` 或首页组件里的文案，两种语言一起改；首页组件的文案用 `docs/.vitepress/theme/i18n.ts` 的 `useCopy` 按语言切换。macOS 客户端链接的英文锚点在 `DocsLinks.swift` 的 `englishFragment` 里，改英文标题时一起改。
 - 改了 macOS 客户端的界面文字，运行 `./script/sync_strings.sh` 并在 `apps/macos/Localization/Localizable.xcstrings` 补上英文；传给 `String` 的文字写成 `String(localized: "…")`。
 
 ## 已完成：M1 协议验证版（2026-10-15）

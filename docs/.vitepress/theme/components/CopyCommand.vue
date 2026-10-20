@@ -8,12 +8,18 @@
  * ```
  */
 import { ref } from 'vue'
+import { useCopy } from '../i18n'
 import SymbolIcon from './SymbolIcon.vue'
 
 const props = defineProps<{
   /** The command, without a prompt */
   command: string
 }>()
+
+const t = useCopy({
+  zh: { label: (command: string) => `复制命令 ${command}`, copy: '复制', copied: '已复制' },
+  en: { label: (command: string) => `Copy the command ${command}`, copy: 'Copy', copied: 'Copied' },
+})
 
 const copied = ref(false)
 let timer: ReturnType<typeof setTimeout> | undefined
@@ -34,9 +40,9 @@ async function copy(): Promise<void> {
 <template>
   <div class="copy">
     <code class="copy-text"><span class="prompt" aria-hidden="true">$ </span>{{ command }}</code>
-    <button type="button" class="copy-button" :aria-label="`复制命令 ${command}`" @click="copy">
+    <button type="button" class="copy-button" :aria-label="t.label(command)" @click="copy">
       <SymbolIcon :name="copied ? 'checkmark.circle.fill' : 'doc.on.doc'" />
-      {{ copied ? '已复制' : '复制' }}
+      {{ copied ? t.copied : t.copy }}
     </button>
   </div>
 </template>

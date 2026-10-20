@@ -7,8 +7,8 @@
  * presets, the switch and the timer only change the sample state.
  */
 import type { PopMenuItem } from './PopMenu.vue'
-import { withBase } from 'vitepress'
 import { computed, reactive, ref } from 'vue'
+import { useCopy, useLocalePath } from '../i18n'
 import PopMenu from './PopMenu.vue'
 import SymbolIcon from './SymbolIcon.vue'
 
@@ -36,28 +36,149 @@ interface Project {
 type Span = [number, number]
 
 const DAY = 1440
-const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
 const TODAY = 2
 const NOW = 15 * 60 + 30
-const SCOPE_LABELS: Record<Scope, string> = { local: '本仓库', shared: '团队', global: '全局' }
 
-const PRESETS: { title: string, rule: Rule }[] = [
-  { title: '工作时间', rule: { text: 'Mo-Fr 09:00-18:00', parts: [{ days: [1, 2, 3, 4, 5], start: 9 * 60, end: 18 * 60 }] } },
-  { title: '周末', rule: { text: 'Sa,Su', parts: [{ days: [6, 0], start: 0, end: DAY }] } },
-  { title: '夜间', rule: { text: '22:00-08:00', parts: [{ days: [0, 1, 2, 3, 4, 5, 6], start: 22 * 60, end: 8 * 60 }] } },
+// Wording follows the app's own Chinese and English interface.
+const t = useCopy({
+  zh: {
+    weekdays: ['周日', '周一', '周二', '周三', '周四', '周五', '周六'],
+    today: '今天',
+    tomorrow: '明天',
+    scopes: { local: '本仓库', shared: '团队', global: '全局' } as Record<Scope, string>,
+    presets: ['工作时间', '周末', '夜间'],
+    pauses: ['关闭 30 分钟', '关闭 1 小时', '关闭 2 小时', '关闭到今天结束', '一直关闭，直到重新开启'],
+    closedWeek: '接下来 7 天都不能推送',
+    opens: (day: string | null, time: string) => `${day === null ? '' : `${day} `}${time} 后可以推送`,
+    next: (day: string, time: string) => `${day} ${time} 开始禁推`,
+    untilOn: '直到重新开启',
+    backOn: (day: string, time: string) => `至 ${day} ${time} 自动恢复`,
+    frozen: '禁推中',
+    withScope: (rule: string, scope: string) => `${rule}（${scope}）`,
+    pausedTitle: '现在可以推送（禁推已关闭）',
+    wouldFreeze: (rule: string) => `本应禁推：${rule}`,
+    noneAhead: '未来 7 天没有禁推',
+    noneSet: '没有设置禁推时段',
+    canPush: '现在可以推送',
+    frozenLine: (opens: string) => `禁推中 · ${opens}`,
+    pausedLine: (label: string) => `已关闭（全局）· ${label}`,
+    globalOnly: '只有全局规则',
+    noRules: '未设置规则',
+    ruleSeparator: '；',
+    clear: (scope: string) => `清除${scope}规则`,
+    resume: '恢复',
+    spans: (day: string, spans: string[]) => spans.length ? `${day}禁推 ${spans.join('、')}` : `${day}没有禁推`,
+    span: (start: string, end: string) => `${start} 到 ${end}`,
+    hours: (hours: string) => `${hours} 小时`,
+    figure: 'macOS 菜单栏面板示意：推送时段',
+    markFrozen: '菜单栏的云匣图标，右上角圆点表示当前仓库处于禁推时段',
+    mark: '菜单栏的云匣图标',
+    clock: '10月20日 周二 15:30',
+    title: '推送时段',
+    timer: '定时关闭本机所有仓库的禁推时段',
+    timerHeading: '关闭本机所有仓库的禁推时段',
+    switchLabel: '禁推时段（本机所有仓库）',
+    switchOff: '关闭本机所有仓库的禁推时段（规则保留）',
+    switchOn: '恢复本机所有仓库的禁推时段',
+    nowAt: (spans: string) => `${spans}，现在 15:30`,
+    week: '未来 7 天',
+    global: '全局规则',
+    globalSub: '本机所有仓库',
+    presetsOf: (scope: string) => `${scope}预设`,
+    projectPresets: (project: string, scope: string) => `${project} 的${scope}预设`,
+    noGlobal: '没有全局规则',
+    noGlobalHint: '在右上角「＋」选择预设，对本机所有仓库生效',
+    projects: '项目',
+    projectsSub: '每个项目单独设置',
+    current: '当前',
+    unset: '未设置',
+    makeCurrent: '设为当前',
+    addProject: '添加项目…',
+    edit: '编辑禁推时段…',
+    open: '打开云匣',
+    help: '使用说明',
+    quit: '退出云匣',
+  },
+  en: {
+    weekdays: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
+    today: 'today',
+    tomorrow: 'tomorrow',
+    scopes: { local: 'This repository', shared: 'Team', global: 'Global' } as Record<Scope, string>,
+    presets: ['Working hours', 'Weekends', 'Overnight'],
+    pauses: ['Off for 30 minutes', 'Off for 1 hour', 'Off for 2 hours', 'Off until the end of today', 'Off until switched back on'],
+    closedWeek: 'No pushing in the next 7 days',
+    opens: (day: string | null, time: string) => day === null ? `Pushing opens at ${time}` : `Pushing opens ${day} at ${time}`,
+    next: (day: string, time: string) => `Freeze starts ${day} at ${time}`,
+    untilOn: 'until switched back on',
+    backOn: (day: string, time: string) => `back on ${day} at ${time}`,
+    frozen: 'Push freeze in effect',
+    withScope: (rule: string, scope: string) => `${rule} (${scope})`,
+    pausedTitle: 'You can push now (freeze switched off)',
+    wouldFreeze: (rule: string) => `Would be frozen: ${rule}`,
+    noneAhead: 'No freeze in the next 7 days',
+    noneSet: 'No push freeze set',
+    canPush: 'You can push now',
+    frozenLine: (opens: string) => `Frozen · ${opens}`,
+    pausedLine: (label: string) => `Off (Global) · ${label}`,
+    globalOnly: 'Global rules only',
+    noRules: 'No rules',
+    ruleSeparator: '; ',
+    clear: (scope: string) => `Clear Rules (${scope})`,
+    resume: 'Resume',
+    spans: (day: string, spans: string[]) => spans.length ? `${day}: frozen ${spans.join(', ')}` : `${day}: no freeze`,
+    span: (start: string, end: string) => `${start} to ${end}`,
+    hours: (hours: string) => `${hours} h`,
+    figure: 'The macOS menu bar panel: Push Freeze',
+    markFrozen: 'The YunBox menu bar icon; the dot at the top right means the current repository is in a push freeze',
+    mark: 'The YunBox menu bar icon',
+    clock: 'Tue Oct 20 15:30',
+    title: 'Push Freeze',
+    timer: 'Switch off push freezes for every repository on this Mac for a while',
+    timerHeading: 'Switch off push freezes for every repository on this Mac',
+    switchLabel: 'Push freezes (every repository on this Mac)',
+    switchOff: 'Switch off push freezes for every repository on this Mac (rules are kept)',
+    switchOn: 'Resume push freezes for every repository on this Mac',
+    nowAt: (spans: string) => `${spans}; now 15:30`,
+    week: 'Next 7 Days',
+    global: 'Global Rules',
+    globalSub: 'Every repository on this Mac',
+    presetsOf: (scope: string) => `${scope} presets`,
+    projectPresets: (project: string, scope: string) => `${scope} presets for ${project}`,
+    noGlobal: 'No global rules',
+    noGlobalHint: 'Pick a preset with + at the top right; it applies to every repository on this Mac',
+    projects: 'Projects',
+    projectsSub: 'Set per project',
+    current: 'Current',
+    unset: 'Not set',
+    makeCurrent: 'Make Current',
+    addProject: 'Add Project…',
+    edit: 'Edit Push Freeze…',
+    open: 'Open YunBox',
+    help: 'Help',
+    quit: 'Quit YunBox',
+  },
+})
+const localePath = useLocalePath()
+
+/** Presets in the app's order; their titles are `t.presets` at the same index. */
+const PRESETS: Rule[] = [
+  { text: 'Mo-Fr 09:00-18:00', parts: [{ days: [1, 2, 3, 4, 5], start: 9 * 60, end: 18 * 60 }] },
+  { text: 'Sa,Su', parts: [{ days: [6, 0], start: 0, end: DAY }] },
+  { text: '22:00-08:00', parts: [{ days: [0, 1, 2, 3, 4, 5, 6], start: 22 * 60, end: 8 * 60 }] },
 ]
 
-const PAUSES: { title: string, until: (now: number) => number | null }[] = [
-  { title: '关闭 30 分钟', until: now => now + 30 },
-  { title: '关闭 1 小时', until: now => now + 60 },
-  { title: '关闭 2 小时', until: now => now + 120 },
-  { title: '关闭到今天结束', until: () => DAY },
-  { title: '一直关闭，直到重新开启', until: () => null },
+/** Timer choices; their titles are `t.pauses` at the same index. */
+const PAUSES: ((now: number) => number | null)[] = [
+  now => now + 30,
+  now => now + 60,
+  now => now + 120,
+  () => DAY,
+  () => null,
 ]
 
 const projects = reactive<Project[]>([
-  { name: 'game', local: PRESETS[0].rule, shared: { text: 'Fr 18:00-24:00', parts: [{ days: [5], start: 18 * 60, end: DAY }] } },
-  { name: 'art-library', local: null, shared: PRESETS[1].rule },
+  { name: 'game', local: PRESETS[0], shared: { text: 'Fr 18:00-24:00', parts: [{ days: [5], start: 18 * 60, end: DAY }] } },
+  { name: 'art-library', local: null, shared: PRESETS[1] },
   { name: 'life', local: null, shared: null },
 ])
 const globalRule = ref<Rule | null>(null)
@@ -71,8 +192,15 @@ function clock(minutes: number): string {
   return `${String(hours).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`
 }
 
+/** `today`, `tomorrow` or a weekday, as it reads inside a sentence. */
 function dayLabel(offset: number): string {
-  return offset === 0 ? '今天' : offset === 1 ? '明天' : WEEKDAYS[(TODAY + offset) % 7]
+  return offset === 0 ? t.value.today : offset === 1 ? t.value.tomorrow : t.value.weekdays[(TODAY + offset) % 7]
+}
+
+/** The same, as a label on its own. */
+function dayTitle(offset: number): string {
+  const label = dayLabel(offset)
+  return label.charAt(0).toUpperCase() + label.slice(1)
 }
 
 /** Frozen stretches of one rule on the day `offset` days from today, including last night's carry-over. */
@@ -136,17 +264,17 @@ function statusOf(project: Project) {
     frozen: Boolean(hit) && !pause.value,
     paused: Boolean(hit) && Boolean(pause.value),
     opensLabel: opens === null
-      ? '接下来 7 天都不能推送'
-      : `${opens < DAY ? '' : `${dayLabel(Math.floor(opens / DAY))} `}${clock(opens % DAY)} 后可以推送`,
-    nextLabel: next ? `${dayLabel(next.offset)} ${clock(next.start)} 开始禁推` : null,
+      ? t.value.closedWeek
+      : t.value.opens(opens < DAY ? null : dayLabel(Math.floor(opens / DAY)), clock(opens % DAY)),
+    nextLabel: next ? t.value.next(dayLabel(next.offset), clock(next.start)) : null,
   }
 }
 
 const pauseLabel = computed(() => {
   const until = pause.value?.until
   if (until === null || until === undefined)
-    return '直到重新开启'
-  return `至 ${until < DAY ? '今天' : '明天'} ${clock(until % DAY)} 自动恢复`
+    return t.value.untilOn
+  return t.value.backOn(dayLabel(until < DAY ? 0 : 1), clock(until % DAY))
 })
 
 const statuses = computed(() => Object.fromEntries(projects.map(project => [project.name, statusOf(project)])))
@@ -156,12 +284,12 @@ const card = computed(() => {
   const status = now.value
   const name = current.value
   if (status.frozen) {
-    return { tone: 'red', icon: 'hand.raised' as const, title: '禁推中', subtitle: `${name} · ${status.opensLabel}`, detail: `${status.hit!.rule.text}（${SCOPE_LABELS[status.hit!.scope]}）` }
+    return { tone: 'red', icon: 'hand.raised' as const, title: t.value.frozen, subtitle: `${name} · ${status.opensLabel}`, detail: t.value.withScope(status.hit!.rule.text, t.value.scopes[status.hit!.scope]) }
   }
   if (status.paused)
-    return { tone: 'orange', icon: 'pause' as const, title: '现在可以推送（禁推已关闭）', subtitle: `${name} · 本应禁推：${status.hit!.rule.text}`, detail: null }
-  const rest = status.nextLabel ?? (status.windows.length ? '未来 7 天没有禁推' : '没有设置禁推时段')
-  return { tone: pause.value ? 'orange' : 'green', icon: pause.value ? 'pause' as const : 'arrow.up' as const, title: '现在可以推送', subtitle: `${name} · ${rest}`, detail: null }
+    return { tone: 'orange', icon: 'pause' as const, title: t.value.pausedTitle, subtitle: `${name} · ${t.value.wouldFreeze(status.hit!.rule.text)}`, detail: null }
+  const rest = status.nextLabel ?? (status.windows.length ? t.value.noneAhead : t.value.noneSet)
+  return { tone: pause.value ? 'orange' : 'green', icon: pause.value ? 'pause' as const : 'arrow.up' as const, title: t.value.canPush, subtitle: `${name} · ${rest}`, detail: null }
 })
 
 const hasWeek = computed(() => now.value.week.some(spans => spans.length > 0))
@@ -170,18 +298,18 @@ function projectLine(project: Project) {
   const status = statuses.value[project.name]
   const rules = [project.local, project.shared].filter(rule => rule !== null).map(rule => rule.text)
   if (status.frozen)
-    return { tone: 'red', icon: 'hand.raised' as const, subtitle: `禁推中 · ${status.opensLabel}` }
+    return { tone: 'red', icon: 'hand.raised' as const, subtitle: t.value.frozenLine(status.opensLabel) }
   if (pause.value)
-    return { tone: 'orange', icon: 'pause' as const, subtitle: `已关闭（全局）· ${pauseLabel.value}` }
+    return { tone: 'orange', icon: 'pause' as const, subtitle: t.value.pausedLine(pauseLabel.value) }
   if (rules.length === 0)
-    return { tone: 'gray', icon: 'folder' as const, subtitle: globalRule.value ? '只有全局规则' : '未设置规则' }
-  return { tone: 'blue', icon: 'folder' as const, subtitle: rules.join('；') }
+    return { tone: 'gray', icon: 'folder' as const, subtitle: globalRule.value ? t.value.globalOnly : t.value.noRules }
+  return { tone: 'blue', icon: 'folder' as const, subtitle: rules.join(t.value.ruleSeparator) }
 }
 
 function presetItems(rule: Rule | null, scope: Scope): PopMenuItem[] {
   return [
-    ...PRESETS.map(preset => ({ key: preset.rule.text, label: preset.title, detail: preset.rule.text, checked: rule?.text === preset.rule.text })),
-    { key: '', label: `清除${SCOPE_LABELS[scope]}规则`, disabled: rule === null, separated: true },
+    ...PRESETS.map((preset, index) => ({ key: preset.text, label: t.value.presets[index], detail: preset.text, checked: rule?.text === preset.text })),
+    { key: '', label: t.value.clear(t.value.scopes[scope]), disabled: rule === null, separated: true },
   ]
 }
 
@@ -189,18 +317,18 @@ function presetItems(rule: Rule | null, scope: Scope): PopMenuItem[] {
 function pick(rule: Rule | null, key: string): Rule | null {
   if (key === '' || rule?.text === key)
     return null
-  return PRESETS.find(preset => preset.rule.text === key)!.rule
+  return PRESETS.find(preset => preset.text === key)!
 }
 
 const pauseItems = computed<PopMenuItem[]>(() => [
-  ...PAUSES.map(option => ({ key: option.title, label: option.title })),
-  ...(pause.value ? [{ key: 'resume', label: '恢复', separated: true }] : []),
+  ...PAUSES.map((_, index) => ({ key: String(index), label: t.value.pauses[index] })),
+  ...(pause.value ? [{ key: 'resume', label: t.value.resume, separated: true }] : []),
 ])
 
 /** A duration from the timer menu, or「恢复」. */
 function choosePause(key: string) {
-  const option = PAUSES.find(option => option.title === key)
-  pause.value = option ? { until: option.until(NOW) } : null
+  const until = key === 'resume' ? undefined : PAUSES[Number(key)]
+  pause.value = until ? { until: until(NOW) } : null
 }
 
 function toggleAll() {
@@ -212,24 +340,23 @@ function percent(minutes: number): string {
 }
 
 function spansLabel(spans: Span[], offset: number): string {
-  const day = offset === 0 ? '今天' : dayLabel(offset)
-  return spans.length ? `${day}禁推 ${spans.map(([start, end]) => `${clock(start)} 到 ${clock(end)}`).join('、')}` : `${day}没有禁推`
+  return t.value.spans(dayTitle(offset), spans.map(([start, end]) => t.value.span(clock(start), clock(end))))
 }
 
 function hours(spans: Span[]): string {
   const minutes = spans.reduce((sum, [start, end]) => sum + end - start, 0)
   if (minutes === 0)
     return '—'
-  return minutes % 60 === 0 ? `${minutes / 60} 小时` : `${(minutes / 60).toFixed(1)} 小时`
+  return t.value.hours(minutes % 60 === 0 ? `${minutes / 60}` : (minutes / 60).toFixed(1))
 }
 </script>
 
 <template>
-  <figure class="desk" role="group" aria-label="macOS 菜单栏面板示意：推送时段">
+  <figure class="desk" role="group" :aria-label="t.figure">
     <div class="menubar">
       <span
         class="mark" role="img"
-        :aria-label="now.frozen ? '菜单栏的云匣图标，右上角圆点表示当前仓库处于禁推时段' : '菜单栏的云匣图标'"
+        :aria-label="now.frozen ? t.markFrozen : t.mark"
       >
         <svg viewBox="0 0 64 54" aria-hidden="true">
           <mask id="yb-mark-badge">
@@ -243,18 +370,18 @@ function hours(spans: Span[]): string {
           <circle v-if="now.frozen" cx="55" cy="9" r="8" fill="currentColor" />
         </svg>
       </span>
-      <span class="menubar-clock">10月20日 周二 15:30</span>
+      <span class="menubar-clock">{{ t.clock }}</span>
     </div>
 
     <div class="panel">
       <header class="head">
-        <strong>推送时段</strong>
-        <PopMenu label="定时关闭本机所有仓库的禁推时段" heading="关闭本机所有仓库的禁推时段" :items="pauseItems" @select="choosePause">
+        <strong>{{ t.title }}</strong>
+        <PopMenu :label="t.timer" :heading="t.timerHeading" :items="pauseItems" @select="choosePause">
           <SymbolIcon name="timer" />
         </PopMenu>
         <button
-          type="button" class="switch" role="switch" :aria-checked="!pause" aria-label="禁推时段（本机所有仓库）"
-          :title="pause ? '恢复本机所有仓库的禁推时段' : '关闭本机所有仓库的禁推时段（规则保留）'"
+          type="button" class="switch" role="switch" :aria-checked="!pause" :aria-label="t.switchLabel"
+          :title="pause ? t.switchOn : t.switchOff"
           @click="toggleAll"
         >
           <span />
@@ -271,13 +398,13 @@ function hours(spans: Span[]): string {
         </div>
         <div v-if="pause" class="paused">
           <SymbolIcon name="pause" class="paused-icon" />
-          <span>已关闭（全局）· {{ pauseLabel }}</span>
+          <span>{{ t.pausedLine(pauseLabel) }}</span>
           <button type="button" class="small-button" @click="pause = null">
-            恢复
+            {{ t.resume }}
           </button>
         </div>
         <div class="today" :class="{ dimmed: pause }">
-          <div class="timeline timeline-today" role="img" :aria-label="`${spansLabel(now.week[0], 0)}，现在 15:30`">
+          <div class="timeline timeline-today" role="img" :aria-label="t.nowAt(spansLabel(now.week[0], 0))">
             <i v-for="[start, end] in now.week[0]" :key="start" :style="{ left: percent(start), width: percent(end - start) }" />
             <b :style="{ left: percent(NOW) }" />
           </div>
@@ -290,11 +417,11 @@ function hours(spans: Span[]): string {
       <template v-if="hasWeek">
         <hr>
         <div class="section-title">
-          未来 7 天
+          {{ t.week }}
         </div>
         <ul class="week">
           <li v-for="(spans, offset) in now.week" :key="offset">
-            <span class="week-day" :class="{ 'week-today': offset === 0 }">{{ offset === 0 ? '今天' : dayLabel(offset) }}</span>
+            <span class="week-day" :class="{ 'week-today': offset === 0 }">{{ dayTitle(offset) }}</span>
             <span class="timeline" role="img" :aria-label="spansLabel(spans, offset)">
               <i v-for="[start, end] in spans" :key="start" :style="{ left: percent(start), width: percent(end - start) }" />
               <b v-if="offset === 0" :style="{ left: percent(NOW) }" />
@@ -306,8 +433,8 @@ function hours(spans: Span[]): string {
 
       <hr>
       <div class="section-title">
-        全局规则<small>本机所有仓库</small>
-        <PopMenu class="section-menu" label="全局预设" heading="全局预设" :items="presetItems(globalRule, 'global')" @select="key => globalRule = pick(globalRule, key)">
+        {{ t.global }}<small>{{ t.globalSub }}</small>
+        <PopMenu class="section-menu" :label="t.presetsOf(t.scopes.global)" :heading="t.presetsOf(t.scopes.global)" :items="presetItems(globalRule, 'global')" @select="key => globalRule = pick(globalRule, key)">
           <SymbolIcon name="plus.circle" />
         </PopMenu>
       </div>
@@ -316,18 +443,18 @@ function hours(spans: Span[]): string {
         <p>
           <template v-if="globalRule">
             <span class="mono">{{ globalRule.text }}</span>
-            <small>全局</small>
+            <small>{{ t.scopes.global }}</small>
           </template>
           <template v-else>
-            <span>没有全局规则</span>
-            <small>在右上角「＋」选择预设，对本机所有仓库生效</small>
+            <span>{{ t.noGlobal }}</span>
+            <small>{{ t.noGlobalHint }}</small>
           </template>
         </p>
       </div>
 
       <hr>
       <div class="section-title">
-        项目<small>每个项目单独设置</small>
+        {{ t.projects }}<small>{{ t.projectsSub }}</small>
       </div>
       <div v-for="project in projects" :key="project.name" class="project">
         <button
@@ -336,42 +463,42 @@ function hours(spans: Span[]): string {
         >
           <span class="dot dot-small" :class="`tone-${projectLine(project).tone}`" aria-hidden="true"><SymbolIcon :name="projectLine(project).icon" /></span>
           <span class="row-text">
-            <span>{{ project.name }}<i v-if="project.name === current" class="current">当前</i></span>
+            <span>{{ project.name }}<i v-if="project.name === current" class="current">{{ t.current }}</i></span>
             <small>{{ projectLine(project).subtitle }}</small>
           </span>
           <SymbolIcon name="chevron.right" class="chevron" />
         </button>
         <div v-if="expanded === project.name" :id="`fp-${project.name}`" class="details">
           <div v-for="scope in (['local', 'shared'] as const)" :key="scope" class="detail">
-            <span class="detail-scope">{{ SCOPE_LABELS[scope] }}</span>
-            <span class="mono" :class="{ unset: !project[scope] }">{{ project[scope]?.text ?? '未设置' }}</span>
-            <PopMenu :label="`${project.name} 的${SCOPE_LABELS[scope]}预设`" :heading="`${SCOPE_LABELS[scope]}预设`" :items="presetItems(project[scope], scope)" @select="key => project[scope] = pick(project[scope], key)">
+            <span class="detail-scope">{{ t.scopes[scope] }}</span>
+            <span class="mono" :class="{ unset: !project[scope] }">{{ project[scope]?.text ?? t.unset }}</span>
+            <PopMenu :label="t.projectPresets(project.name, t.scopes[scope])" :heading="t.presetsOf(t.scopes[scope])" :items="presetItems(project[scope], scope)" @select="key => project[scope] = pick(project[scope], key)">
               <SymbolIcon name="plus.circle" />
             </PopMenu>
           </div>
           <div v-if="project.name !== current" class="detail-actions">
             <button type="button" class="small-button" @click="current = project.name">
-              设为当前
+              {{ t.makeCurrent }}
             </button>
           </div>
         </div>
       </div>
       <p class="menu-item inert">
-        <SymbolIcon name="plus" />添加项目…
+        <SymbolIcon name="plus" />{{ t.addProject }}
       </p>
 
       <hr>
       <p class="menu-item inert">
-        <SymbolIcon name="slider.horizontal.3" />编辑禁推时段…
+        <SymbolIcon name="slider.horizontal.3" />{{ t.edit }}
       </p>
       <p class="menu-item inert">
-        <SymbolIcon name="macwindow" />打开云匣
+        <SymbolIcon name="macwindow" />{{ t.open }}
       </p>
-      <a class="menu-item" :href="withBase('/guide/freeze')">
-        <SymbolIcon name="questionmark.circle" />使用说明
+      <a class="menu-item" :href="localePath('/guide/freeze')">
+        <SymbolIcon name="questionmark.circle" />{{ t.help }}
       </a>
       <p class="menu-item inert">
-        <SymbolIcon name="power" />退出云匣
+        <SymbolIcon name="power" />{{ t.quit }}
       </p>
     </div>
   </figure>
@@ -742,6 +869,11 @@ small {
   font-size: 11px;
 }
 
+/* English day names (Today, Tomorrow) need more room than 今天、明天. */
+.week-day:lang(en) {
+  width: 54px;
+}
+
 .week-today {
   font-weight: 600;
 }
@@ -821,6 +953,10 @@ small {
   flex: none;
   width: 40px;
   color: var(--yb-label-2);
+}
+
+.detail-scope:lang(en) {
+  width: 88px;
 }
 
 .detail .mono {

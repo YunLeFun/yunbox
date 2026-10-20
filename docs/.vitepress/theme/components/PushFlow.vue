@@ -6,7 +6,41 @@
  */
 import { computed, ref } from 'vue'
 import { DEMO_ASSETS, demoOid, formatBytes, pointerFor } from '../demo-assets'
+import { useCopy } from '../i18n'
 import SymbolIcon from './SymbolIcon.vue'
+
+const t = useCopy({
+  zh: {
+    machine: '你的电脑',
+    found: (count: number) => `找出 ${count} 个素材`,
+    signs: '用本机密钥签名',
+    push: '推送一次',
+    again: '再推送一次',
+    commits: (size: string) => `提交和指针，${size}`,
+    codeHost: '代码托管',
+    codeHostSub: 'GitHub、GitLab、工蜂，照旧使用',
+    received: (count: number) => `收到 1 个提交，${count} 个指针文件`,
+    assets: (size: string) => `素材本体，${size}`,
+    noServer: '中间没有服务端',
+    bucket: '你的 COS bucket',
+    bucketSub: '私有读写，按内容寻址',
+  },
+  en: {
+    machine: 'Your computer',
+    found: (count: number) => `finds ${count} assets`,
+    signs: 'signs with your local key',
+    push: 'Push',
+    again: 'Push Again',
+    commits: (size: string) => `Commits and pointers, ${size}`,
+    codeHost: 'Code host',
+    codeHostSub: 'GitHub, GitLab or any Git host, as before',
+    received: (count: number) => `Received 1 commit and ${count} pointer files`,
+    assets: (size: string) => `The assets themselves, ${size}`,
+    noServer: 'No server in between',
+    bucket: 'Your COS bucket',
+    bucketSub: 'Private, content-addressed',
+  },
+})
 
 const PREFIX = 'yunbox/team/game'
 const pushed = DEMO_ASSETS.slice(0, 3)
@@ -36,35 +70,35 @@ function push(): void {
     <div class="node machine">
       <p class="node-title">
         <span class="node-icon"><SymbolIcon name="laptopcomputer" /></span>
-        你的电脑
+        {{ t.machine }}
       </p>
       <ol class="steps">
         <li><code>git push</code></li>
-        <li><code>git-lfs</code> 找出 {{ pushed.length }} 个素材</li>
-        <li><code>git-yunbox lfs-agent</code> 用本机密钥签名</li>
+        <li><code>git-lfs</code> {{ t.found(pushed.length) }}</li>
+        <li><code>git-yunbox lfs-agent</code> {{ t.signs }}</li>
       </ol>
       <button class="push" type="button" :disabled="state === 'moving'" @click="push">
         <SymbolIcon name="arrow.up.doc" />
-        {{ state === 'done' ? '再推送一次' : '推送一次' }}
+        {{ state === 'done' ? t.again : t.push }}
       </button>
     </div>
 
     <div class="lane lane-code">
       <div class="track">
         <span class="parcel parcel-small" />
-        <span class="track-label">提交和指针，{{ formatBytes(pointerBytes) }}</span>
+        <span class="track-label">{{ t.commits(formatBytes(pointerBytes)) }}</span>
       </div>
       <div class="node dest">
         <p class="node-title">
           <span class="node-icon node-icon-grey"><SymbolIcon name="arrow.triangle.branch" /></span>
-          代码托管
+          {{ t.codeHost }}
         </p>
         <p class="dest-sub">
-          GitHub、GitLab、工蜂，照旧使用
+          {{ t.codeHostSub }}
         </p>
         <p class="dest-result">
           <SymbolIcon name="checkmark.circle.fill" class="ok" />
-          收到 1 个提交，{{ pushed.length }} 个指针文件
+          {{ t.received(pushed.length) }}
         </p>
       </div>
     </div>
@@ -72,19 +106,19 @@ function push(): void {
     <div class="lane lane-assets">
       <div class="track">
         <span class="parcel parcel-big" />
-        <span class="track-label">素材本体，{{ formatBytes(assetBytes) }}</span>
+        <span class="track-label">{{ t.assets(formatBytes(assetBytes)) }}</span>
         <span class="no-server">
           <SymbolIcon name="square.on.square.dashed" />
-          中间没有服务端
+          {{ t.noServer }}
         </span>
       </div>
       <div class="node dest">
         <p class="node-title">
           <span class="node-icon"><SymbolIcon name="icloud" /></span>
-          你的 COS bucket
+          {{ t.bucket }}
         </p>
         <p class="dest-sub">
-          私有读写，按内容寻址
+          {{ t.bucketSub }}
         </p>
         <ul class="dest-result keys">
           <li v-for="key in keys" :key="key">

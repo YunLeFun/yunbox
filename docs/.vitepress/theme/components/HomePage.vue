@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /** The landing page: hero, how a push travels, setup, push check, freeze windows and AI, keys, downloads. */
-import { withBase } from 'vitepress'
+import { useCopy, useLocalePath } from '../i18n'
 import ConfirmDialogMock from './ConfirmDialogMock.vue'
 import CopyCommand from './CopyCommand.vue'
 import DownloadPanel from './DownloadPanel.vue'
@@ -11,6 +11,82 @@ import KeyBoundary from './KeyBoundary.vue'
 import PushFlow from './PushFlow.vue'
 import SymbolIcon from './SymbolIcon.vue'
 import TerminalDemo from './TerminalDemo.vue'
+
+const localePath = useLocalePath()
+
+// Paragraphs with inline code are trusted HTML written here, never user input.
+const t = useCopy({
+  zh: {
+    title: ['代码交给 Git，', '素材交给云匣。'],
+    lead: '云匣 YunBox 兼容 Git LFS。PSD、模型、音频和视频直接存进你自己的腾讯云 COS，团队照常 <code>git push</code>、<code>git clone</code>，中间不经过任何服务端。',
+    downloadMac: '下载 macOS 客户端',
+    quickStart: '快速开始',
+    platforms: '命令行支持 macOS、Linux 和 Windows',
+    scope: '',
+    flowTitle: '一次推送，分两条路走',
+    flow: '代码和几行指针照旧去代码托管平台；素材由本机的传输代理签名后，直接上传到你的 bucket。没有要部署、要续费、要盯着的服务端。',
+    setupTitle: '接入只要几条命令',
+    setup: '管理员给仓库接一次 COS，再给每位协作者开一个子账号。协作者登录后 clone，素材自动下载。哪里不对，先跑 <code>yunbox doctor</code>，每一项都附修复命令。',
+    checkTitle: '推送之前，先看看有多大',
+    check: 'macOS 客户端和 <code>yunbox inspect --push</code> 用同一套检查：分别统计 Git pack 和 LFS 候选量，按大小列出每个文件，超出预算的标出来。下面的窗口可以直接操作。',
+    confirm: '用 <code>yunbox hook install --confirm</code> 装上推送钩子后，超出预算的 <code>git push</code> 不会被直接拦下，而是弹出下面的对话框：推到哪个远端、哪些文件超限、每个文件多大，看完再决定取消还是继续。',
+    checkLinks: [
+      { text: '推送检查的统计口径', path: '/inspect' },
+      { text: '超限时如何确认', path: '/inspect#超限确认' },
+      { text: 'macOS 客户端的全部功能', path: '/guide/macos' },
+    ],
+    freezeTitle: '到点不让推送',
+    freeze: '用 <code>opening_hours</code> 写法设定禁推时段，例如 <code>Mo-Fr 09:00-18:00; We off</code>。本仓库、团队、全局三层规则同时生效，命中时推送在上传前被中断；紧急修复时 <code>yunbox freeze off --for 1h</code> 快速关闭，规则保留，到点自动恢复。',
+    menuTitle: '菜单栏里随时看到',
+    menu: '当前仓库处在禁推时段时，菜单栏的云匣图标右上角会多一个圆点。点开面板：现在能不能推、今天和未来 7 天的禁推分布、每个项目的规则。勾选预设就能设置，右上角的开关和定时按钮可以一次关闭所有仓库。这里的演示面板可以直接操作：勾选预设、拨动开关试试。',
+    commands: '命令行示例',
+    aiTitle: '交给 AI 接入',
+    ai: '客户端的 COS 面板里有「复制给 AI 的接入说明」，粘贴给 Claude Code、Codex 或 Cursor 即可。云匣的命令都不需要交互、都有 JSON 输出，编程助手可以自己检查、接入、设时段；只有保存腾讯云密钥这一步留给你自己。',
+    freezeLinks: [
+      { text: '禁推时段的写法和场景', path: '/guide/freeze' },
+      { text: '用 AI 编程助手接入', path: '/guide/ai' },
+    ],
+    keysTitle: '密钥不离开你的电脑',
+    keys: '仓库里只记录素材放在哪个 bucket、哪个前缀。访问 COS 的密钥每人一把，存在各自电脑的钥匙串里。',
+    downloadTitle: '下载云匣',
+    download: '图形界面适合日常查看和接入；命令行负责传输，每位协作者都需要安装。两者可以同时使用。',
+  },
+  en: {
+    title: ['Code goes to Git.', 'Assets go to YunBox.'],
+    lead: 'YunBox works with Git LFS. PSDs, models, audio and video go straight into your own Tencent Cloud COS bucket, while your team keeps using <code>git push</code> and <code>git clone</code> as usual. No server sits in between.',
+    downloadMac: 'Download for macOS',
+    quickStart: 'Quick Start',
+    platforms: 'The command line runs on macOS, Linux and Windows',
+    scope: '<strong>Tencent Cloud COS only, for now.</strong> You need a Tencent Cloud account and a COS bucket; other storage such as S3 is not supported yet. The macOS app and these docs are in English, but command-line messages are still in Chinese.',
+    flowTitle: 'One push, two paths',
+    flow: 'Code and a few lines of pointers go to your Git host as always. Assets are signed by a transfer agent on your machine and uploaded straight to your bucket. There is no server to deploy, pay for or babysit.',
+    setupTitle: 'Set up with a few commands',
+    setup: 'An admin connects the repository to COS once and creates a sub-account for each collaborator. Collaborators sign in and clone; assets download on their own. If anything is off, run <code>yunbox doctor</code>: every failed check comes with the command that fixes it.',
+    checkTitle: 'See how big a push is before you push',
+    check: 'The macOS app and <code>yunbox inspect --push</code> run the same check: Git pack and LFS candidates are counted separately, every file is listed by size, and anything over budget is flagged. Try the window below; it works.',
+    confirm: 'Install the hook with <code>yunbox hook install --confirm</code> and an over-budget <code>git push</code> is not simply refused. You get the dialog below instead: which remote, which files are over, how big each one is. Then you decide whether to cancel or push anyway. (The real dialog is in Chinese for now.)',
+    checkLinks: [
+      { text: 'What the push check counts', path: '/inspect' },
+      { text: 'Confirming over-budget pushes', path: '/inspect#confirming-over-budget-pushes' },
+      { text: 'Everything the macOS app does', path: '/guide/macos' },
+    ],
+    freezeTitle: 'No pushing after hours',
+    freeze: 'Set push freeze windows in <code>opening_hours</code> syntax, such as <code>Mo-Fr 09:00-18:00; We off</code>. Rules for this repository, the team and every repository on your machine all apply at once, and a push that falls inside a window stops before anything uploads. For an urgent fix, <code>yunbox freeze off --for 1h</code> switches it off; the rules stay and come back on by themselves.',
+    menuTitle: 'Always visible in the menu bar',
+    menu: 'When the current repository is in a push freeze, the YunBox icon in the menu bar gets a dot. Open the panel to see whether you can push now, today\'s and the next 7 days\' freeze windows, and each project\'s rules. Tick a preset to set one; the switch and timer at the top switch off every repository at once. The demo panel here works too: tick a preset or flip the switch.',
+    commands: 'Command-line examples',
+    aiTitle: 'Let AI set it up',
+    ai: 'The app\'s COS panel has Copy Setup Prompt for AI: paste it into Claude Code, Codex or Cursor. Every YunBox command runs without prompts and has JSON output, so a coding assistant can check, connect and set freeze windows by itself. Saving your Tencent Cloud key is the one step left to you.',
+    freezeLinks: [
+      { text: 'Freeze window syntax and examples', path: '/guide/freeze' },
+      { text: 'Set up with an AI coding assistant', path: '/guide/ai' },
+    ],
+    keysTitle: 'Your keys never leave your computer',
+    keys: 'The repository only records which bucket and prefix the assets live in. Everyone has their own key for COS, kept in their own computer\'s keychain.',
+    downloadTitle: 'Download YunBox',
+    download: 'The app is for everyday checks and setup; the command line does the transfers, so every collaborator needs it. Use both side by side.',
+  },
+})
 </script>
 
 <template>
@@ -19,24 +95,21 @@ import TerminalDemo from './TerminalDemo.vue'
       <div class="wrap hero-grid">
         <div class="hero-copy">
           <h1 class="hero-title">
-            <span>代码交给 Git，</span>
-            <span>素材交给云匣。</span>
+            <span v-for="line in t.title" :key="line">{{ line }}</span>
           </h1>
-          <p class="hero-lead">
-            云匣 YunBox 兼容 Git LFS。PSD、模型、音频和视频直接存进你自己的腾讯云 COS，团队照常
-            <code>git push</code>、<code>git clone</code>，中间不经过任何服务端。
-          </p>
+          <p class="hero-lead" v-html="t.lead" />
           <div class="hero-actions">
             <a class="btn btn-primary" href="#download">
               <SymbolIcon name="arrow.down.circle" />
-              下载 macOS 客户端
+              {{ t.downloadMac }}
             </a>
-            <a class="btn btn-secondary" :href="withBase('/guide/')">快速开始</a>
+            <a class="btn btn-secondary" :href="localePath('/guide/')">{{ t.quickStart }}</a>
           </div>
           <div class="hero-install">
             <CopyCommand command="npm install -g yunbox" />
-            <p>命令行支持 macOS、Linux 和 Windows</p>
+            <p>{{ t.platforms }}</p>
           </div>
+          <p v-if="t.scope" class="hero-scope" v-html="t.scope" />
         </div>
         <HeroBox />
       </div>
@@ -45,8 +118,8 @@ import TerminalDemo from './TerminalDemo.vue'
     <section class="section section-alt">
       <div class="wrap">
         <header class="section-head">
-          <h2>一次推送，分两条路走</h2>
-          <p>代码和几行指针照旧去代码托管平台；素材由本机的传输代理签名后，直接上传到你的 bucket。没有要部署、要续费、要盯着的服务端。</p>
+          <h2>{{ t.flowTitle }}</h2>
+          <p>{{ t.flow }}</p>
         </header>
         <PushFlow />
       </div>
@@ -55,8 +128,8 @@ import TerminalDemo from './TerminalDemo.vue'
     <section class="section">
       <div class="wrap">
         <header class="section-head">
-          <h2>接入只要几条命令</h2>
-          <p>管理员给仓库接一次 COS，再给每位协作者开一个子账号。协作者登录后 clone，素材自动下载。哪里不对，先跑 <code>yunbox doctor</code>，每一项都附修复命令。</p>
+          <h2>{{ t.setupTitle }}</h2>
+          <p v-html="t.setup" />
         </header>
         <div class="narrow">
           <TerminalDemo />
@@ -67,20 +140,14 @@ import TerminalDemo from './TerminalDemo.vue'
     <section class="section section-alt">
       <div class="wrap">
         <header class="section-head">
-          <h2>推送之前，先看看有多大</h2>
-          <p>
-            macOS 客户端和 <code>yunbox inspect --push</code> 用同一套检查：分别统计 Git pack 和 LFS 候选量，按大小列出每个文件，超出预算的标出来。下面的窗口可以直接操作。
-          </p>
+          <h2>{{ t.checkTitle }}</h2>
+          <p v-html="t.check" />
         </header>
         <InspectorMock />
-        <p class="confirm-lead">
-          用 <code>yunbox hook install --confirm</code> 装上推送钩子后，超出预算的 <code>git push</code> 不会被直接拦下，而是弹出下面的对话框：推到哪个远端、哪些文件超限、每个文件多大，看完再决定取消还是继续。
-        </p>
+        <p class="confirm-lead" v-html="t.confirm" />
         <ConfirmDialogMock />
         <p class="section-foot">
-          <a :href="withBase('/inspect')">推送检查的统计口径</a>
-          <a :href="withBase('/inspect#超限确认')">超限时如何确认</a>
-          <a :href="withBase('/guide/macos')">macOS 客户端的全部功能</a>
+          <a v-for="link in t.checkLinks" :key="link.path" :href="localePath(link.path)">{{ link.text }}</a>
         </p>
       </div>
     </section>
@@ -88,24 +155,21 @@ import TerminalDemo from './TerminalDemo.vue'
     <section class="section">
       <div class="wrap">
         <header class="section-head">
-          <h2>到点不让推送</h2>
-          <p>
-            用 <code>opening_hours</code> 写法设定禁推时段，例如 <code>Mo-Fr 09:00-18:00; We off</code>。本仓库、团队、全局三层规则同时生效，命中时推送在上传前被中断；紧急修复时 <code>yunbox freeze off --for 1h</code> 快速关闭，规则保留，到点自动恢复。
-          </p>
+          <h2>{{ t.freezeTitle }}</h2>
+          <p v-html="t.freeze" />
         </header>
         <div class="freeze-grid">
           <div class="freeze-copy">
-            <h3>菜单栏里随时看到</h3>
-            <p>当前仓库处在禁推时段时，菜单栏的云匣图标右上角会多一个圆点。点开面板：现在能不能推、今天和未来 7 天的禁推分布、每个项目的规则。勾选预设就能设置，右上角的开关和定时按钮可以一次关闭所有仓库。这里的演示面板可以直接操作：勾选预设、拨动开关试试。</p>
-            <pre class="freeze-commands" aria-label="命令行示例"><code><span>yunbox freeze set "Mo-Fr 09:00-18:00"</span>
+            <h3>{{ t.menuTitle }}</h3>
+            <p>{{ t.menu }}</p>
+            <pre class="freeze-commands" :aria-label="t.commands"><code><span>yunbox freeze set "Mo-Fr 09:00-18:00"</span>
 <span>yunbox freeze off --until 18:00</span>
 <span>yunbox freeze check --json</span></code></pre>
 
-            <h3>交给 AI 接入</h3>
-            <p>客户端的 COS 面板里有「复制给 AI 的接入说明」，粘贴给 Claude Code、Codex 或 Cursor 即可。云匣的命令都不需要交互、都有 JSON 输出，编程助手可以自己检查、接入、设时段；只有保存腾讯云密钥这一步留给你自己。</p>
+            <h3>{{ t.aiTitle }}</h3>
+            <p>{{ t.ai }}</p>
             <p class="freeze-links">
-              <a :href="withBase('/guide/freeze')">禁推时段的写法和场景</a>
-              <a :href="withBase('/guide/ai')">用 AI 编程助手接入</a>
+              <a v-for="link in t.freezeLinks" :key="link.path" :href="localePath(link.path)">{{ link.text }}</a>
             </p>
           </div>
           <FreezePanelMock />
@@ -116,8 +180,8 @@ import TerminalDemo from './TerminalDemo.vue'
     <section class="section section-alt">
       <div class="wrap">
         <header class="section-head">
-          <h2>密钥不离开你的电脑</h2>
-          <p>仓库里只记录素材放在哪个 bucket、哪个前缀。访问 COS 的密钥每人一把，存在各自电脑的钥匙串里。</p>
+          <h2>{{ t.keysTitle }}</h2>
+          <p>{{ t.keys }}</p>
         </header>
         <KeyBoundary />
       </div>
@@ -126,8 +190,8 @@ import TerminalDemo from './TerminalDemo.vue'
     <section id="download" class="section">
       <div class="wrap">
         <header class="section-head">
-          <h2>下载云匣</h2>
-          <p>图形界面适合日常查看和接入；命令行负责传输，每位协作者都需要安装。两者可以同时使用。</p>
+          <h2>{{ t.downloadTitle }}</h2>
+          <p>{{ t.download }}</p>
         </header>
         <DownloadPanel />
       </div>
@@ -187,9 +251,9 @@ import TerminalDemo from './TerminalDemo.vue'
   line-height: 1.7;
 }
 
-.hero-lead code,
-.section-head code,
-.confirm-lead code,
+.hero-lead :deep(code),
+.section-head :deep(code),
+.confirm-lead :deep(code),
 .freeze-copy p code {
   padding: 0;
   background: none;
@@ -253,6 +317,21 @@ import TerminalDemo from './TerminalDemo.vue'
   margin: 8px 0 0 2px;
   color: var(--yb-label-3);
   font-size: 13px;
+}
+
+.hero-scope {
+  max-width: 34em;
+  margin: 24px 0 0;
+  padding: 12px 16px;
+  border-radius: var(--yb-radius-card);
+  background: var(--yb-fill-strong);
+  color: var(--yb-label-2);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.hero-scope :deep(strong) {
+  color: var(--yb-label);
 }
 
 .section {

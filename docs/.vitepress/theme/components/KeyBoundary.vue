@@ -3,14 +3,40 @@
  * What is committed and shared versus what never leaves a member's
  * machine, shown as the actual files, followed by the storage guarantees.
  */
+import { useCopy } from '../i18n'
 import SymbolIcon from './SymbolIcon.vue'
 
-const FACTS = [
-  { icon: 'lock', title: '不覆盖', body: '上传带 x-cos-forbid-overwrite，已经存在的对象不会被改写。' },
-  { icon: 'doc.on.doc', title: '只传一次', body: '对象按 SHA-256 内容寻址，同样的文件全组只上传一次。' },
-  { icon: 'checkmark.shield', title: '下载校验', body: '核对大小和 SHA-256，被替换或损坏的对象不会交给 git-lfs。' },
-  { icon: 'key', title: '最小权限', body: '子账号只有这个前缀的读写，不能列出 bucket，也不能删除。' },
-] as const
+/** Icons for the facts below, in the same order. */
+const FACT_ICONS = ['lock', 'doc.on.doc', 'checkmark.shield', 'key'] as const
+
+const t = useCopy({
+  zh: {
+    shared: '提交进仓库，全组共享',
+    sharedNote: '只记录素材放在哪里，没有任何密钥。不同项目可以用不同 bucket，也可以共用一个 bucket、各用一个前缀。',
+    local: '只在你自己的电脑上',
+    keychain: 'macOS 钥匙串（yunbox）',
+    localNote: ['每人一个子账号，只能读写这个前缀。有人离开项目，', ' 之后对方的密钥立即失效。Linux 和 Windows 上密钥存在只有本人可读的文件里。'],
+    facts: [
+      { title: '不覆盖', body: '上传带 x-cos-forbid-overwrite，已经存在的对象不会被改写。' },
+      { title: '只传一次', body: '对象按 SHA-256 内容寻址，同样的文件全组只上传一次。' },
+      { title: '下载校验', body: '核对大小和 SHA-256，被替换或损坏的对象不会交给 git-lfs。' },
+      { title: '最小权限', body: '子账号只有这个前缀的读写，不能列出 bucket，也不能删除。' },
+    ],
+  },
+  en: {
+    shared: 'Committed and shared with the team',
+    sharedNote: 'Only where the assets live, never a key. Each project can have its own bucket, or several can share one bucket with a prefix each.',
+    local: 'Only on your own computer',
+    keychain: 'macOS Keychain (yunbox)',
+    localNote: ['Everyone gets a sub-account that can only read and write this prefix. When someone leaves, ', ' revokes their key at once. On Linux and Windows the key lives in a file only you can read.'],
+    facts: [
+      { title: 'Never overwrites', body: 'Uploads carry x-cos-forbid-overwrite, so an existing object is never replaced.' },
+      { title: 'Uploaded once', body: 'Objects are addressed by SHA-256, so the same file is uploaded once for the whole team.' },
+      { title: 'Verified downloads', body: 'Size and SHA-256 are checked; a swapped or corrupted object never reaches git-lfs.' },
+      { title: 'Least privilege', body: 'Sub-accounts can read and write this prefix only. They cannot list the bucket or delete anything.' },
+    ],
+  },
+})
 </script>
 
 <template>
@@ -18,7 +44,7 @@ const FACTS = [
     <section class="side">
       <p class="side-title">
         <span class="tile tile-grey"><SymbolIcon name="arrow.triangle.branch" /></span>
-        提交进仓库，全组共享
+        {{ t.shared }}
       </p>
       <p class="file-name">
         .yunbox/config
@@ -34,17 +60,17 @@ const FACTS = [
 *.fbx filter=lfs diff=lfs merge=lfs -text
 *.wav filter=lfs diff=lfs merge=lfs -text</code></pre>
       <p class="side-note">
-        只记录素材放在哪里，没有任何密钥。不同项目可以用不同 bucket，也可以共用一个 bucket、各用一个前缀。
+        {{ t.sharedNote }}
       </p>
     </section>
 
     <section class="side">
       <p class="side-title">
         <span class="tile"><SymbolIcon name="key" /></span>
-        只在你自己的电脑上
+        {{ t.local }}
       </p>
       <p class="file-name">
-        macOS 钥匙串（yunbox）
+        {{ t.keychain }}
       </p>
       <pre class="file"><code>SecretId   AKID••••••••••••••••
 SecretKey  ••••••••••••••••••••</code></pre>
@@ -55,15 +81,15 @@ SecretKey  ••••••••••••••••••••</code></
     standalonetransferagent = yunbox
     locksverify = false</code></pre>
       <p class="side-note">
-        每人一个子账号，只能读写这个前缀。有人离开项目，<code>yunbox subaccount delete</code> 之后对方的密钥立即失效。Linux 和 Windows 上密钥存在只有本人可读的文件里。
+        {{ t.localNote[0] }}<code>yunbox subaccount delete</code>{{ t.localNote[1] }}
       </p>
     </section>
   </div>
 
   <dl class="facts">
-    <div v-for="fact in FACTS" :key="fact.title">
+    <div v-for="(fact, index) in t.facts" :key="FACT_ICONS[index]">
       <dt>
-        <SymbolIcon :name="fact.icon" class="fact-icon" />
+        <SymbolIcon :name="FACT_ICONS[index]" class="fact-icon" />
         {{ fact.title }}
       </dt>
       <dd>{{ fact.body }}</dd>

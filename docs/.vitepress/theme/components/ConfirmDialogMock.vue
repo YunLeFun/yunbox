@@ -5,6 +5,8 @@
  * packages/cli/src/confirm.ts embedded. Nothing here is clickable; the sample
  * push adds an intro video that is larger than the single-file budget.
  */
+import { computed } from 'vue'
+import { useCopy } from '../i18n'
 
 type Status = 'added' | 'modified' | 'deleted'
 
@@ -22,8 +24,6 @@ const KIB = 1024
 const MIB = 1024 * KIB
 const GIB = 1024 * MIB
 const LIMITS = { git: 50 * MIB, lfs: GIB, file: 200 * MIB }
-
-const LABELS: Record<Status, string> = { added: '新增', modified: '修改', deleted: '删除' }
 
 const CHANGES = ([
   { path: 'Assets/Video/opening.mp4', status: 'added', lfs: true, before: null, after: 412 * MIB, push: 412 * MIB },
@@ -45,18 +45,70 @@ const lfsBytes = lfsChanges.reduce((sum, change) => sum + change.push, 0)
 const largest = Math.max(...CHANGES.map(change => change.after ?? 0))
 const largestPush = Math.max(...CHANGES.map(change => change.push))
 
-const meters = [
-  { label: 'Git pack', value: GIT_PACK, limit: LIMITS.git, note: '压缩后预计上传' },
-  { label: 'LFS 候选', value: lfsBytes, limit: LIMITS.lfs, note: `${lfsChanges.length} 个素材，远端已有的会跳过` },
-  { label: '最大单文件', value: largest, limit: LIMITS.file, note: '原始大小' },
-].map(meter => ({ ...meter, over: meter.value > meter.limit, ratio: meter.value / meter.limit }))
+const overCount = CHANGES.filter(change => change.over).length
+
+// The real dialog is in Chinese for now; the English page shows it translated.
+const t = useCopy({
+  zh: {
+    figure: 'macOS 推送确认对话框示意',
+    labels: { added: '新增', modified: '修改', deleted: '删除' } as Record<Status, string>,
+    gitNote: '压缩后预计上传',
+    lfs: 'LFS 候选',
+    lfsNote: (count: number) => `${count} 个素材，远端已有的会跳过`,
+    largest: '最大单文件',
+    largestNote: '原始大小',
+    reason: (count: number, limit: string) => `${count} 个文件版本超过单文件限额 ${limit}`,
+    links: ['在 Finder 中显示', '在 Cursor 中打开', '在 YunBox 中查看完整信息', '打开远端仓库'],
+    title: '推送到 github.com/owner/game-assets 超过限额',
+    local: '本地仓库 game-assets（main）',
+    over: '超限',
+    changes: '变更文件',
+    files: (count: number) => `${count} 个文件`,
+    sort: '按本次上传大小排序',
+    columns: ['状态', '文件', '大小变化', '本次上传'],
+    versions: (count: number) => `${count} 个版本`,
+    none: '无',
+    delta: (text: string, delta: string) => `${text}（${delta}）`,
+    note: '「本次上传」是文件原始大小，Git 会压缩和增量传输；同一文件的每个历史版本分别统计。',
+    proceed: '继续推送',
+    cancel: '取消',
+  },
+  en: {
+    figure: 'The macOS push confirmation dialog',
+    labels: { added: 'Added', modified: 'Modified', deleted: 'Deleted' } as Record<Status, string>,
+    gitNote: 'Estimated upload after compression',
+    lfs: 'LFS candidates',
+    lfsNote: (count: number) => `${count} assets; ones already on the remote are skipped`,
+    largest: 'Largest file',
+    largestNote: 'Original size',
+    reason: (count: number, limit: string) => `${count} file versions are over the per-file limit of ${limit}`,
+    links: ['Show in Finder', 'Open in Cursor', 'View Details in YunBox', 'Open Remote Repository'],
+    title: 'Push to github.com/owner/game-assets is over the limit',
+    local: 'Local repository game-assets (main)',
+    over: 'Over',
+    changes: 'Changed files',
+    files: (count: number) => `${count} files`,
+    sort: 'Sorted by upload size',
+    columns: ['Status', 'File', 'Size change', 'This push'],
+    versions: (count: number) => `${count} versions`,
+    none: 'none',
+    delta: (text: string, delta: string) => `${text} (${delta})`,
+    note: '“This push” is the original file size; Git compresses and sends deltas. Each past version of a file counts separately.',
+    proceed: 'Push Anyway',
+    cancel: 'Cancel',
+  },
+})
+
+const meters = computed(() => [
+  { label: 'Git pack', value: GIT_PACK, limit: LIMITS.git, note: t.value.gitNote },
+  { label: t.value.lfs, value: lfsBytes, limit: LIMITS.lfs, note: t.value.lfsNote(lfsChanges.length) },
+  { label: t.value.largest, value: largest, limit: LIMITS.file, note: t.value.largestNote },
+].map(meter => ({ ...meter, over: meter.value > meter.limit, ratio: meter.value / meter.limit })))
 
 const counts = (['added', 'modified', 'deleted'] as const)
   .map(status => ({ status, count: CHANGES.filter(change => change.status === status).length }))
 
-const reason = `${CHANGES.filter(change => change.over).length} 个文件版本超过单文件限额 ${compact(LIMITS.file)}`
-
-const LINKS = ['在 Finder 中显示', '在 Cursor 中打开', '在 YunBox 中查看完整信息', '打开远端仓库']
+const reason = computed(() => t.value.reason(overCount, compact(LIMITS.file)))
 
 /** Same rounding as the CLI's `compactBytes`, so the numbers read like the real dialog. */
 function compact(bytes: number): string {
@@ -73,11 +125,12 @@ function compact(bytes: number): string {
 }
 
 function sizeChange(change: Change): string {
-  const text = `${change.before === null ? '无' : compact(change.before)} → ${change.after === null ? '无' : compact(change.after)}`
+  const none = t.value.none
+  const text = `${change.before === null ? none : compact(change.before)} → ${change.after === null ? none : compact(change.after)}`
   if (change.before === null || change.after === null)
     return text
   const delta = change.after - change.before
-  return `${text}（${delta > 0 ? '+' : '−'}${compact(Math.abs(delta))}）`
+  return t.value.delta(text, `${delta > 0 ? '+' : '−'}${compact(Math.abs(delta))}`)
 }
 
 function percent(ratio: number): string {
@@ -86,7 +139,7 @@ function percent(ratio: number): string {
 </script>
 
 <template>
-  <figure class="alert" role="group" aria-label="macOS 推送确认对话框示意">
+  <figure class="alert" role="group" :aria-label="t.figure">
     <svg class="caution" viewBox="0 0 64 64" aria-hidden="true">
       <defs>
         <linearGradient id="yb-caution" x1="0" y1="0" x2="0" y2="1">
@@ -101,17 +154,17 @@ function percent(ratio: number): string {
 
     <div class="body">
       <p class="title">
-        推送到 github.com/owner/game-assets 超过限额
+        {{ t.title }}
       </p>
       <p class="info">
-        本地仓库 game-assets（main）<br>{{ reason }}
+        {{ t.local }}<br>{{ reason }}
       </p>
 
       <div class="report">
         <div class="meters">
           <div v-for="meter in meters" :key="meter.label" class="meter" :class="{ over: meter.over }">
             <p class="meter-label">
-              {{ meter.label }}<b v-if="meter.over">超限</b>
+              {{ meter.label }}<b v-if="meter.over">{{ t.over }}</b>
             </p>
             <p class="meter-value">
               {{ compact(meter.value) }}<span> / {{ compact(meter.limit) }}</span>
@@ -126,31 +179,31 @@ function percent(ratio: number): string {
         </div>
 
         <p class="caption">
-          <strong>变更文件</strong>
+          <strong>{{ t.changes }}</strong>
           <span>
-            {{ CHANGES.length }} 个文件
+            {{ t.files(CHANGES.length) }}
             <template v-for="item in counts" :key="item.status">
-              · <i class="badge" :class="item.status">{{ LABELS[item.status] }}</i> {{ item.count }}
+              · <i class="badge" :class="item.status">{{ t.labels[item.status] }}</i> {{ item.count }}
             </template>
           </span>
-          <span class="sort">按本次上传大小排序</span>
+          <span class="sort">{{ t.sort }}</span>
         </p>
 
-        <div class="table" role="table" aria-label="变更文件">
+        <div class="table" role="table" :aria-label="t.changes">
           <div class="tr th" role="row">
-            <span role="columnheader">状态</span>
-            <span role="columnheader">文件</span>
-            <span role="columnheader" class="num col-diff">大小变化</span>
-            <span role="columnheader" class="num">本次上传</span>
+            <span role="columnheader">{{ t.columns[0] }}</span>
+            <span role="columnheader">{{ t.columns[1] }}</span>
+            <span role="columnheader" class="num col-diff">{{ t.columns[2] }}</span>
+            <span role="columnheader" class="num">{{ t.columns[3] }}</span>
           </div>
           <div v-for="change in CHANGES" :key="change.path" class="tr" :class="{ over: change.over }" role="row">
-            <span role="cell"><i class="badge" :class="change.status">{{ LABELS[change.status] }}</i></span>
+            <span role="cell"><i class="badge" :class="change.status">{{ t.labels[change.status] }}</i></span>
             <span role="cell" class="path">
               <span class="dir">{{ change.dir }}</span>
               <span class="name">{{ change.name }}</span>
               <i v-if="change.lfs" class="tag">LFS</i>
-              <i v-if="change.versions" class="tag">{{ change.versions }} 个版本</i>
-              <i v-if="change.over" class="tag tag-over">超限</i>
+              <i v-if="change.versions" class="tag">{{ t.versions(change.versions) }}</i>
+              <i v-if="change.over" class="tag tag-over">{{ t.over }}</i>
             </span>
             <span role="cell" class="num diff col-diff">{{ sizeChange(change) }}</span>
             <span role="cell" class="num push">
@@ -160,17 +213,17 @@ function percent(ratio: number): string {
           </div>
         </div>
         <p class="note">
-          「本次上传」是文件原始大小，Git 会压缩和增量传输；同一文件的每个历史版本分别统计。
+          {{ t.note }}
         </p>
       </div>
 
       <div class="links">
-        <span v-for="link in LINKS" :key="link" class="button button-small">{{ link }}</span>
+        <span v-for="link in t.links" :key="link" class="button button-small">{{ link }}</span>
       </div>
 
       <div class="actions">
-        <span class="button button-destructive">继续推送</span>
-        <span class="button button-default">取消</span>
+        <span class="button button-destructive">{{ t.proceed }}</span>
+        <span class="button button-default">{{ t.cancel }}</span>
       </div>
     </div>
   </figure>
@@ -366,6 +419,11 @@ i {
   border-bottom: 1px solid var(--line);
 }
 
+/* English status labels (Modified) are wider than 新增、修改. */
+.tr:lang(en) {
+  grid-template-columns: 66px minmax(0, 1fr) 210px 120px;
+}
+
 .th {
   padding: 4px 6px;
   color: var(--muted);
@@ -526,6 +584,10 @@ i {
   .tr {
     grid-template-columns: 40px minmax(0, 1fr) 76px;
     padding: 5px 2px;
+  }
+
+  .tr:lang(en) {
+    grid-template-columns: 62px minmax(0, 1fr) 76px;
   }
 
   .col-diff {

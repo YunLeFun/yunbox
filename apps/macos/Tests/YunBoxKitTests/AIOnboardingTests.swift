@@ -23,14 +23,16 @@ import Testing
 }
 
 @Test func docsLinksPointAtTheWebsite() {
-    #expect(DocsPage.freeze.url.absoluteString == "https://yunlefun.github.io/yunbox/guide/freeze")
-    #expect(DocsPage.quickStart.url.absoluteString == "https://yunlefun.github.io/yunbox/guide/")
-    #expect(DocsPage.freezeSyntax.url.path == "/yunbox/guide/freeze")
-    #expect(DocsPage.freezeSyntax.url.fragment(percentEncoded: false) == "时段写法")
+    #expect(DocsPage.freeze.url(english: false).absoluteString == "https://yunlefun.github.io/yunbox/guide/freeze")
+    #expect(DocsPage.quickStart.url(english: false).absoluteString == "https://yunlefun.github.io/yunbox/guide/")
+    #expect(DocsPage.freezeSyntax.url(english: false).path == "/yunbox/guide/freeze")
+    #expect(DocsPage.freezeSyntax.url(english: false).fragment(percentEncoded: false) == "时段写法")
     #expect(DocsPage.changelog.url(english: false).absoluteString == "https://yunlefun.github.io/yunbox/changelog")
     #expect(DocsPage.changelog.url(english: true).absoluteString == "https://yunlefun.github.io/yunbox/en/changelog")
-    // Chinese-only pages stay Chinese in an English interface.
-    #expect(DocsPage.freeze.url(english: true) == DocsPage.freeze.url(english: false))
+    // An English interface opens the English page, with its English anchor.
+    #expect(DocsPage.quickStart.url(english: true).absoluteString == "https://yunlefun.github.io/yunbox/en/guide/")
+    #expect(DocsPage.freezeSyntax.url(english: true).absoluteString == "https://yunlefun.github.io/yunbox/en/guide/freeze#window-syntax")
+    #expect(DocsPage.inspect.url(english: true).absoluteString == "https://yunlefun.github.io/yunbox/en/inspect")
 }
 
 @Test func everyDocsPageExistsInTheRepository() throws {
@@ -39,12 +41,17 @@ import Testing
         let path = String(page.rawValue.split(separator: "#")[0])
         let file = path.hasSuffix("/") ? "\(path)index.md" : "\(path).md"
         #expect(FileManager.default.fileExists(atPath: docs.appending(path: file).path), "\(file)")
-        if DocsPage.englishPages.contains(page) {
-            #expect(FileManager.default.fileExists(atPath: docs.appending(path: "en/\(file)").path), "en/\(file)")
-        }
-        if let anchor = page.url.fragment(percentEncoded: false) {
+        #expect(FileManager.default.fileExists(atPath: docs.appending(path: "en/\(file)").path), "en/\(file)")
+        if let anchor = page.url(english: false).fragment(percentEncoded: false) {
             let text = try String(contentsOf: docs.appending(path: file), encoding: .utf8)
             #expect(text.contains("## \(anchor)\n"), "\(file)#\(anchor)")
+        }
+        // English headings get VitePress's slugs: lower case, spaces to hyphens.
+        #expect((page.englishFragment == nil) == (page.url(english: false).fragment == nil), "\(page)")
+        if let anchor = page.englishFragment {
+            let text = try String(contentsOf: docs.appending(path: "en/\(file)"), encoding: .utf8)
+            let slugs = text.split(separator: "\n").filter { $0.hasPrefix("## ") }.map { $0.dropFirst(3).lowercased().replacingOccurrences(of: " ", with: "-") }
+            #expect(slugs.contains(anchor), "en/\(file)#\(anchor)")
         }
     }
 }
