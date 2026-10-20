@@ -16,6 +16,8 @@ const PREFIX_SEGMENT_PATTERN = /^[\w.-]+$/
  * `<prefix>/<oid[0:2]>/<oid[2:4]>/<oid>`.
  */
 export interface CosLocation {
+  /** Never set: only S3 locations carry a provider, so this one stays what 0.1.x wrote. */
+  provider?: 'cos'
   /** Bucket name including the APPID suffix. */
   bucket: string
   region: string
@@ -44,12 +46,6 @@ export function normalizeLocation(location: CosLocation): CosLocation {
   return normalized
 }
 
-/** The COS key of an LFS object. */
-export function objectKey(location: CosLocation, oid: string): string {
-  const path = `${oid.slice(0, 2)}/${oid.slice(2, 4)}/${oid}`
-  return location.prefix === '' ? path : `${location.prefix}/${path}`
-}
-
 /**
  * The shared settings file, relative to the repository root. `.yunbox/` holds
  * only files that are committed and shared with the team; credentials and the
@@ -65,7 +61,8 @@ export function locationFiles(root: string): string[] {
   return [LOCATION_FILE, LEGACY_LOCATION_FILE].filter(file => existsSync(join(root, file)))
 }
 
-async function readLocationFile(context: CliContext, file: string): Promise<CosLocation | undefined> {
+/** Read the `[cos]` section of one settings file; `undefined` when it has no bucket. @throws {TypeError} for an invalid setting. */
+export async function readCosSection(context: CliContext, file: string): Promise<CosLocation | undefined> {
   const bucket = await readGitConfig(context, 'cos.bucket', file)
   if (bucket === undefined)
     return undefined
@@ -92,7 +89,7 @@ export async function readLocation(context: CliContext, root: string): Promise<C
   const found: { file: string, location: CosLocation }[] = []
   for (const file of locationFiles(root)) {
     try {
-      const location = await readLocationFile(context, join(root, file))
+      const location = await readCosSection(context, join(root, file))
       if (location !== undefined)
         found.push({ file, location })
     }
@@ -114,6 +111,12 @@ export async function readLocation(context: CliContext, root: string): Promise<C
 export async function writeLocation(context: CliContext, root: string, location: CosLocation): Promise<{ removedLegacy: boolean }> {
   const file = join(root, LOCATION_FILE)
   await mkdir(dirname(file), { recursive: true })
+  await writeCosSection(context, file, location)
+  return removeLegacyLocationFile(root)
+}
+
+/** Write the `[cos]` section of a settings file, keeping every other setting. */
+export async function writeCosSection(context: CliContext, file: string, location: CosLocation): Promise<void> {
   await runGitChecked(context, ['config', '--file', file, 'cos.bucket', location.bucket])
   await runGitChecked(context, ['config', '--file', file, 'cos.region', location.region])
   await runGitChecked(context, ['config', '--file', file, 'cos.prefix', location.prefix])
@@ -121,6 +124,10 @@ export async function writeLocation(context: CliContext, root: string, location:
     await runGitChecked(context, ['config', '--file', file, '--unset-all', 'cos.endpoint']).catch(() => {})
   else
     await runGitChecked(context, ['config', '--file', file, 'cos.endpoint', location.endpoint])
+}
+
+/** Delete the legacy `.yunboxconfig` so it cannot drift from `.yunbox/config`; returns whether it existed. */
+export async function removeLegacyLocationFile(root: string): Promise<{ removedLegacy: boolean }> {
   const legacy = join(root, LEGACY_LOCATION_FILE)
   if (!existsSync(legacy))
     return { removedLegacy: false }

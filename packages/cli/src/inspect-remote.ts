@@ -1,11 +1,11 @@
 // @env node
 
 import type { CliContext } from './context.ts'
+import type { ObjectStore, StorageLocation } from './storage/provider.ts'
 import { AGENT_NAME } from './commands/lfs-agent.ts'
-import { CosClientError, CosDirectClient } from './cos/client.ts'
-import { resolveCredentials } from './cos/credentials.ts'
-import { objectKey, readLocation } from './cos/location.ts'
 import { readGitConfig } from './git.ts'
+import { providerOf, readStorageLocation } from './storage/config.ts'
+import { objectKey, StorageRequestError } from './storage/provider.ts'
 
 /** HEAD requests in flight at once. */
 export const REMOTE_CHECK_CONCURRENCY = 8
@@ -15,7 +15,7 @@ export const REMOTE_CHECK_TIMEOUT_MS = 5000
 
 /**
  * Outcome of {@link checkRemoteObjects}. Only `checked` is definite: `skipped`
- * means the repository is not in direct COS mode or has no local keys, and
+ * means the repository is not in direct mode (any provider) or has no local keys, and
  * `failed` carries a reason that is safe to print (no keys, signatures or URLs).
  */
 export type RemoteCheck
@@ -24,7 +24,7 @@ export type RemoteCheck
     | { status: 'failed', reason: string }
 
 /**
- * Which LFS objects already exist in the repository's COS prefix, by one HEAD
+ * Which LFS objects already exist in the repository's storage prefix, by one HEAD
  * request each with the user's own keys, as the transfer agent does before an
  * upload. All or nothing: any failed request, or running out of time, fails
  * the whole check, so an unanswered object is never taken as already uploaded.
@@ -40,19 +40,22 @@ export async function checkRemoteObjects(context: CliContext, objects: Array<{ o
     return { status: 'skipped' }
   if (await readGitConfig(context, 'lfs.standalonetransferagent') !== AGENT_NAME)
     return { status: 'skipped' }
-  let client: CosDirectClient
+  let client: ObjectStore
+  let location: StorageLocation | undefined
   try {
-    const location = await readLocation(context, context.cwd)
+    location = await readStorageLocation(context, context.cwd)
     if (location === undefined)
       return { status: 'skipped' }
-    const resolved = await resolveCredentials(context.env)
+    const provider = providerOf(location)
+    const resolved = await provider.resolveCredentials(context.env)
     if (resolved === undefined)
       return { status: 'skipped' }
-    client = new CosDirectClient(location, () => resolved.credentials)
+    client = provider.connect(location, () => resolved.credentials)
   }
   catch {
-    return { status: 'failed', reason: '无法读取 COS 位置或本机密钥（yunbox doctor 可以检查）' }
+    return { status: 'failed', reason: `无法读取${location === undefined ? '存储' : ` ${providerOf(location).label} `}位置或本机密钥（yunbox doctor 可以检查）` }
   }
+  const where = location
 
   const controller = new AbortController()
   const present = new Set<string>()
@@ -60,7 +63,7 @@ export async function checkRemoteObjects(context: CliContext, objects: Array<{ o
   const worker = async (): Promise<void> => {
     while (next < objects.length && !controller.signal.aborted) {
       const object = objects[next++]!
-      const found = await client.head(objectKey(client.location, object.oid), { signal: controller.signal })
+      const found = await client.head(objectKey(where, object.oid), { signal: controller.signal })
       if (found?.size === object.bytes)
         present.add(object.oid)
     }
@@ -78,7 +81,7 @@ export async function checkRemoteObjects(context: CliContext, objects: Array<{ o
     return { status: 'checked', present }
   }
   catch (error) {
-    return { status: 'failed', reason: error instanceof CosClientError ? error.message : '查询 COS 失败' }
+    return { status: 'failed', reason: error instanceof StorageRequestError ? error.message : `查询 ${providerOf(where).label} 失败` }
   }
   finally {
     clearTimeout(timer)

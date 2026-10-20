@@ -2,9 +2,10 @@ import type { CliContext } from '../context.ts'
 import type { CosLocation } from '../cos/location.ts'
 import { parseArgs } from 'node:util'
 import { CliError, printError, USAGE_EXIT_CODE } from '../context.ts'
-import { describeLocation, LOCATION_FILE, normalizeLocation, readLocation } from '../cos/location.ts'
+import { describeLocation, LOCATION_FILE, normalizeLocation } from '../cos/location.ts'
 import { buildCosPolicy } from '../cos/policy.ts'
 import { findRepositoryRoot } from '../git.ts'
+import { readStorageLocation, requireCapability } from '../storage/config.ts'
 
 export const policyHelp = `用法：yunbox policy [--read-only] [--bucket <名称-APPID>] [--region <地域>] [--prefix <前缀>]
 
@@ -72,9 +73,12 @@ async function chooseLocation(context: CliContext, values: PolicyOptions): Promi
   const root = await findRepositoryRoot(context)
   let existing: CosLocation | undefined
   if (root !== undefined) {
-    existing = await readLocation({ ...context, cwd: root }, root).catch((error: Error) => {
+    const found = await readStorageLocation({ ...context, cwd: root }, root).catch((error: Error) => {
       throw new CliError(`COS 位置的配置不对：${error.message}`)
     })
+    if (found !== undefined && values.bucket === undefined)
+      requireCapability(found, 'policy', 'yunbox policy')
+    existing = found as CosLocation | undefined
   }
   const bucket = values.bucket ?? existing?.bucket
   const region = values.region ?? existing?.region

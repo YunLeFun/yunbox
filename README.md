@@ -6,6 +6,8 @@
 
 代码仍托管在 GitHub 等平台，LFS 大文件存到你自己的腾讯云 COS。每个协作者在自己电脑上用 `yunbox login` 保存自己的子账号密钥，git-lfs 通过 YunBox 的传输代理直接上传、下载 COS，**中间没有服务端**。需要集中签发 token 时，也可以改用[服务端模式](#服务端模式)。
 
+也可以直连 Cloudflare R2、AWS S3、MinIO 等 S3 兼容存储（`git yunbox init --preset r2`，`yunbox login --provider s3`），见 [接入 R2 和 S3 兼容存储](./docs/guide/r2.md)。
+
 - 官网和使用文档：[yunbox.yunle.fun](https://yunbox.yunle.fun/)（下载、功能演示和指南；[文档源码](./docs/)）
 - 方案与里程碑：[docs/plan.md](./docs/plan.md)
 - 部署到 CloudBase 云托管：[docs/deploy.md](./docs/deploy.md)
@@ -97,7 +99,7 @@ pnpm test
 
 - `packages/core`：LFS 协议类型、输入校验、存储接口、本地文件存储和 COS 存储
 - `packages/server`：基于 `node:http` 的 Batch、Verify、PUT 和 GET 服务，以及元数据存储（`metadata.ts` 定义接口，`metadata-local.ts` 和 `metadata-cloudbase.ts` 是两个实现）
-- `packages/cli`（包名 `yunbox`）：协作者使用的 `yunbox` / `git-yunbox` 命令
+- `packages/cli`（包名 `yunbox`）：协作者使用的 `yunbox` / `git-yunbox` 命令。直连模式的存储（COS、S3 兼容存储）是内置的提供方，不支持第三方插件；接口和新增步骤见 [`packages/cli/src/storage/README.md`](./packages/cli/src/storage/README.md)
 
 以及官网 `docs/`（`@yunbox/docs`，VitePress）：首页的演示组件在 `docs/.vitepress/theme/components/`，`deploy.md`、`inspect.md` 直接作为站点页面，`plan.md`、`goal*.md` 是内部规划，不进站点。文档里指向仓库其他位置的相对链接，构建时改写成 GitHub 地址，所以同一份 Markdown 在 GitHub 和官网上都能点。
 
@@ -110,7 +112,7 @@ pnpm docs:build    # 输出到 docs/.vitepress/dist
 
 `Docs` 工作流在 main 上的 `docs/` 有改动、以及每次 `Release` 结束后构建并发布到 [GitHub Pages 默认地址](https://yunlefun.github.io/yunbox/)（需要在仓库设置里把 Pages 的来源设为 GitHub Actions）。两处部署各自使用对应的网站路径，GitHub Pages 不绑定自定义域名。下载区在构建时查询最新 release 是否带 macOS 安装包，没有时改为提示从源码构建；`Release` 工作流在 npm 发布成功后创建 GitHub release，并附上通用二进制的 `YunBox-macOS.zip`（ad-hoc 签名，未公证）。
 
-命令行的测试位于 `packages/cli/test/`：用真实的 `git` 和 `git-lfs` 在临时目录里检查 `init` 生成的配置和幂等性，并对本仓库的服务端（本地存储加 token）检查 `doctor` 在通过、缺少凭据、只读 token、无效 token 等情况下的输出和退出码。测试使用独立的 HOME 和 `credential.helper store`，不会碰到本机的钥匙串。
+命令行的测试位于 `packages/cli/test/`：用真实的 `git` 和 `git-lfs` 在临时目录里检查 `init` 生成的配置和幂等性，并对本仓库的服务端（本地存储加 token）检查 `doctor` 在通过、缺少凭据、只读 token、无效 token 等情况下的输出和退出码。测试使用独立的 HOME 和 `credential.helper store`，不会碰到本机的钥匙串。 `s3-direct.test.ts` 用 S3 测试替身（`packages/core/test/fake-s3-server.ts`，用 AWS SDK 的签名器重新核对每个 SigV4 签名和请求体哈希）跑完整的直连 S3 流程；`s3-live.test.ts` 对真实的 R2 / S3 / MinIO 运行，默认跳过（`YUNBOX_S3_E2E=1`，变量见文件开头）。
 
 端到端测试位于 `packages/server/test/`：`e2e.test.ts` 分别用「本地存储 + 本地元数据」和「COS 测试替身（`packages/core/test/fake-cos-server.ts`，用官方 SDK 重新核对每个签名）+ CloudBase 文档数据库测试替身（`fake-cloudbase-server.ts`，用官方签名库 `@cloudbase/signature-nodejs` 重新核对换取 token 的签名，数据请求只认它签发的 token）」跑同一套 git-lfs 流程（`lfs-workflow.ts`），不需要任何云端凭据。流程通过 `credential.helper store` 把 token 交给 git-lfs，并覆盖只读 token 不能 push、无权限的仓库被拒、过期 token、未提供凭据和吊销后被拒。`metadata.test.ts` 对本地文件版和 CloudBase 版跑同一套元数据契约测试（`metadata-contract.ts`，包括跨实例的并发签发、吊销、授权修改和抢锁）。`cos-live.test.ts` 和 `metadata-live.test.ts` 分别对真实 COS 和真实 CloudBase 运行，默认跳过。
 

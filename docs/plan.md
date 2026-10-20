@@ -374,6 +374,28 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **决定**：宣传视频和官网改为公开，面向中文和英文开发者，不再只限云乐坊内部。G2 里「生产可用」的完成标准和「不做 SaaS、计费」的范围不变：公开的是自托管的开源工具，用户用自己的 COS。
 - **影响**：官网要补英文首页和指南（单独的任务）；对外不说「生产可用」，等 life 试点满 2 周有结论；公开演示不能用 life 试点的 bucket（见上面 EdgeOne 回源的风险），要用单独的演示 bucket。目前只支持腾讯云 COS，英文页面要写清楚。
 
+### 存储提供方接口（2026-10-20）
+
+- **决定**：宣传改为公开、中英双语后，要支持腾讯云 COS 以外的 S3 兼容存储（重点是下载流量免费的 Cloudflare R2）。提供方是**内置实现**，不开放第三方插件：插件要经手用户的云密钥，审查和分发的成本都不值得；接口仍按插件的形状设计（`packages/cli/src/storage/provider.ts` 的 `StorageProvider`），以后加内置提供方只需要实现它。
+- **接口分两层**：传输必需的动作是 `ObjectStore`（HEAD、不覆盖上传、边下载边校验 SHA-256、PUT / HEAD / GET 读写探测），所有提供方共用 `HttpObjectStore` 一份实现，提供方只负责「地址怎么拼、请求怎么签名、怎样声明不覆盖、哪些状态码表示已存在」（`ObjectTransport`）；列出和新建 bucket、生成访问策略、创建受限密钥（`yunbox subaccount`）是可选能力，命令检查能力而不是判断「是不是 COS」，不支持时报错并说明去提供方自己的控制台处理。
+- **兼容**：COS 的配置、密钥存储、步骤标题（`COS 密钥` 等，macOS 客户端靠它判断要不要提示登录）和 `doctor --json` / `buckets --json` 的输出都不变；这一步只是把 COS 移到接口后面，现有测试原样通过。
+
+### S3 兼容存储提供方（2026-10-20）
+
+- **配置**：`.yunbox/config` 新增 `storage.provider = s3` 和 `[s3] endpoint / bucket / region / prefix / addressingStyle`（`path` 或 `virtual`），命名沿用 `cos.*` 和 `yunbox.pushFreeze` 的风格。没有 `storage.provider` 时按 COS 读取，旧的 `cos.*` 和 `.yunboxconfig` 照常可用；写 COS 时仍然不写 `storage.provider`，0.1.x 的客户端能继续读。切换提供方时删除另一个提供方的配置段；`.yunbox/config` 是 S3 而 `.yunboxconfig` 还指向 COS 时报错并点名两个文件。预设：`r2`（`https://<账户 ID>.r2.cloudflarestorage.com`，region `auto`，路径风格）、`aws`（`https://s3.<地域>.amazonaws.com`，虚拟主机风格）、`minio`（路径风格，`us-east-1`）和自定义 `--endpoint`。endpoint 必须是 https，只有本机地址可以用 http；含「.」的 bucket 不允许虚拟主机风格（证书对不上）。
+- **签名**：手写 AWS Signature Version 4（`@yunbox/core` 的 `signSigV4`），不引入云 SDK。单元测试用 AWS 公开的 SigV4 测试套件（`aws-sig-v4-test-suite`，现保存在 awslabs/aws-c-auth 的 `tests/aws-signing-test-suite/v4`：get-vanilla、查询参数排序、未保留字符、UTF-8、空格、session token、带签名请求体）和 S3 文档里 GET Object（Range）、PUT Object 两个示例；另外用 AWS SDK 的签名器 `@smithy/signature-v4`（只作为开发依赖）逐字节核对 YunBox 实际发出的请求，包括 `UNSIGNED-PAYLOAD`。
+- **不用 UNSIGNED-PAYLOAD，也不用分块流式签名**：git-lfs 的对象 ID 就是内容的 SHA-256，上传时直接把它作为 `x-amz-content-sha256` 签名，不用再读一遍文件。存储服务会拒绝内容不符的上传（`XAmzContentSHA256Mismatch`），比 `UNSIGNED-PAYLOAD` 多一层保护；`aws-chunked` 流式签名只在不知道哈希时才需要。签名器支持 `UNSIGNED-PAYLOAD`，但传输代理不用它。
+- **不覆盖上传用 `If-None-Match: *`**（2026-10-20 查官方文档）：
+  - AWS S3：**支持**。PutObject 带 `If-None-Match: *` 时，已存在返回 412；并发时先完成的成功、后面的 412；并发删除时可能返回 409，可以重试。见 [Conditional writes](https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html)。
+  - Cloudflare R2：**支持**。S3 API 兼容表的 PutObject 列出 `If-None-Match`，并说明条件头「按已提交的 bucket 状态原子地判断」。见 [R2 S3 API compatibility](https://developers.cloudflare.com/r2/api/s3/api/)。返回码没有单独说明，按 S3 语义处理为 412，**未实测**（`s3-live.test.ts` 会检查）。
+  - MinIO：**部分核实**。AIStor 的 [S3 API 兼容文档](https://docs.min.io/aistor/developers/s3-api-compatibility/) 列出 PutObject 支持 `If-None-Match`，但没有说明 `*` 的语义；[官方博客](https://www.min.io/blog/leading-the-way-minios-conditional-write-feature-for-modern-data-workloads) 说 2023 年 2 月合入了条件写入。开源版各版本的行为**未核实**。
+  - **退回方案**：服务返回 501 或 `NotImplemented` 时，这个传输代理进程之后的上传不再带这个头，直接 PUT。可以接受，因为：上传前本来就先 HEAD，已存在就跳过；对象按内容寻址，键就是 SHA-256，同一个键只可能写入同样的字节；签名的 `x-amz-content-sha256` 让服务拒绝内容不符的上传；下载时还会校验 SHA-256。所以最坏情况是两个人同时上传同一个对象时，后写的用同样的内容覆盖了先写的。静默忽略这个头的服务（覆盖而不报错）也是同样的结论。
+  - 已存在（412）或冲突（409）时再 HEAD 一次：大小一致就算成功，不一致就报错。
+- **密钥**：按提供方分开保存。S3 的密钥在钥匙串的 `yunbox` / `s3` 项（COS 仍是 `yunbox` / `cos`）或 `credentials-s3.json`；环境变量是 `YUNBOX_S3_ACCESS_KEY_ID` / `YUNBOX_S3_SECRET_ACCESS_KEY` / `YUNBOX_S3_SESSION_TOKEN`，**不读** `AWS_*`，避免把开发者的 AWS 身份发给 R2 等其他服务。`yunbox login` 在已接入 S3 的仓库里默认按 S3 保存，并用一次 GET 不存在的键检查密钥：404 表示有效，`InvalidAccessKeyId` / `SignatureDoesNotMatch` 拒绝保存，`AccessDenied` 只提示；不在仓库里时没有 bucket 可查，直接保存。
+- **能力**：S3 提供方只实现传输动作。bucket、token、策略在服务自己的控制台里管理；`yunbox buckets`、`policy`、`subaccount` 在 S3 仓库里报错说明。R2 的 API token 只能按 bucket（可以选几个）授权，[官方文档](https://developers.cloudflare.com/r2/api/tokens/)没有按前缀授权的选项，所以指南建议每个项目一个 bucket，`init` 选 R2 时也会提示。
+- **JSON 兼容**：`doctor --json` 的 `mode` 在任何直连提供方下都是 `cos`（macOS 客户端按枚举严格解码，新值会让旧客户端解析失败），新增 `provider`（`cos` / `s3`）和 S3 的 `location.endpoint`；Swift 的 `Decodable` 会忽略多出的字段。S3 的检查项标题是「S3 位置」「S3 密钥」「S3 权限」，所以 macOS 客户端在 S3 仓库里缺密钥时不会出现「登录」引导，面板改造留到下一阶段。
+- **测试替身而不是 Docker 里的 MinIO**：`FakeS3Server` 用 AWS SDK 的签名器重新计算每个请求的签名，核对 `x-amz-content-sha256` 和请求体，模拟 R2 的 `auto` 地域、只读 token、不支持 `If-None-Match`（501）的服务。选它是因为：macOS、Linux、Windows 三个 CI 都能跑，不依赖 Docker；能稳定地注入 501、只读、篡改等情况；不需要下载镜像。真实服务由默认跳过的 `s3-live.test.ts` 覆盖（`YUNBOX_S3_E2E=1` 加 endpoint、bucket、密钥），也可以指向本机 Docker 里的 MinIO。
+
 ### 后续风险
 
 - CloudBase 云托管绑定运行角色后是否以 `TENCENTCLOUD_*` 环境变量注入临时密钥**未核实**（云函数是这样做的）。如果不是，需要在服务端增加从平台元数据接口获取密钥的代码，或者临时改用只挂最小权限策略的子账号长期密钥。
@@ -415,3 +437,9 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **G2 阶段 1 新增**：每次重新读取快照都要列出全部 token 和授权（每个实例每 30 秒两次查询）。规模变大后可以改成按 token 哈希直接查一个文档，但要重新论证吊销时限。
 - **G2 阶段 1 新增**：本地文件版的锁文件超过 10 秒就被当作崩溃残留删除。持有锁的操作只有几毫秒，但机器极慢（例如磁盘卡住超过 10 秒）时，两个写入者可能同时进入临界区。本地版只用于开发和测试。
 - **G2 阶段 1 新增**：迁移后的旧 token 统一在迁移后 90 天过期。管理员要在此之前给每个人换发新 token，否则大家会在同一天收到 401；`token list` 会显示过期时间。
+- **S3 提供方新增（2026-10-20）**：还没有在真实的 R2、AWS S3 或 MinIO 上跑过 `s3-live.test.ts`，`If-None-Match: *` 在 R2 上返回 412 也**未实测**。接入试点前要先跑一次。
+- **S3 提供方新增**：R2 token 不能限定到前缀。多个项目共用一个 R2 bucket 时，任何一个项目的 token 都能读写、覆盖其他项目的素材（下载时的 SHA-256 校验能发现被替换的内容，但找不回来，R2 也没有 COS 那样的版本控制）。只能靠每个项目一个 bucket。
+- **S3 提供方新增**：一台电脑同一时间只保存一组 S3 密钥。同时参与多个 R2 账户、或同时用 R2 和 MinIO 的人要来回 `yunbox login`，或者用 `YUNBOX_S3_*` 环境变量。真有需要再按 endpoint 分开保存。
+- **S3 提供方新增**：0.1.x 和本版本之前的命令行读不到 `storage.provider = s3`，在 S3 仓库里会提示「还没有 .yunbox/config」。团队改用 S3 前，所有协作者要先升级。
+- **S3 提供方新增**：单个 PUT 的上限（AWS 和 R2 都是 5 GB 左右）高于本项目 2 GB 的单文件上限，所以没有实现分片上传；以后放宽单文件上限时要加分片，并且分片上传要用 `CompleteMultipartUpload` 的条件写入。
+- **S3 提供方新增**：签名里的时间来自本机时钟，偏差超过 15 分钟时 S3 拒绝请求（`RequestTimeTooSkewed`，错误信息会提示校准时间）。HEAD 没有响应体，这时 `doctor` 只能显示 HTTP 403，看不出是时钟问题。

@@ -25,12 +25,12 @@ export const mainHelp = `云匣 YunBox 命令行（版本 ${CLI_VERSION}）
   yunbox <命令> [选项]
 
 命令：
-  login    在这台电脑上保存自己的腾讯云 COS 密钥（logout 删除）
+  login    在这台电脑上保存自己的 COS 或 S3 兼容存储密钥（logout 删除）
   subaccount  用管理员身份新建 / 授权 / 删除只给 YunBox 用的子账号，并保存长期密钥
   policy   输出给协作者子账号用的最小权限 CAM 策略 JSON（不改动账号）
-  init     在当前仓库接入 YunBox：.gitattributes、.lfsconfig，git-lfs 直连 COS
+  init     在当前仓库接入 YunBox：.gitattributes、.yunbox/config，git-lfs 直连 COS 或 S3 兼容存储
   types    按素材类型查看、添加、移除 .gitattributes 里的 LFS 规则（支持 game 等预置组合）
-  clone    clone 一个直连 COS 的仓库并下载素材
+  clone    clone 一个直连对象存储的仓库并下载素材
   buckets  列出本机密钥能看到的 COS bucket
   doctor   检查配置、连通性和读写权限，并给出修复命令
   status   列出当前仓库 LFS 对象的数量和总大小

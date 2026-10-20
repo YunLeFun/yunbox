@@ -30,9 +30,10 @@ import { runInitCos } from './init-cos.ts'
 
 export const initHelp = `用法：git yunbox init [选项]
 
-在当前 Git 仓库里接入 YunBox。默认直连 COS，不需要任何服务端：
+在当前 Git 仓库里接入 YunBox。默认直连腾讯云 COS，也可以直连 S3 兼容存储（Cloudflare R2、AWS S3、
+MinIO 等），都不需要任何服务端：
   1. 检查 git 和 git-lfs 版本，执行 git lfs install
-  2. 选择 COS bucket（或新建私有 bucket）和目录前缀，写进 .yunbox/config（不含密钥，提交后团队共享）
+  2. 选择 bucket（COS 可以新建私有 bucket）和目录前缀，写进 .yunbox/config（不含密钥，提交后团队共享）
   3. 用本机密钥检查能否在这个前缀写入和读取
   4. 按素材类型生成或合并 .gitattributes（已有规则不会重复添加）
   5. 在本仓库的 .git/config 登记传输代理：git-lfs 用 git-yunbox lfs-agent 直接上传下载
@@ -49,6 +50,14 @@ export const initHelp = `用法：git yunbox init [选项]
   --read-only        只需要拉取：密钥没有写权限时不提示警告
   --yes, -y          跳过确认
   --force            .yunbox/config 或 .lfsconfig 里已有不同的配置时替换它
+
+直连 S3 兼容存储的选项（密钥用 yunbox login --provider s3 保存）：
+  --provider <名称>  cos（默认）或 s3；给出下面任一选项时自动选 s3
+  --preset <预设>    r2（Cloudflare R2）、aws（AWS S3）或 minio
+  --account-id <id>  R2 的账户 ID，endpoint 为 https://<账户 ID>.r2.cloudflarestorage.com
+  --endpoint <地址>  服务地址（不含 bucket），例如 https://minio.example.com；必须是 https，本机地址除外
+  --addressing <风格>  path（<endpoint>/<bucket>/…，R2、MinIO 默认）或 virtual（<bucket>.<endpoint>/…，AWS 默认）
+  --bucket、--region、--prefix 同上；R2 的 region 是 auto，AWS 默认 us-east-1
 
 服务端模式（使用 YunBox 服务端和个人 token）：
   --url <地址>       YunBox 仓库地址，例如 https://lfs.example.com/team/assets；
@@ -84,12 +93,15 @@ export async function runInit(context: CliContext, args: string[]): Promise<numb
   const lfsConfigPath = join(root, '.lfsconfig')
   const currentUrl = await readGitConfig(repo, 'lfs.url', lfsConfigPath)
   const cosOptions = values.bucket !== undefined || values.region !== undefined || values.prefix !== undefined || values.create === true
+    || values.provider !== undefined || values.preset !== undefined || values.endpoint !== undefined || values['account-id'] !== undefined || values.addressing !== undefined
   let hasCosLocation = false
-  for (const file of locationFiles(root))
+  for (const file of locationFiles(root)) {
     hasCosLocation ||= await readGitConfig(repo, 'cos.bucket', join(root, file)) !== undefined
+    hasCosLocation ||= await readGitConfig(repo, 'storage.provider', join(root, file)) !== undefined
+  }
   if (values.cos === true || cosOptions || (values.url === undefined && (hasCosLocation || currentUrl === undefined))) {
     if (values.url !== undefined)
-      throw new CliError('--url（服务端模式）和 --cos（直连 COS）只能选一个', USAGE_EXIT_CODE)
+      throw new CliError('--url（服务端模式）和 --cos（直连 COS）只能选一个；--provider、--bucket 等直连存储的选项也不能和 --url 一起用', USAGE_EXIT_CODE)
     return await runInitCos(context, repo, root, values, parseCategories(values.types), installLfsAndAttributes)
   }
   const service = resolveService(values.url ?? currentUrl)
@@ -355,6 +367,11 @@ function assertToken(token: string): void {
 export interface InitOptions {
   'url'?: string
   'cos'?: boolean
+  'provider'?: string
+  'preset'?: string
+  'endpoint'?: string
+  'account-id'?: string
+  'addressing'?: string
   'bucket'?: string
   'region'?: string
   'prefix'?: string
@@ -377,6 +394,11 @@ function parseInitArgs(args: string[]): InitOptions {
       options: {
         'url': { type: 'string' },
         'cos': { type: 'boolean' },
+        'provider': { type: 'string' },
+        'preset': { type: 'string' },
+        'endpoint': { type: 'string' },
+        'account-id': { type: 'string' },
+        'addressing': { type: 'string' },
         'bucket': { type: 'string' },
         'region': { type: 'string' },
         'prefix': { type: 'string' },
