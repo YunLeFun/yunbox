@@ -226,7 +226,11 @@ private struct SetupForm: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("接入：把素材直传到 COS").font(.headline)
             if loading {
-                ProgressView("正在读取 bucket…").controlSize(.small)
+                // Inline like the header's spinner; a titled ProgressView stacks and centres the spinner over its label.
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("正在读取 bucket…").font(.callout).foregroundStyle(.secondary)
+                }
             } else if let loadError, loadError.needsLogin {
                 Text(loadError.message).font(.callout).foregroundStyle(.secondary)
                 LoginForm(store: store, running: $running, output: $output)
