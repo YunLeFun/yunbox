@@ -38,7 +38,7 @@ struct ReportView: View {
                 if let upload = report.lfs.uploadBytes {
                     BudgetCard(title: "LFS 需上传", symbol: "shippingbox", value: upload, limit: report.limits.lfsBytes,
                                exceeded: report.lfs.exceedsLimit, display: byteLabel(upload),
-                               footnote: "\(report.lfs.candidateCount - report.lfs.remoteCount) 个素材对象，\(report.lfs.remoteCount) 个已在 COS")
+                               footnote: "\(report.lfs.candidateCount - report.lfs.remoteCount) 个素材对象，\(report.lfs.remoteCount) 个已在 \(report.lfs.remoteStorageName)")
                 } else {
                     BudgetCard(title: "LFS 候选", symbol: "shippingbox", value: report.lfs.candidateBytes, limit: report.limits.lfsBytes,
                                exceeded: report.lfs.exceedsLimit, display: byteLabel(report.lfs.candidateBytes),
@@ -46,7 +46,7 @@ struct ReportView: View {
                 }
             }
             if report.lfs.remoteChecked {
-                Text("已查询 COS：已有的 LFS 对象推送时跳过，不计入上传量。")
+                Text("已查询 \(report.lfs.remoteStorageName)：已有的 LFS 对象推送时跳过，不计入上传量。")
                     .font(.caption).foregroundStyle(.secondary)
             } else {
                 Text("LFS 尚未查询远端，实际上传量未知；远端已有对象可能跳过。")

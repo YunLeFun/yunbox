@@ -46,9 +46,10 @@ git config yunbox.inspectFileBytes 10m
 | `changes` | 每个变更路径一条：`{ path, status, storage, beforeBytes, afterBytes, beforeOid, afterOid, versions, pushBytes, exceedsFileLimit }`。`status` 为 `added`、`modified`、`deleted` 或 `transient`；`storage` 为 `git` 或 `lfs`；路径不存在或旧对象不在本地时大小为 `null`；`versions` 为 `0` 表示没有新内容需要上传（如删除，或 LFS 对象已在 COS）。新增字段，`schemaVersion` 仍为 `1` |
 | `changes[].beforeOid` / `afterOid` | 推送前、推送后的内容 ID，用于读取对应版本：LFS 文件为素材的 SHA-256（本地位于 `.git/lfs/objects/<前 2 位>/<3–4 位>/<oid>`，可能尚未下载），普通文件为 Git blob ID（`git cat-file blob <oid>`）。与对应的大小同时为 `null`。不要从工作区读取，工作区可能与推送的提交不同。新增字段，`schemaVersion` 仍为 `1` |
 | `git.files` / `lfs.files` | 完整对象列表，每条为 `{ oid, bytes, paths, exceedsFileLimit }`，按大小降序。`exceedsFileLimit` 表示超过单文件预算且需要上传，COS 上已有的 LFS 对象为 `false` |
-| `lfs.files[].onRemote` | 仅在 `lfs.remoteChecked` 为 `true` 时提供：COS 上是否已有这个对象（推送时跳过）。新增字段，`schemaVersion` 仍为 `1` |
+| `lfs.files[].onRemote` | 仅在 `lfs.remoteChecked` 为 `true` 时提供：存储上是否已有这个对象（推送时跳过）。新增字段，`schemaVersion` 仍为 `1` |
 | `lfs.candidateBytes` / `candidateCount` | 去重后的 LFS 候选大小和数量 |
-| `lfs.remoteChecked` / `uploadBytes` | 查询了 COS 时为 `true` / 需要上传的 LFS 字节数；否则为 `false` / `null`，不能把未知上传量当成 `0`。`lfs.exceedsLimit` 在已查询时按 `uploadBytes` 判断，否则按 `candidateBytes` |
+| `lfs.remoteChecked` / `uploadBytes` | 查询了存储时为 `true` / 需要上传的 LFS 字节数；否则为 `false` / `null`，不能把未知上传量当成 `0`。`lfs.exceedsLimit` 在已查询时按 `uploadBytes` 判断，否则按 `candidateBytes` |
+| `lfs.remoteStorage` | 仅在 `lfs.remoteChecked` 为 `true` 时提供：查询的是哪种存储（`COS`、`S3`）。新增字段，`schemaVersion` 仍为 `1`；没有这个字段的旧版本只查询 COS |
 | `warnings` | 保守估算、upstream 快照等提示 |
 | `error` | 仅失败时提供 `{ code: "INSPECTION_FAILED", message }`，不返回原始 Git 错误或远端 URL |
 

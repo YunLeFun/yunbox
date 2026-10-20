@@ -25,6 +25,10 @@ private let reportJSON = #"""
     #expect(report.lfs.remoteCount == 1)
     #expect(report.files.map(\.object.onRemote) == [true, false])
     #expect(try InspectionResult.decode(Data(reportJSON.utf8), exitCode: 1).report.files.allSatisfy { $0.object.onRemote == nil })
+    // CLIs before storage providers only looked up COS and do not name it.
+    #expect(report.lfs.remoteStorageName == "COS")
+    let s3 = json.replacingOccurrences(of: #""remoteChecked":true"#, with: #""remoteChecked":true,"remoteStorage":"S3""#)
+    #expect(try InspectionResult.decode(Data(s3.utf8), exitCode: 0).report.lfs.remoteStorageName == "S3")
 }
 
 @Test func rejectsSchemaMismatchAndInconsistentExitCode() {

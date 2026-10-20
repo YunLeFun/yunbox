@@ -23,7 +23,7 @@ export interface InspectionFile {
    */
   exceedsFileLimit: boolean
   /**
-   * LFS objects only, and only when `lfs.remoteChecked`: whether COS already
+   * LFS objects only, and only when `lfs.remoteChecked`: whether the storage already
    * has the object, so the push skips it. Additive to schema version 1.
    */
   onRemote?: boolean
@@ -53,7 +53,7 @@ export interface InspectionChange {
   afterOid: string | null
   /**
    * Content versions of this path that the push uploads: Git objects not on
-   * the remote, or LFS candidates (only those missing in COS when `lfs.remoteChecked`).
+   * the remote, or LFS candidates (only those missing in the storage when `lfs.remoteChecked`).
    */
   versions: number
   /** Raw bytes of those versions, before compression; shared content counts for every path that uses it. */
@@ -83,9 +83,11 @@ export interface PushInspection {
   lfs: {
     candidateBytes: number
     candidateCount: number
-    /** Whether every candidate was looked up in COS (direct mode with local keys). */
+    /** Whether every candidate was looked up in the storage (direct mode with local keys). */
     remoteChecked: boolean
-    /** Bytes of candidates missing in COS; `null` unless `remoteChecked`, never a guessed `0`. */
+    /** Which storage was looked up (`COS`, `S3`), when `remoteChecked`. Additive to schema version 1. */
+    remoteStorage?: string
+    /** Bytes of candidates missing in the storage; `null` unless `remoteChecked`, never a guessed `0`. */
     uploadBytes: number | null
     /** Against `uploadBytes` when known, else `candidateBytes`. */
     exceedsLimit: boolean
@@ -133,7 +135,7 @@ export async function inspectPush(context: CliContext, range: InspectionRange, l
   const candidateBytes = sumBytes(candidates)
   const remote = await checkRemoteObjects(context, candidates)
   if (remote.status === 'failed')
-    warnings.push(`未能查询 COS 上已有的 LFS 对象（${remote.reason}），实际上传量按未知处理`)
+    warnings.push(`未能查询存储上已有的 LFS 对象（${remote.reason}），实际上传量按未知处理`)
   const present = remote.status === 'checked' ? remote.present : new Set<string>()
   const files = remote.status === 'checked'
     ? candidates.map(file => ({ ...file, exceedsFileLimit: file.exceedsFileLimit && !present.has(file.oid), onRemote: present.has(file.oid) }))
@@ -149,7 +151,7 @@ export async function inspectPush(context: CliContext, range: InspectionRange, l
     pointerBytes,
     files: gitFiles.sort(compareFiles),
   }
-  const lfs = { candidateBytes, candidateCount: files.length, remoteChecked: uploadBytes !== null, uploadBytes, exceedsLimit: (uploadBytes ?? candidateBytes) > limits.lfsBytes, files }
+  const lfs = { candidateBytes, candidateCount: files.length, remoteChecked: uploadBytes !== null, ...(remote.status === 'checked' && { remoteStorage: remote.storage }), uploadBytes, exceedsLimit: (uploadBytes ?? candidateBytes) > limits.lfsBytes, files }
   const lfsUploads = new Set(files.filter(file => !file.onRemote).map(file => file.oid))
   const changes = await readChanges(context, history.events, { blobs: allBlobs, pointers, gitBlobs: new Set(gitBlobs.map(blob => blob.oid)), lfsUploads, fileBytes: limits.fileBytes })
   return {
@@ -258,7 +260,7 @@ function describeLfs(report: PushInspection): string[] {
   const present = lfs.files.filter(file => file.onRemote).length
   return [
     `LFS 需上传：${formatBytes(lfs.uploadBytes)}，${lfs.candidateCount - present} 个对象；限额 ${formatBytes(limits.lfsBytes)}`,
-    `已查询 COS：${lfs.candidateCount} 个 LFS 候选中 ${present} 个已存在，推送时跳过。`,
+    `已查询 ${lfs.remoteStorage ?? 'COS'}：${lfs.candidateCount} 个 LFS 候选中 ${present} 个已存在，推送时跳过。`,
   ]
 }
 

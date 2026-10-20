@@ -19,7 +19,7 @@ export const REMOTE_CHECK_TIMEOUT_MS = 5000
  * `failed` carries a reason that is safe to print (no keys, signatures or URLs).
  */
 export type RemoteCheck
-  = | { status: 'checked', present: Set<string> }
+  = | { status: 'checked', present: Set<string>, storage: string }
     | { status: 'skipped' }
     | { status: 'failed', reason: string }
 
@@ -78,7 +78,7 @@ export async function checkRemoteObjects(context: CliContext, objects: Array<{ o
   try {
     if (await Promise.race([work, deadline]) === 'timeout')
       return { status: 'failed', reason: `${objects.length} 个对象未在 ${timeoutMs / 1000} 秒内查完` }
-    return { status: 'checked', present }
+    return { status: 'checked', present, storage: providerOf(where).label }
   }
   catch (error) {
     return { status: 'failed', reason: error instanceof StorageRequestError ? error.message : `查询 ${providerOf(where).label} 失败` }

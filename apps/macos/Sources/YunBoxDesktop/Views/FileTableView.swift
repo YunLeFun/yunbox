@@ -26,6 +26,8 @@ struct FileTableView: View {
         }
     }
 
+    private var storageName: String { store.result?.report.lfs.remoteStorageName ?? "COS" }
+
     private var table: some View {
         Table(store.visibleRows, selection: $store.selectedFile) {
             TableColumn("文件") { row in
@@ -41,7 +43,7 @@ struct FileTableView: View {
             TableColumn("原始大小") { row in Text(byteLabel(row.object.bytes)).monospacedDigit().help("\(row.object.bytes) 字节") }.width(90)
             TableColumn("预算") { row in
                 if row.object.onRemote == true {
-                    Text("已在 COS").foregroundStyle(.secondary).help("COS 里已有这个对象，推送时跳过")
+                    Text("已在 \(storageName)").foregroundStyle(.secondary).help("\(storageName) 里已有这个对象，推送时跳过")
                 } else {
                     Text(row.object.exceedsFileLimit ? "超限" : "—").foregroundStyle(row.object.exceedsFileLimit ? .orange : .secondary)
                 }

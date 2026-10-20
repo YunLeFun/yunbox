@@ -199,6 +199,16 @@
         }
       }
     },
+    "%@ 里已有这个对象，推送时跳过" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ already has this object; the push skips it"
+          }
+        }
+      }
+    },
     "%@　%@" : {
       "localizations" : {
         "en" : {
@@ -344,18 +354,18 @@
         }
       }
     },
-    "%lld 个素材对象，%lld 个已在 COS" : {
+    "%lld 个素材对象，%lld 个已在 %@" : {
       "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "To upload: %1$lld · already in COS: %2$lld"
-          }
-        },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "%1$lld 个素材对象，%2$lld 个已在 COS"
+            "value" : "%1$lld 个素材对象，%2$lld 个已在 %3$@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To upload: %1$lld · already in %3$@: %2$lld"
           }
         }
       }
@@ -489,16 +499,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Direct COS status. Click to see the checks and set it up."
-          }
-        }
-      }
-    },
-    "COS 里已有这个对象，推送时跳过" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "COS already has this object; the push skips it"
           }
         }
       }
@@ -1868,12 +1868,12 @@
         }
       }
     },
-    "已在 COS" : {
+    "已在 %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "In COS"
+            "value" : "In %@"
           }
         }
       }
@@ -1928,12 +1928,12 @@
         }
       }
     },
-    "已查询 COS：已有的 LFS 对象推送时跳过，不计入上传量。" : {
+    "已查询 %@：已有的 LFS 对象推送时跳过，不计入上传量。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "COS was checked: LFS objects already there are skipped by the push and not counted as uploads."
+            "value" : "%@ was checked: LFS objects already there are skipped by the push and not counted as uploads."
           }
         }
       }

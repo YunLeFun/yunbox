@@ -61,7 +61,7 @@ describe('push inspection in direct COS mode', () => {
     const { code, stdout, report } = await inspect(sandbox, repo)
     expect(code).toBe(0)
     expect(report.status).toBe('ok')
-    expect(report.lfs).toMatchObject({ candidateBytes: 72 * 1024, candidateCount: 3, remoteChecked: true, uploadBytes: 0, exceedsLimit: false })
+    expect(report.lfs).toMatchObject({ candidateBytes: 72 * 1024, candidateCount: 3, remoteChecked: true, remoteStorage: 'COS', uploadBytes: 0, exceedsLimit: false })
     expect(report.lfs.files.every(file => file.onRemote && !file.exceedsFileLimit)).toBe(true)
     expect(report.changes.filter(change => change.storage === 'lfs').map(change => [change.versions, change.pushBytes])).toEqual([[0, 0], [0, 0], [0, 0]])
     expect(cos.requests.map(request => request.method)).toEqual(['HEAD', 'HEAD', 'HEAD'])

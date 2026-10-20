@@ -110,7 +110,7 @@ describe('git-lfs directly to S3-compatible storage', () => {
     await git(sandbox, repo, 'commit', '--quiet', '-m', 'same bytes again')
     const inspect = await run(sandbox, outputs, repo, ['inspect', '--push', '--json'])
     const report = JSON.parse(inspect.stdout) as PushInspection
-    expect(report.lfs).toMatchObject({ remoteChecked: true, uploadBytes: 0 })
+    expect(report.lfs).toMatchObject({ remoteChecked: true, remoteStorage: 'S3', uploadBytes: 0 })
 
     const second = Buffer.alloc(1024 * 1024, 9)
     await writeFile(join(repo, 'car.fbx'), second)
