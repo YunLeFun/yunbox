@@ -6,10 +6,52 @@
 import { withBase } from 'vitepress'
 import { computed, onMounted, ref } from 'vue'
 import { formatBytes } from '../demo-assets'
+import { useCopy, useLocalePath } from '../i18n'
 import { CLI_VERSION, MACOS_DOWNLOAD_URL, REPOSITORY, useLatestRelease } from '../release'
 import CopyCommand from './CopyCommand.vue'
 import SymbolIcon from './SymbolIcon.vue'
 
+const t = useCopy({
+  zh: {
+    macTitle: '云匣 for macOS',
+    macLead: '选择仓库就能看推送体积、超限文件和 COS 直连状态，也能在窗口里保存密钥、一键接入 bucket。',
+    download: '下载 YunBox-macOS.zip',
+    universal: 'Apple 芯片和 Intel 通用',
+    separator: '，',
+    pending: '带安装包的版本还没有发布。现在可以从源码构建，安装到「应用程序」：',
+    macNeeds: ['macOS 14 或更新', '本机 Node.js 22.18+，客户端用它运行内置的检查组件', 'git-lfs 3.2+（', '）'],
+    firstOpen: '第一次打开被 macOS 拦下？',
+    firstOpenBody: '安装包还没有经过 Apple 公证。解压后把 YunBox 拖进「应用程序」，第一次打开如果提示无法验证开发者，到「系统设置 → 隐私与安全性」点「仍要打开」；也可以在终端运行：',
+    cliTitle: '命令行',
+    forYour: (platform: string) => `适用于你的 ${platform}`,
+    cliLead: ['macOS、Linux、Windows 都能用。安装后同时得到 ', ' 和 ', '，', ' 和 ', ' 完全一样。'],
+    cliMeta: (version: string) => `最新 v${version}，由 GitHub Actions 发布并附带 provenance`,
+    cliNeeds: ['Git 2.30+ 和 git-lfs 3.2+', 'Windows 上使用 Git for Windows 自带的 git-lfs'],
+    quickStart: '快速开始',
+    releases: '全部版本',
+    npm: 'npm 页面',
+  },
+  en: {
+    macTitle: 'YunBox for macOS',
+    macLead: 'Pick a repository to see its push size, files over budget and COS connection status. You can also save your key and connect a bucket right from the window.',
+    download: 'Download YunBox-macOS.zip',
+    universal: 'Universal (Apple silicon and Intel)',
+    separator: ' · ',
+    pending: 'No release with the app has been published yet. For now, build it from source and install it into Applications:',
+    macNeeds: ['macOS 14 or later', 'Node.js 22.18+ on your Mac; the app uses it to run its built-in checks', 'git-lfs 3.2+ (', ')'],
+    firstOpen: 'Blocked by macOS on first launch?',
+    firstOpenBody: 'The app is not notarized by Apple yet. Unzip it and drag YunBox into Applications. If the first launch says the developer cannot be verified, go to System Settings → Privacy & Security and click Open Anyway, or run this in Terminal:',
+    cliTitle: 'Command line',
+    forYour: (platform: string) => `For your ${platform}`,
+    cliLead: ['Works on macOS, Linux and Windows. Installing it gives you both ', ' and ', '; ', ' and ', ' are the same thing.'],
+    cliMeta: (version: string) => `Latest v${version}, published by GitHub Actions with provenance`,
+    cliNeeds: ['Git 2.30+ and git-lfs 3.2+', 'On Windows, the git-lfs bundled with Git for Windows'],
+    quickStart: 'Quick Start',
+    releases: 'All releases',
+    npm: 'npm package',
+  },
+})
+const localePath = useLocalePath()
 const release = useLatestRelease()
 const platform = ref<'mac' | 'windows' | 'linux' | 'other'>('other')
 
@@ -29,8 +71,8 @@ const macUrl = computed(() => release.value.macosUrl ?? MACOS_DOWNLOAD_URL)
 const macMeta = computed(() => [
   release.value.tag ?? `v${CLI_VERSION}`,
   release.value.macosBytes === undefined ? undefined : formatBytes(release.value.macosBytes),
-  'Apple 芯片和 Intel 通用',
-].filter(Boolean).join('，'))
+  t.value.universal,
+].filter(Boolean).join(t.value.separator))
 const cliFirst = computed(() => platform.value === 'windows' || platform.value === 'linux')
 const platformName = computed(() => ({ windows: 'Windows', linux: 'Linux', mac: 'macOS', other: '' })[platform.value])
 </script>
@@ -40,15 +82,15 @@ const platformName = computed(() => ({ windows: 'Windows', linux: 'Linux', mac: 
     <section class="option option-mac" aria-labelledby="dl-mac">
       <img class="app-icon" :src="withBase('/yunbox-app-icon.svg')" alt="" width="88" height="88">
       <h3 id="dl-mac">
-        云匣 for macOS
+        {{ t.macTitle }}
       </h3>
       <p class="lead">
-        选择仓库就能看推送体积、超限文件和 COS 直连状态，也能在窗口里保存密钥、一键接入 bucket。
+        {{ t.macLead }}
       </p>
       <template v-if="macReady">
         <a class="primary" :href="macUrl">
           <SymbolIcon name="arrow.down.circle" />
-          下载 YunBox-macOS.zip
+          {{ t.download }}
         </a>
         <p class="meta">
           {{ macMeta }}
@@ -56,19 +98,19 @@ const platformName = computed(() => ({ windows: 'Windows', linux: 'Linux', mac: 
       </template>
       <template v-else>
         <p class="pending">
-          带安装包的版本还没有发布。现在可以从源码构建，安装到「应用程序」：
+          {{ t.pending }}
         </p>
         <CopyCommand command="./script/build_and_run.sh --install" />
       </template>
       <ul class="needs">
-        <li>macOS 14 或更新</li>
-        <li>本机 Node.js 22.18+，客户端用它运行内置的检查组件</li>
-        <li>git-lfs 3.2+（<code>brew install git-lfs</code>）</li>
+        <li>{{ t.macNeeds[0] }}</li>
+        <li>{{ t.macNeeds[1] }}</li>
+        <li>{{ t.macNeeds[2] }}<code>brew install git-lfs</code>{{ t.macNeeds[3] }}</li>
       </ul>
       <details class="first-open">
-        <summary>第一次打开被 macOS 拦下？</summary>
+        <summary>{{ t.firstOpen }}</summary>
         <p>
-          安装包还没有经过 Apple 公证。解压后把 YunBox 拖进「应用程序」，第一次打开如果提示无法验证开发者，到「系统设置 → 隐私与安全性」点「仍要打开」；也可以在终端运行：
+          {{ t.firstOpenBody }}
         </p>
         <CopyCommand command="xattr -dr com.apple.quarantine /Applications/YunBox.app" />
       </details>
@@ -77,25 +119,25 @@ const platformName = computed(() => ({ windows: 'Windows', linux: 'Linux', mac: 
     <section class="option" aria-labelledby="dl-cli">
       <span class="cli-icon"><SymbolIcon name="terminal" /></span>
       <h3 id="dl-cli">
-        命令行
-        <span v-if="cliFirst" class="here">适用于你的 {{ platformName }}</span>
+        {{ t.cliTitle }}
+        <span v-if="cliFirst" class="here">{{ t.forYour(platformName) }}</span>
       </h3>
       <p class="lead">
-        macOS、Linux、Windows 都能用。安装后同时得到 <code>yunbox</code> 和 <code>git-yunbox</code>，<code>git yunbox init</code> 和 <code>yunbox init</code> 完全一样。
+        {{ t.cliLead[0] }}<code>yunbox</code>{{ t.cliLead[1] }}<code>git-yunbox</code>{{ t.cliLead[2] }}<code>git yunbox init</code>{{ t.cliLead[3] }}<code>yunbox init</code>{{ t.cliLead[4] }}
       </p>
       <CopyCommand command="npm install -g yunbox" />
       <p class="meta">
-        最新 v{{ CLI_VERSION }}，由 GitHub Actions 发布并附带 provenance
+        {{ t.cliMeta(CLI_VERSION) }}
       </p>
       <ul class="needs">
         <li>Node.js 22.18+</li>
-        <li>Git 2.30+ 和 git-lfs 3.2+</li>
-        <li>Windows 上使用 Git for Windows 自带的 git-lfs</li>
+        <li>{{ t.cliNeeds[0] }}</li>
+        <li>{{ t.cliNeeds[1] }}</li>
       </ul>
       <p class="links">
-        <a :href="withBase('/guide/')">快速开始</a>
-        <a :href="`${REPOSITORY}/releases`">全部版本</a>
-        <a href="https://www.npmjs.com/package/yunbox">npm 页面</a>
+        <a :href="localePath('/guide/')">{{ t.quickStart }}</a>
+        <a :href="`${REPOSITORY}/releases`">{{ t.releases }}</a>
+        <a href="https://www.npmjs.com/package/yunbox">{{ t.npm }}</a>
       </p>
     </section>
   </div>

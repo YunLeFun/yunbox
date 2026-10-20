@@ -31,17 +31,24 @@ public enum DocsPage: String, CaseIterable, Sendable, Identifiable {
         }
     }
 
-    /// Pages the site also has in English, under `en/`; the rest of the site is Chinese only.
-    public static let englishPages: Set<DocsPage> = [.changelog]
+    /// The heading anchor on the English page (under `en/`), whose headings are in English.
+    public var englishFragment: String? {
+        switch self {
+        case .freezeSyntax: "window-syntax"
+        case .freezeQuickOff: "quick-off"
+        case .assetTypes: "asset-types"
+        default: nil
+        }
+    }
 
-    /// The page in the interface's language where the site has it.
+    /// The page in the interface's language.
     public var url: URL { url(english: AppLanguage.interfaceIsEnglish) }
 
     public func url(english: Bool) -> URL {
         var components = URLComponents(url: Self.site, resolvingAgainstBaseURL: false)!
         let parts = rawValue.split(separator: "#", maxSplits: 1).map(String.init)
-        components.path += (english && Self.englishPages.contains(self) ? "en/" : "") + parts[0]
-        components.fragment = parts.count > 1 ? parts[1] : nil
+        components.path += (english ? "en/" : "") + parts[0]
+        components.fragment = english ? englishFragment : parts.count > 1 ? parts[1] : nil
         return components.url!
     }
 }

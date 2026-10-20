@@ -7,7 +7,35 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { DEMO_ASSETS, formatBytes, pointerFor } from '../demo-assets'
+import { useCopy } from '../i18n'
 import SymbolIcon from './SymbolIcon.vue'
+
+const t = useCopy({
+  zh: {
+    label: '素材装进云匣，Git 里只留下指针',
+    stored: '存进你的 COS',
+    assets: (count: number) => `${count} 个素材`,
+    git: 'Git 仓库增加',
+    pointersOnly: '只有指针',
+    pointerFile: '指针文件',
+    inGit: '在 Git 里的样子',
+    empty: '素材装进来以后，这里显示它的指针。',
+    playing: '正在装匣…',
+    replay: '再装一次',
+  },
+  en: {
+    label: 'Assets go into YunBox; Git keeps only pointers',
+    stored: 'Stored in your COS',
+    assets: (count: number) => `${count} ${count === 1 ? 'asset' : 'assets'}`,
+    git: 'Added to Git',
+    pointersOnly: 'pointers only',
+    pointerFile: 'Pointer file',
+    inGit: 'as Git stores it',
+    empty: 'Once an asset is in, its pointer shows up here.',
+    playing: 'Packing…',
+    replay: 'Pack Again',
+  },
+})
 
 // Timings of one asset: lid opens, file falls in, lid closes.
 const LIFT_MS = 260
@@ -73,7 +101,7 @@ onBeforeUnmount(clear)
 </script>
 
 <template>
-  <figure class="stage" aria-label="素材装进云匣，Git 里只留下指针">
+  <figure class="stage" :aria-label="t.label">
     <svg class="icon" viewBox="-4 -30 72 98" role="img" aria-hidden="true">
       <defs>
         <linearGradient id="yb-hero-sky" x1="32" y1="0" x2="32" y2="64" gradientUnits="userSpaceOnUse">
@@ -109,25 +137,25 @@ onBeforeUnmount(clear)
     <figcaption class="ledger">
       <dl class="rows">
         <div class="row">
-          <dt><SymbolIcon name="icloud" /> 存进你的 COS</dt>
-          <dd><strong>{{ formatBytes(storedBytes) }}</strong><span>{{ stored }} 个素材</span></dd>
+          <dt><SymbolIcon name="icloud" /> {{ t.stored }}</dt>
+          <dd><strong>{{ formatBytes(storedBytes) }}</strong><span>{{ t.assets(stored) }}</span></dd>
         </div>
         <div class="row">
-          <dt><SymbolIcon name="arrow.triangle.branch" /> Git 仓库增加</dt>
-          <dd><strong>{{ formatBytes(pointerBytes) }}</strong><span>只有指针</span></dd>
+          <dt><SymbolIcon name="arrow.triangle.branch" /> {{ t.git }}</dt>
+          <dd><strong>{{ formatBytes(pointerBytes) }}</strong><span>{{ t.pointersOnly }}</span></dd>
         </div>
       </dl>
       <div class="pointer">
         <p class="pointer-name">
           <SymbolIcon name="doc" />
-          {{ last ? last.name : '指针文件' }}
-          <span>在 Git 里的样子</span>
+          {{ last ? last.name : t.pointerFile }}
+          <span>{{ t.inGit }}</span>
         </p>
-        <pre><code>{{ last ? pointerFor(last) : '素材装进来以后，这里显示它的指针。' }}</code></pre>
+        <pre><code>{{ last ? pointerFor(last) : t.empty }}</code></pre>
       </div>
       <button class="replay" type="button" :disabled="playing" @click="play">
         <SymbolIcon name="arrow.clockwise" />
-        {{ playing ? '正在装匣…' : '再装一次' }}
+        {{ playing ? t.playing : t.replay }}
       </button>
     </figcaption>
   </figure>

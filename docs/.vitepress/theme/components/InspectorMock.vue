@@ -6,6 +6,7 @@
  */
 import { computed, ref } from 'vue'
 import { demoOid, formatBytes } from '../demo-assets'
+import { useCopy } from '../i18n'
 import MacWindow from './MacWindow.vue'
 import SymbolIcon from './SymbolIcon.vue'
 
@@ -33,29 +34,105 @@ const GIT_PACK = Math.round(1.24 * MIB)
 const lfsRows = ROWS.filter(row => row.storage === 'LFS')
 const lfsBytes = lfsRows.reduce((sum, row) => sum + row.bytes, 0)
 
-const budgets = [
-  { title: 'Git pack', icon: 'arrow.up.doc' as const, value: GIT_PACK, limit: LIMITS.git, footnote: '压缩后的预计上传量' },
-  { title: 'LFS 候选', icon: 'shippingbox' as const, value: lfsBytes, limit: LIMITS.lfs, footnote: `${lfsRows.length} 个素材对象` },
-]
+// Wording follows the app's own Chinese and English interface.
+const t = useCopy({
+  zh: {
+    window: 'macOS 客户端示意：推送检查',
+    title: '推送检查',
+    recent: '最近的仓库',
+    cos: '直连 COS · 正常',
+    checked: '检查于 14:21',
+    over: '超过预算',
+    fileBudget: (size: string) => `单文件预算 ${size}`,
+    budgetSettings: '预算设置',
+    lfs: 'LFS 候选',
+    gitFoot: '压缩后的预计上传量',
+    lfsFoot: (count: number) => `${count} 个素材对象`,
+    budget: (size: string) => `预算 ${size}`,
+    unqueried: 'LFS 尚未查询远端，实际上传量未知；远端已有对象可能跳过。',
+    fileType: '文件类型',
+    all: '全部',
+    onlyOver: '仅超限',
+    search: '搜索路径或对象 ID',
+    files: '文件明细',
+    count: (shown: number, total: number) => `${shown} / ${total} 个对象 · 按大小降序`,
+    columns: ['文件', '类型', '原始大小', '预算'],
+    overCell: '超限',
+    empty: '没有符合条件的文件，换个筛选条件试试。',
+    bytes: (bytes: number) => `${bytes.toLocaleString('zh-CN')} 字节`,
+    pngHint: '这张图片进了 Git 而不是 LFS，Git pack 因此超出预算。检查 .gitattributes 有没有跟踪 *.png。',
+    bigHint: (size: string) => `超过单文件预算 ${size}，预算可以在设置里按仓库调整。`,
+    sheet: 'COS 直连',
+    again: '重新检查',
+    location: 'team-assets-1250000000（ap-shanghai）/yunbox/team/game/',
+    keys: '密钥只保存在这台电脑上（钥匙串），仓库里只记录 bucket、地域和前缀。',
+    done: '完成',
+    doctor: [
+      { title: 'git', detail: '2.47.1' },
+      { title: 'git-lfs', detail: '3.6.1' },
+      { title: 'Git 仓库', detail: '/Users/alice/game' },
+      { title: 'LFS 过滤器', detail: '已启用' },
+      { title: '传输代理', detail: 'git-lfs 通过 git-yunbox 直连 COS' },
+      { title: 'COS 密钥', detail: '来自 macOS 钥匙串（yunbox）' },
+      { title: 'COS 权限', detail: '可以写入和读取' },
+    ],
+  },
+  en: {
+    window: 'The macOS app: Push Check',
+    title: 'Push Check',
+    recent: 'Recent Repositories',
+    cos: 'Direct COS · OK',
+    checked: 'Checked 14:21',
+    over: 'Over budget',
+    fileBudget: (size: string) => `Per-file budget ${size}`,
+    budgetSettings: 'Budget Settings',
+    lfs: 'LFS candidates',
+    gitFoot: 'Estimated upload after compression',
+    lfsFoot: (count: number) => `${count} asset objects`,
+    budget: (size: string) => `Budget ${size}`,
+    unqueried: 'The LFS remote has not been queried, so the actual upload size is unknown; objects already on the remote may be skipped.',
+    fileType: 'File Type',
+    all: 'All',
+    onlyOver: 'Over budget only',
+    search: 'Search paths or object IDs',
+    files: 'Files',
+    count: (shown: number, total: number) => `${shown} of ${total} objects · largest first`,
+    columns: ['File', 'Type', 'Original Size', 'Budget'],
+    overCell: 'Over',
+    empty: 'No files match. Try other filters.',
+    bytes: (bytes: number) => `${bytes.toLocaleString('en-US')} bytes`,
+    pngHint: 'This image went into Git instead of LFS, which pushes Git pack over budget. Check whether .gitattributes tracks *.png.',
+    bigHint: (size: string) => `Over the per-file budget of ${size}. Budgets can be adjusted per repository in Settings.`,
+    sheet: 'Direct COS',
+    again: 'Check Again',
+    location: 'team-assets-1250000000 (ap-shanghai)/yunbox/team/game/',
+    keys: 'Keys stay on this Mac (in the keychain); the repository records only the bucket, region and prefix.',
+    done: 'Done',
+    doctor: [
+      { title: 'git', detail: '2.47.1' },
+      { title: 'git-lfs', detail: '3.6.1' },
+      { title: 'Git repository', detail: '/Users/alice/game' },
+      { title: 'LFS filter', detail: 'Enabled' },
+      { title: 'Transfer agent', detail: 'git-lfs goes straight to COS through git-yunbox' },
+      { title: 'COS key', detail: 'From macOS Keychain (yunbox)' },
+      { title: 'COS permissions', detail: 'Can write and read' },
+    ],
+  },
+})
 
-const DOCTOR = [
-  { title: 'git', detail: '2.47.1' },
-  { title: 'git-lfs', detail: '3.6.1' },
-  { title: 'Git 仓库', detail: '/Users/alice/game' },
-  { title: 'LFS 过滤器', detail: '已启用' },
-  { title: '传输代理', detail: 'git-lfs 通过 git-yunbox 直连 COS' },
-  { title: 'COS 密钥', detail: '来自 macOS 钥匙串（yunbox）' },
-  { title: 'COS 权限', detail: '可以写入和读取' },
-]
+const budgets = computed(() => [
+  { title: 'Git pack', icon: 'arrow.up.doc' as const, value: GIT_PACK, limit: LIMITS.git, footnote: t.value.gitFoot },
+  { title: t.value.lfs, icon: 'shippingbox' as const, value: lfsBytes, limit: LIMITS.lfs, footnote: t.value.lfsFoot(lfsRows.length) },
+])
 
-const kind = ref<'全部' | 'Git' | 'LFS'>('全部')
+const kind = ref<'all' | 'Git' | 'LFS'>('all')
 const onlyExceeded = ref(false)
 const query = ref('')
 const selected = ref(ROWS[3].path)
 const sheetOpen = ref(false)
 
 const visible = computed(() => ROWS.filter(row =>
-  (kind.value === '全部' || row.storage === kind.value)
+  (kind.value === 'all' || row.storage === kind.value)
   && (!onlyExceeded.value || row.bytes > LIMITS.file)
   && (query.value === '' || row.path.toLowerCase().includes(query.value.toLowerCase()) || demoOid(row.path).startsWith(query.value.toLowerCase())),
 ))
@@ -67,10 +144,10 @@ function ratio(value: number, limit: number): string {
 </script>
 
 <template>
-  <MacWindow label="macOS 客户端示意：推送检查" title="推送检查">
+  <MacWindow :label="t.window" :title="t.title">
     <template #sidebar>
       <p class="side-head">
-        最近的仓库
+        {{ t.recent }}
       </p>
       <p class="repo repo-active">
         <SymbolIcon name="folder" class="repo-icon" />
@@ -110,23 +187,23 @@ function ratio(value: number, limit: number): string {
       </div>
       <button class="capsule" type="button" @click="sheetOpen = true">
         <SymbolIcon name="icloud" />
-        直连 COS · 正常
+        {{ t.cos }}
       </button>
-      <span class="checked">检查于 14:21</span>
+      <span class="checked">{{ t.checked }}</span>
     </header>
 
     <section class="report">
       <div class="report-head">
         <span class="status">
           <SymbolIcon name="exclamationmark.circle.fill" />
-          超过预算
+          {{ t.over }}
         </span>
-        <span class="muted">单文件预算 {{ formatBytes(LIMITS.file) }}</span>
-        <span class="bordered">预算设置</span>
+        <span class="muted">{{ t.fileBudget(formatBytes(LIMITS.file)) }}</span>
+        <span class="bordered">{{ t.budgetSettings }}</span>
       </div>
 
       <div class="budgets">
-        <div v-for="budget in budgets" :key="budget.title" class="budget">
+        <div v-for="budget in budgets" :key="budget.icon" class="budget">
           <p class="budget-title">
             <SymbolIcon :name="budget.icon" />
             {{ budget.title }}
@@ -140,41 +217,38 @@ function ratio(value: number, limit: number): string {
           </div>
           <p class="budget-foot">
             <span>{{ budget.footnote }}</span>
-            <span>预算 {{ formatBytes(budget.limit) }}</span>
+            <span>{{ t.budget(formatBytes(budget.limit)) }}</span>
           </p>
         </div>
       </div>
       <p class="caption">
-        LFS 尚未查询远端，实际上传量未知；远端已有对象可能跳过。
+        {{ t.unqueried }}
       </p>
 
       <div class="controls">
-        <span class="control-label">文件类型</span>
-        <div class="segmented" role="radiogroup" aria-label="文件类型">
+        <span class="control-label">{{ t.fileType }}</span>
+        <div class="segmented" role="radiogroup" :aria-label="t.fileType">
           <button
-            v-for="option in (['全部', 'Git', 'LFS'] as const)" :key="option" type="button" role="radio"
+            v-for="option in (['all', 'Git', 'LFS'] as const)" :key="option" type="button" role="radio"
             :aria-checked="kind === option" @click="kind = option"
           >
-            {{ option }}
+            {{ option === 'all' ? t.all : option }}
           </button>
         </div>
-        <label class="check"><input v-model="onlyExceeded" type="checkbox"> 仅超限</label>
+        <label class="check"><input v-model="onlyExceeded" type="checkbox"> {{ t.onlyOver }}</label>
         <label class="search">
           <SymbolIcon name="magnifyingglass" />
-          <input v-model="query" type="search" placeholder="搜索路径或对象 ID" aria-label="搜索路径或对象 ID">
+          <input v-model="query" type="search" :placeholder="t.search" :aria-label="t.search">
         </label>
       </div>
 
       <p class="table-title">
-        <strong>文件明细</strong>
-        <span>{{ visible.length }} / {{ ROWS.length }} 个对象 · 按大小降序</span>
+        <strong>{{ t.files }}</strong>
+        <span>{{ t.count(visible.length, ROWS.length) }}</span>
       </p>
-      <div class="table" role="table" aria-label="文件明细">
+      <div class="table" role="table" :aria-label="t.files">
         <div class="tr th" role="row">
-          <span role="columnheader">文件</span>
-          <span role="columnheader">类型</span>
-          <span role="columnheader">原始大小</span>
-          <span role="columnheader">预算</span>
+          <span v-for="column in t.columns" :key="column" role="columnheader">{{ column }}</span>
         </div>
         <button
           v-for="row in visible" :key="row.path" type="button" role="row" class="tr"
@@ -186,52 +260,52 @@ function ratio(value: number, limit: number): string {
           </span>
           <span role="cell" class="cell-dim">{{ row.storage }}</span>
           <span role="cell" class="cell-num">{{ formatBytes(row.bytes) }}</span>
-          <span role="cell" :class="row.bytes > LIMITS.file ? 'cell-over' : 'cell-dim'">{{ row.bytes > LIMITS.file ? '超限' : '—' }}</span>
+          <span role="cell" :class="row.bytes > LIMITS.file ? 'cell-over' : 'cell-dim'">{{ row.bytes > LIMITS.file ? t.overCell : '—' }}</span>
         </button>
         <p v-if="visible.length === 0" class="empty">
-          没有符合条件的文件，换个筛选条件试试。
+          {{ t.empty }}
         </p>
       </div>
 
       <div v-if="detail" class="detail">
         <p class="detail-head">
-          {{ detail.storage }} · {{ detail.bytes.toLocaleString('zh-CN') }} 字节
+          {{ detail.storage }} · {{ t.bytes(detail.bytes) }}
         </p>
         <p class="mono">
           {{ demoOid(detail.path).slice(0, 40) }}…
         </p>
         <p v-if="detail.storage === 'Git' && detail.path.endsWith('.png')" class="hint">
           <SymbolIcon name="info.circle" />
-          这张图片进了 Git 而不是 LFS，Git pack 因此超出预算。检查 .gitattributes 有没有跟踪 *.png。
+          {{ t.pngHint }}
         </p>
         <p v-else-if="detail.bytes > LIMITS.file" class="hint">
           <SymbolIcon name="info.circle" />
-          超过单文件预算 {{ formatBytes(LIMITS.file) }}，预算可以在设置里按仓库调整。
+          {{ t.bigHint(formatBytes(LIMITS.file)) }}
         </p>
       </div>
     </section>
 
     <template #overlay>
       <div v-if="sheetOpen" class="sheet-backdrop" @click.self="sheetOpen = false">
-        <div class="sheet" role="dialog" aria-label="COS 直连">
+        <div class="sheet" role="dialog" :aria-label="t.sheet">
           <div class="sheet-head">
-            <strong>COS 直连</strong>
-            <span class="bordered">重新检查</span>
+            <strong>{{ t.sheet }}</strong>
+            <span class="bordered">{{ t.again }}</span>
           </div>
           <p class="location">
             <SymbolIcon name="icloud" />
-            team-assets-1250000000（ap-shanghai）/yunbox/team/game/
+            {{ t.location }}
           </p>
           <ul class="steps">
-            <li v-for="step in DOCTOR" :key="step.title">
+            <li v-for="step in t.doctor" :key="step.title">
               <SymbolIcon name="checkmark.circle.fill" class="step-ok" />
               <span><strong>{{ step.title }}</strong><small>{{ step.detail }}</small></span>
             </li>
           </ul>
           <div class="sheet-foot">
-            <span>密钥只保存在这台电脑上（钥匙串），仓库里只记录 bucket、地域和前缀。</span>
+            <span>{{ t.keys }}</span>
             <button type="button" class="bordered" @click="sheetOpen = false">
-              完成
+              {{ t.done }}
             </button>
           </div>
         </div>
