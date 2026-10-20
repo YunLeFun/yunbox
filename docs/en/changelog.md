@@ -31,6 +31,7 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ### Fixed
 
+- Fixed closed connections that prevented the website and documentation from opening on some networks.
 - `git yunbox init` no longer adds LFS rules for file types that already have files committed outside LFS, so those files no longer show up as modified or break new clones. It lists them and shows the commands to move them to LFS.
 
 ## 0.1.4 - 2026-10-19
