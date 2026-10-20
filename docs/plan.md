@@ -387,7 +387,7 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **不用 UNSIGNED-PAYLOAD，也不用分块流式签名**：git-lfs 的对象 ID 就是内容的 SHA-256，上传时直接把它作为 `x-amz-content-sha256` 签名，不用再读一遍文件。存储服务会拒绝内容不符的上传（`XAmzContentSHA256Mismatch`），比 `UNSIGNED-PAYLOAD` 多一层保护；`aws-chunked` 流式签名只在不知道哈希时才需要。签名器支持 `UNSIGNED-PAYLOAD`，但传输代理不用它。
 - **不覆盖上传用 `If-None-Match: *`**（2026-10-20 查官方文档）：
   - AWS S3：**支持**。PutObject 带 `If-None-Match: *` 时，已存在返回 412；并发时先完成的成功、后面的 412；并发删除时可能返回 409，可以重试。见 [Conditional writes](https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes.html)。
-  - Cloudflare R2：**支持**。S3 API 兼容表的 PutObject 列出 `If-None-Match`，并说明条件头「按已提交的 bucket 状态原子地判断」。见 [R2 S3 API compatibility](https://developers.cloudflare.com/r2/api/s3/api/)。返回码没有单独说明，按 S3 语义处理为 412，**未实测**（`s3-live.test.ts` 会检查）。
+  - Cloudflare R2：**支持**。S3 API 兼容表的 PutObject 列出 `If-None-Match`，并说明条件头「按已提交的 bucket 状态原子地判断」。见 [R2 S3 API compatibility](https://developers.cloudflare.com/r2/api/s3/api/)。2026-10-21 在私有测试 bucket 上运行 `s3-live.test.ts` 全部通过：推送、全新 clone、SHA-256 校验、恢复旧版本、重复推送不改变 Last-Modified；对已存在的键带 `If-None-Match: *` 返回 412。测试对象已自动清理。
   - MinIO：**部分核实**。AIStor 的 [S3 API 兼容文档](https://docs.min.io/aistor/developers/s3-api-compatibility/) 列出 PutObject 支持 `If-None-Match`，但没有说明 `*` 的语义；[官方博客](https://www.min.io/blog/leading-the-way-minios-conditional-write-feature-for-modern-data-workloads) 说 2023 年 2 月合入了条件写入。开源版各版本的行为**未核实**。2026-10-20 在本机用 Homebrew 的开源版 `RELEASE.2025-10-15T17-29-55Z` 实测：`s3-live.test.ts` 全部通过，对已存在的键带 `If-None-Match: *` 返回 412；另外按用户步骤走了一遍 `git yunbox init --preset minio`、推送、`git yunbox clone`（SHA-256 一致）、`doctor` 和推送检查（新分支只计入 S3 上还没有的对象）。MinIO 已不再在 Docker Hub 和 quay.io 公开发布镜像，CI 继续用测试替身。
   - **退回方案**：服务返回 501 或 `NotImplemented` 时，这个传输代理进程之后的上传不再带这个头，直接 PUT。可以接受，因为：上传前本来就先 HEAD，已存在就跳过；对象按内容寻址，键就是 SHA-256，同一个键只可能写入同样的字节；签名的 `x-amz-content-sha256` 让服务拒绝内容不符的上传；下载时还会校验 SHA-256。所以最坏情况是两个人同时上传同一个对象时，后写的用同样的内容覆盖了先写的。静默忽略这个头的服务（覆盖而不报错）也是同样的结论。
   - 已存在（412）或冲突（409）时再 HEAD 一次：大小一致就算成功，不一致就报错。
@@ -444,7 +444,7 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **G2 阶段 1 新增**：每次重新读取快照都要列出全部 token 和授权（每个实例每 30 秒两次查询）。规模变大后可以改成按 token 哈希直接查一个文档，但要重新论证吊销时限。
 - **G2 阶段 1 新增**：本地文件版的锁文件超过 10 秒就被当作崩溃残留删除。持有锁的操作只有几毫秒，但机器极慢（例如磁盘卡住超过 10 秒）时，两个写入者可能同时进入临界区。本地版只用于开发和测试。
 - **G2 阶段 1 新增**：迁移后的旧 token 统一在迁移后 90 天过期。管理员要在此之前给每个人换发新 token，否则大家会在同一天收到 401；`token list` 会显示过期时间。
-- **S3 提供方新增（2026-10-20）**：还没有在真实的 R2、AWS S3 或 MinIO 上跑过 `s3-live.test.ts`，`If-None-Match: *` 在 R2 上返回 412 也**未实测**。接入试点前要先跑一次。
+- **S3 提供方新增（2026-10-21）**：已在真实 R2（2026-10-21）和本机 MinIO（2026-10-20）上跑通 `s3-live.test.ts`，两者对已存在的键带 `If-None-Match: *` 均返回 412。真实 AWS S3 尚未实测，接入 AWS S3 试点前要先跑一次。
 - **S3 提供方新增**：R2 token 不能限定到前缀。多个项目共用一个 R2 bucket 时，任何一个项目的 token 都能读写、覆盖其他项目的素材（下载时的 SHA-256 校验能发现被替换的内容，但找不回来，R2 也没有 COS 那样的版本控制）。只能靠每个项目一个 bucket。
 - **S3 提供方新增**：一台电脑同一时间只保存一组 S3 密钥。同时参与多个 R2 账户、或同时用 R2 和 MinIO 的人要来回 `yunbox login`，或者用 `YUNBOX_S3_*` 环境变量。真有需要再按 endpoint 分开保存。
 - **S3 提供方新增**：0.1.x 和本版本之前的命令行读不到 `storage.provider = s3`，在 S3 仓库里会提示「还没有 .yunbox/config」。团队改用 S3 前，所有协作者要先升级。
