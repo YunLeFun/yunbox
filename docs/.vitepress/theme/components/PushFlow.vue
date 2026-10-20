@@ -22,8 +22,8 @@ const t = useCopy({
     received: (count: number) => `收到 1 个提交，${count} 个指针文件`,
     assets: (size: string) => `素材本体，${size}`,
     noServer: '中间没有服务端',
-    bucket: '你的 COS bucket',
-    bucketSub: '私有读写，按内容寻址',
+    bucket: '你的 bucket',
+    bucketSub: 'COS、R2 或 S3，私有读写，按内容寻址',
   },
   en: {
     machine: 'Your computer',
@@ -37,8 +37,8 @@ const t = useCopy({
     received: (count: number) => `Received 1 commit and ${count} pointer files`,
     assets: (size: string) => `The assets themselves, ${size}`,
     noServer: 'No server in between',
-    bucket: 'Your COS bucket',
-    bucketSub: 'Private, content-addressed',
+    bucket: 'Your bucket',
+    bucketSub: 'R2, S3 or COS · private, content-addressed',
   },
 })
 

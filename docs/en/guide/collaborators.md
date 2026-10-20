@@ -2,6 +2,8 @@
 
 Your admin has already connected the repository to COS and given you a sub-account key (a SecretId and a SecretKey).
 
+If the repository uses Cloudflare R2 or another S3-compatible service, you'll have an Access Key ID and Secret Access Key instead; follow [Cloudflare R2 and S3-compatible storage](./r2#joining-as-a-collaborator).
+
 ## 1. Install the command line
 
 ```bash

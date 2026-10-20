@@ -63,7 +63,7 @@ export default defineConfig({
       lang: 'zh-CN',
       title: '云匣 YunBox',
       titleTemplate: ':title · 云匣 YunBox',
-      description: '兼容 Git LFS 的素材托管：代码交给 Git，素材直传你自己的腾讯云 COS，中间没有服务端。',
+      description: '兼容 Git LFS 的素材托管：代码交给 Git，素材直传你自己的腾讯云 COS 或 Cloudflare R2 等 S3 兼容存储，中间没有服务端。',
       themeConfig: {
         siteTitle: '云匣',
         nav: [
@@ -79,6 +79,7 @@ export default defineConfig({
               { text: '快速开始', link: '/guide/' },
               { text: '协作者加入', link: '/guide/collaborators' },
               { text: '从 GitHub LFS 迁移', link: '/guide/migrate' },
+              { text: '接入 R2 和 S3 兼容存储', link: '/guide/r2' },
               { text: 'macOS 客户端', link: '/guide/macos' },
               { text: '禁推时段', link: '/guide/freeze' },
               { text: '用 AI 编程助手接入', link: '/guide/ai' },
@@ -125,7 +126,7 @@ export default defineConfig({
       link: '/en/',
       title: 'YunBox',
       titleTemplate: ':title · YunBox',
-      description: 'Git LFS–compatible asset hosting: code stays in Git, assets go straight to your own Tencent Cloud COS bucket, with no server in between.',
+      description: 'Git LFS–compatible asset hosting: code stays in Git, assets go straight to your own Cloudflare R2, AWS S3, MinIO or Tencent Cloud COS bucket, with no server in between.',
       themeConfig: {
         siteTitle: 'YunBox',
         nav: [
@@ -141,6 +142,7 @@ export default defineConfig({
               { text: 'Quick Start', link: '/en/guide/' },
               { text: 'Joining as a Collaborator', link: '/en/guide/collaborators' },
               { text: 'Migrating from GitHub LFS', link: '/en/guide/migrate' },
+              { text: 'Cloudflare R2 and S3', link: '/en/guide/r2' },
               { text: 'macOS App', link: '/en/guide/macos' },
               { text: 'Push Freeze', link: '/en/guide/freeze' },
               { text: 'Set Up with an AI Assistant', link: '/en/guide/ai' },

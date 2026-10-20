@@ -1,6 +1,6 @@
 # 快速开始
 
-云匣让 git-lfs 把素材直接存进你自己的腾讯云 COS：代码仍在 GitHub 等平台，PSD、模型、音频、视频这些大文件由每个人电脑上的传输代理签名后直传 COS，**中间没有服务端**。
+云匣让 git-lfs 把素材直接存进你自己的腾讯云 COS（也支持 Cloudflare R2 等 S3 兼容存储）：代码仍在 GitHub 等平台，PSD、模型、音频、视频这些大文件由每个人电脑上的传输代理签名后直传 COS，**中间没有服务端**。
 
 ```
 git push / clone ──▶ git-lfs ──▶ git-yunbox lfs-agent ──▶ 腾讯云 COS
