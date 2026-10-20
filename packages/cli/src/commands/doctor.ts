@@ -1,15 +1,12 @@
 import type { CliContext } from '../context.ts'
-import type { CosLocation } from '../cos/location.ts'
 import type { StoredCredential } from '../credentials.ts'
 import type { ProbeResult } from '../probe.ts'
 import type { StepReport } from '../report.ts'
 import type { ServiceUrl } from '../service-url.ts'
+import type { StorageLocation } from '../storage/provider.ts'
 import { parseArgs } from 'node:util'
 import { CliError, print, USAGE_EXIT_CODE } from '../context.ts'
-import { CosDirectClient, PROBE_OPERATIONS } from '../cos/client.ts'
-import { resolveCredentials } from '../cos/credentials.ts'
-import { describeLocation, LEGACY_LOCATION_FILE, LOCATION_FILE, locationFiles, readLocation } from '../cos/location.ts'
-import { defaultSecretStores } from '../cos/secret-store.ts'
+import { LEGACY_LOCATION_FILE, LOCATION_FILE, locationFiles } from '../cos/location.ts'
 import { fillCredential, findCredentialHelper, rejectCommand, suggestedHelperCommands } from '../credentials.ts'
 import { readFreezeConfig } from '../freeze.ts'
 import {
@@ -28,7 +25,10 @@ import { gitInstallHints, gitLfsInstallHints } from '../install-hints.ts'
 import { probeBatch } from '../probe.ts'
 import { printStep } from '../report.ts'
 import { isSecureServiceUrl, parseServiceUrl, ServiceUrlError } from '../service-url.ts'
+import { describeStorage, providerOf, readStorageLocation } from '../storage/config.ts'
+import { PROBE_OPERATIONS } from '../storage/provider.ts'
 import { installedHook } from './hook.ts'
+import { canRead } from './init-cos.ts'
 import { AGENT_NAME } from './lfs-agent.ts'
 
 export const doctorHelp = `用法：yunbox doctor [选项]
@@ -49,7 +49,11 @@ export const doctorHelp = `用法：yunbox doctor [选项]
 export interface DoctorJson {
   schemaVersion: 1
   status: 'ok' | 'failed'
-  /** How this repository uses YunBox: direct COS, a YunBox server, or not set up. */
+  /**
+   * How this repository uses YunBox: direct mode, a YunBox server, or not set
+   * up. Direct mode is `cos` for every provider, the name older clients know;
+   * `provider` tells which.
+   */
   mode: 'cos' | 'server' | 'none'
   location?: { bucket: string, region: string, prefix: string }
   steps: StepReport[]
@@ -58,7 +62,7 @@ export interface DoctorJson {
 /** Facts `diagnose` learns on the way, for the JSON output. */
 interface DoctorSummary {
   mode: DoctorJson['mode']
-  location?: CosLocation
+  location?: StorageLocation
 }
 
 /** Run `yunbox doctor`. Returns 0 when every check passes, otherwise 1. */
@@ -133,9 +137,9 @@ async function diagnose(context: CliContext, report: (step: StepReport) => void,
 
   await diagnoseFreeze(repo, root, report)
 
-  let location: CosLocation | undefined
+  let location: StorageLocation | undefined
   try {
-    location = await readLocation(repo, root)
+    location = await readStorageLocation(repo, root)
   }
   catch (error) {
     report({ status: 'fail', title: 'COS 位置', detail: (error as Error).message, fixes: ['git yunbox init --cos --force   # 重新选择 bucket 和前缀'] })
@@ -144,7 +148,7 @@ async function diagnose(context: CliContext, report: (step: StepReport) => void,
   if (location !== undefined) {
     summary.mode = 'cos'
     summary.location = location
-    await diagnoseCos(repo, location, report, readOnly)
+    await diagnoseDirect(repo, location, report, readOnly)
     return
   }
 
@@ -384,10 +388,12 @@ function redactUrl(value: string): string {
   }
 }
 
-/** Checks for COS mode: the agent registration, local keys and access to the prefix. */
-async function diagnoseCos(repo: CliContext, location: CosLocation, report: (step: StepReport) => void, readOnly: boolean): Promise<void> {
+/** Checks for direct mode: the agent registration, local keys and access to the prefix. */
+async function diagnoseDirect(repo: CliContext, location: StorageLocation, report: (step: StepReport) => void, readOnly: boolean): Promise<void> {
+  const provider = providerOf(location)
+  const { label } = provider
   const files = locationFiles(repo.cwd)
-  report({ status: 'pass', title: 'COS 位置', detail: `${describeLocation(location)}（来自 ${files[0]}）` })
+  report({ status: 'pass', title: `${label} 位置`, detail: `${describeStorage(location)}（来自 ${files[0]}）` })
   if (files.includes(LEGACY_LOCATION_FILE)) {
     report(files.includes(LOCATION_FILE)
       ? { status: 'warn', title: LEGACY_LOCATION_FILE, detail: `和 ${LOCATION_FILE} 一致，只供 0.1.x 版本的协作者读取`, fixes: [`git rm ${LEGACY_LOCATION_FILE}   # 协作者都升级后删除`] }
@@ -396,53 +402,61 @@ async function diagnoseCos(repo: CliContext, location: CosLocation, report: (ste
   const agent = await readGitConfig(repo, 'lfs.standalonetransferagent')
   const agentPath = await readGitConfig(repo, `lfs.customtransfer.${AGENT_NAME}.path`)
   report(agent === AGENT_NAME && agentPath !== undefined
-    ? { status: 'pass', title: '传输代理', detail: `git-lfs 通过 ${agentPath} 直连 COS` }
-    : { status: 'fail', title: '传输代理', detail: '这份 clone 还没有登记直连 COS 的传输代理，push / pull 会失败', fixes: ['git yunbox init'] })
+    ? { status: 'pass', title: '传输代理', detail: `git-lfs 通过 ${agentPath} 直连 ${label}` }
+    : { status: 'fail', title: '传输代理', detail: `这份 clone 还没有登记直连 ${label} 的传输代理，push / pull 会失败`, fixes: ['git yunbox init'] })
   if (await readGitConfig(repo, 'lfs.locksverify') !== 'false') {
     report({ status: 'warn', title: 'lfs.locksverify', detail: '直连模式没有文件锁服务，push 时 git-lfs 可能去代码托管平台查询锁', fixes: ['git config lfs.locksverify false'] })
   }
 
-  let resolved: Awaited<ReturnType<typeof resolveCredentials>>
+  const loginCommand = provider.id === 'cos' ? 'yunbox login' : `yunbox login --provider ${provider.id}`
+  let resolved: Awaited<ReturnType<typeof provider.resolveCredentials>>
   try {
-    resolved = await resolveCredentials(repo.env)
+    resolved = await provider.resolveCredentials(repo.env)
   }
   catch (error) {
-    report({ status: 'fail', title: 'COS 密钥', detail: (error as Error).message, fixes: ['yunbox login', 'tccli auth login'] })
+    report({ status: 'fail', title: `${label} 密钥`, detail: (error as Error).message, fixes: provider.id === 'cos' ? ['yunbox login', 'tccli auth login'] : [loginCommand] })
     return
   }
   if (resolved === undefined) {
-    report({ status: 'fail', title: 'COS 密钥', detail: '这台电脑还没有配置腾讯云密钥', fixes: ['yunbox login   # 保存自己的子账号 SecretId / SecretKey'] })
+    report({
+      status: 'fail',
+      title: `${label} 密钥`,
+      detail: provider.id === 'cos' ? '这台电脑还没有配置腾讯云密钥' : `这台电脑还没有配置 ${label} 密钥`,
+      fixes: [provider.id === 'cos' ? 'yunbox login   # 保存自己的子账号 SecretId / SecretKey' : `${loginCommand}   # 保存自己的 Access Key ID / Secret Access Key`],
+    })
     return
   }
   // resolveCredentials already validated YUNBOX_CREDENTIAL_STORE, so this cannot throw.
-  if (resolved.source === 'file' && defaultSecretStores(repo.env).some(store => store.kind === 'keychain'))
-    report({ status: 'warn', title: 'COS 密钥', detail: `来自 ${resolved.description}（明文文件）`, fixes: ['yunbox login   # 重新保存到 macOS 钥匙串，会删除这个文件'] })
+  if (resolved.source === 'file' && provider.credentialStores(repo.env).some(store => store.kind === 'keychain'))
+    report({ status: 'warn', title: `${label} 密钥`, detail: `来自 ${resolved.description}（明文文件）`, fixes: [`${loginCommand}   # 重新保存到 macOS 钥匙串，会删除这个文件`] })
   else if (resolved.source === 'tccli')
-    report({ status: 'warn', title: 'COS 密钥', detail: `来自 ${resolved.description}：临时密钥，大约 2 小时后要重新登录`, fixes: ['yunbox subaccount create --save   # 用当前登录新建只给 YunBox 用的子账号，长期密钥存进本机'] })
+    report({ status: 'warn', title: `${label} 密钥`, detail: `来自 ${resolved.description}：临时密钥，大约 2 小时后要重新登录`, fixes: ['yunbox subaccount create --save   # 用当前登录新建只给 YunBox 用的子账号，长期密钥存进本机'] })
   else
-    report({ status: 'pass', title: 'COS 密钥', detail: `来自 ${resolved.description}` })
+    report({ status: 'pass', title: `${label} 密钥`, detail: `来自 ${resolved.description}` })
 
-  const client = new CosDirectClient(location, () => resolved.credentials)
+  const credentials = resolved.credentials
+  const client = provider.connect(location, () => credentials)
   const steps = await client.probe()
   if (steps.length === PROBE_OPERATIONS.length && steps.every(step => step.ok)) {
-    report({ status: 'pass', title: 'COS 权限', detail: '可以写入和读取' })
+    report({ status: 'pass', title: `${label} 权限`, detail: '可以写入和读取' })
     return
   }
   const failed = steps.find(step => !step.ok)
   if (failed?.operation === 'PUT' && failed.status === 403) {
-    const readable = await client.head(`${location.prefix === '' ? '' : `${location.prefix}/`}_yunbox/read-check`).then(() => true, () => false)
-    if (readable) {
+    if (await canRead(client, location)) {
       report(readOnly
-        ? { status: 'pass', title: 'COS 权限', detail: '只读：可以拉取' }
-        : { status: 'fail', title: 'COS 权限', detail: '只能读取，不能推送', fixes: ['请管理员给你的子账号加上这个前缀的 PutObject 权限；只需要拉取时用 yunbox doctor --read-only'] })
+        ? { status: 'pass', title: `${label} 权限`, detail: '只读：可以拉取' }
+        : { status: 'fail', title: `${label} 权限`, detail: '只能读取，不能推送', fixes: [provider.restrictedKeys ? '请管理员给你的子账号加上这个前缀的 PutObject 权限；只需要拉取时用 yunbox doctor --read-only' : '请管理员换一把对这个 bucket 有写权限的密钥；只需要拉取时用 yunbox doctor --read-only'] })
       return
     }
   }
   report({
     status: 'fail',
-    title: 'COS 权限',
+    title: `${label} 权限`,
     detail: `${failed?.operation ?? 'PUT'} 返回 ${failed?.status || '无响应'}`,
-    fixes: [`检查 ${LOCATION_FILE} 里的 bucket 和 region`, '确认子账号有这个前缀的 PutObject、GetObject、HeadObject 权限', 'yunbox login   # 密钥失效时重新保存'],
+    fixes: provider.restrictedKeys
+      ? [`检查 ${LOCATION_FILE} 里的 bucket 和 region`, '确认子账号有这个前缀的 PutObject、GetObject、HeadObject 权限', 'yunbox login   # 密钥失效时重新保存']
+      : [`检查 ${LOCATION_FILE} 里的 endpoint、bucket 和 region`, '确认密钥有这个 bucket 的对象读写权限', `${loginCommand}   # 密钥失效时重新保存`],
   })
 }
 

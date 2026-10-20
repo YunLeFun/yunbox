@@ -7,14 +7,16 @@ import { createHash } from 'node:crypto'
 import { userInfo } from 'node:os'
 import { parseArgs } from 'node:util'
 import { CliError, print, USAGE_EXIT_CODE } from '../context.ts'
-import { CosDirectClient } from '../cos/client.ts'
+import { createCosObjectStore } from '../cos/client.ts'
 import { resolveCredentials, saveCredentials } from '../cos/credentials.ts'
-import { describeLocation, LOCATION_FILE, normalizeLocation, readLocation } from '../cos/location.ts'
+import { describeLocation, LOCATION_FILE, normalizeLocation } from '../cos/location.ts'
 import { buildCosPolicy } from '../cos/policy.ts'
 import { callTencentApi, TencentApiError } from '../cos/tencent-api.ts'
 import { findRepositoryRoot } from '../git.ts'
 import { createLineReader } from '../prompt.ts'
 import { printStep } from '../report.ts'
+import { readStorageLocation, requireCapability } from '../storage/config.ts'
+import { prefixed, READ_CHECK_KEY } from '../storage/provider.ts'
 
 /** Marker in the CAM remark of sub-accounts this command created. */
 const REMARK = 'Created by YunBox (yunbox subaccount)'
@@ -266,12 +268,12 @@ async function findUser(cam: Cam, name: string): Promise<CamUser | undefined> {
 
 /** Probe with the new keys until CAM has propagated, so the user knows they work. */
 async function waitForAccess(context: CliContext, location: CosLocation, keys: CosCredentials, readOnly: boolean): Promise<void> {
-  const client = new CosDirectClient(location, () => keys)
+  const client = createCosObjectStore(location, () => keys)
   const deadline = Date.now() + PROPAGATION_TIMEOUT_MS
   print(context, '等待权限生效（通常不到一分钟）…')
   while (true) {
     const steps = await client.probe()
-    const ok = readOnly ? await client.head(`${location.prefix === '' ? '' : `${location.prefix}/`}_yunbox/read-check`).then(() => true, () => false) : steps.every(step => step.ok)
+    const ok = readOnly ? await client.head(prefixed(location, READ_CHECK_KEY)).then(() => true, () => false) : steps.every(step => step.ok)
     if (ok) {
       printStep(context, { status: 'pass', title: 'COS 权限', detail: `新密钥可以${readOnly ? '读取' : '读写'} ${describeLocation(location)}` })
       return
@@ -286,7 +288,10 @@ async function waitForAccess(context: CliContext, location: CosLocation, keys: C
 
 async function resolveLocation(context: CliContext, values: Options): Promise<CosLocation> {
   const root = await findRepositoryRoot(context)
-  const fromRepo = root === undefined ? undefined : await readLocation({ ...context, cwd: root }, root).catch(() => undefined)
+  const found = root === undefined ? undefined : await readStorageLocation({ ...context, cwd: root }, root).catch(() => undefined)
+  if (found !== undefined && values.bucket === undefined)
+    requireCapability(found, 'restrictedKeys', 'yunbox subaccount')
+  const fromRepo = found as CosLocation | undefined
   const bucket = values.bucket ?? fromRepo?.bucket
   const region = values.region ?? fromRepo?.region
   if (bucket === undefined || region === undefined)

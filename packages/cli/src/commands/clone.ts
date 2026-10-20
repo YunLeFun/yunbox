@@ -1,9 +1,10 @@
 import type { CliContext } from '../context.ts'
 import { basename, resolve } from 'node:path'
 import { CliError, print, USAGE_EXIT_CODE } from '../context.ts'
-import { LOCATION_FILE, readLocation } from '../cos/location.ts'
+import { LOCATION_FILE } from '../cos/location.ts'
 import { firstLine, runGit } from '../git.ts'
 import { printStep } from '../report.ts'
+import { readStorageLocation } from '../storage/config.ts'
 import { runInit } from './init.ts'
 
 export const cloneHelp = `用法：git yunbox clone <仓库地址> [目录]
@@ -34,7 +35,7 @@ export async function runClone(context: CliContext, args: string[]): Promise<num
   printStep(context, { status: 'pass', title: 'git clone', detail: `${target}（暂未下载素材）` })
 
   const repo: CliContext = { ...context, cwd: target }
-  if (await readLocation(repo, target) === undefined) {
+  if (await readStorageLocation(repo, target) === undefined) {
     throw new CliError(`clone 完成，但仓库里没有 ${LOCATION_FILE}，它还没有用 YunBox 直连 COS 管理素材，所以没有下载素材。\n`
       + `  在 ${target} 里运行 git yunbox init 接入，或者用普通的 git lfs pull`)
   }

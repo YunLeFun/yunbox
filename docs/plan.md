@@ -360,6 +360,12 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **更新日志两份**：`docs/changelog.md` 和 `docs/en/changelog.md`，Keep a Changelog 的格式，顶部是「未发布」。`pnpm release` 先检查两份都写了未发布的改动，bumpp 改版本号时把它们标上版本号和日期，和版本号同一个提交（只提交这几个文件）。发布工作流用对应版本的两段说明生成 GitHub release 说明，并以 `<description xml:lang>` 写进 appcast，Sparkle 按应用语言显示；appcast 改动后用 `sign_update` 重新签名。没有从提交记录自动生成，是因为提交信息是给开发者看的英文，更新提示要的是给用户看的中英文说明。
 - **还没做**：命令行输出、官网文档（除更新日志）仍只有中文；客户端显示的 `doctor` 检查项等来自命令行的文字在英文界面里也是中文。
 
+### 存储提供方接口（2026-10-20）
+
+- **决定**：宣传改为公开、中英双语后，要支持腾讯云 COS 以外的 S3 兼容存储（重点是下载流量免费的 Cloudflare R2）。提供方是**内置实现**，不开放第三方插件：插件要经手用户的云密钥，审查和分发的成本都不值得；接口仍按插件的形状设计（`packages/cli/src/storage/provider.ts` 的 `StorageProvider`），以后加内置提供方只需要实现它。
+- **接口分两层**：传输必需的动作是 `ObjectStore`（HEAD、不覆盖上传、边下载边校验 SHA-256、PUT / HEAD / GET 读写探测），所有提供方共用 `HttpObjectStore` 一份实现，提供方只负责「地址怎么拼、请求怎么签名、怎样声明不覆盖、哪些状态码表示已存在」（`ObjectTransport`）；列出和新建 bucket、生成访问策略、创建受限密钥（`yunbox subaccount`）是可选能力，命令检查能力而不是判断「是不是 COS」，不支持时报错并说明去提供方自己的控制台处理。
+- **兼容**：COS 的配置、密钥存储、步骤标题（`COS 密钥` 等，macOS 客户端靠它判断要不要提示登录）和 `doctor --json` / `buckets --json` 的输出都不变；这一步只是把 COS 移到接口后面，现有测试原样通过。
+
 ### 后续风险
 
 - CloudBase 云托管绑定运行角色后是否以 `TENCENTCLOUD_*` 环境变量注入临时密钥**未核实**（云函数是这样做的）。如果不是，需要在服务端增加从平台元数据接口获取密钥的代码，或者临时改用只挂最小权限策略的子账号长期密钥。

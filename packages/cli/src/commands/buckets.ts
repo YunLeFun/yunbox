@@ -1,8 +1,9 @@
 import type { CliContext } from '../context.ts'
 import { parseArgs } from 'node:util'
-import { CosRequestError, listCosBuckets } from '@yunbox/core'
 import { CliError, print, USAGE_EXIT_CODE } from '../context.ts'
-import { requireCredentials } from '../cos/credentials.ts'
+import { requireStorageCredentials } from '../storage/config.ts'
+import { cosProvider } from '../storage/cos.ts'
+import { StorageRequestError } from '../storage/provider.ts'
 
 export const bucketsHelp = `用法：yunbox buckets [--json]
 
@@ -34,21 +35,22 @@ export async function runBuckets(context: CliContext, args: string[]): Promise<n
     return 1
   }
 
+  const provider = cosProvider
   let credentials
   try {
-    credentials = (await requireCredentials(context.env)).credentials
+    credentials = (await requireStorageCredentials(context.env, provider)).credentials
   }
   catch (error) {
     return fail('NO_CREDENTIALS', (error as Error).message)
   }
   let buckets
   try {
-    buckets = await listCosBuckets({ credentials, endpoint: context.env.YUNBOX_COS_SERVICE_ENDPOINT || undefined })
+    buckets = await provider.buckets.list(credentials, context.env)
   }
   catch (error) {
-    if (error instanceof CosRequestError && error.status === 403 && error.code === 'AccessDenied')
+    if (error instanceof StorageRequestError && error.status === 403 && error.code === 'AccessDenied')
       return fail('ACCESS_DENIED', '这把密钥不能列出 bucket（受限子账号通常如此），请向管理员要 bucket 名称和地域')
-    if (error instanceof CosRequestError && error.status === 403)
+    if (error instanceof StorageRequestError && error.status === 403)
       return fail('INVALID_CREDENTIALS', `腾讯云拒绝了本机的密钥（${error.code ?? 'HTTP 403'}），请重新运行 yunbox login`)
     return fail('REQUEST_FAILED', `列出 bucket 失败：${(error as Error).message}`)
   }
