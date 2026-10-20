@@ -3,15 +3,19 @@ import type { CliContext } from '../context.ts'
 import type { ResolvedCredentials } from '../cos/credentials.ts'
 import type { CosLocation } from '../cos/location.ts'
 import type { SecretStore } from '../cos/secret-store.ts'
+import type { S3Location } from '../s3/location.ts'
 
 /** The built-in object stores. Providers are not plugins: none of them is loaded from outside the CLI. */
-export type ProviderId = 'cos'
+export type ProviderId = 'cos' | 's3'
+
+/** Every provider id, in the order commands list them. */
+export const PROVIDER_IDS: readonly ProviderId[] = ['cos', 's3']
 
 /**
  * Where a repository keeps its LFS objects, as read from `.yunbox/config`.
  * COS locations have no `provider` field, so they stay what 0.1.x wrote.
  */
-export type StorageLocation = CosLocation
+export type StorageLocation = CosLocation | S3Location
 
 /**
  * A key pair for any provider: `secretId` / `secretKey` are the provider's
@@ -60,6 +64,12 @@ export interface ObjectStore {
   downloadFile: (key: string, destination: string, expected: { oid: string, size: number }, onProgress?: ProgressListener) => Promise<void>
   /** Write, inspect and read back the probe object; stops at the first failure. */
   probe: () => Promise<ProbeStep[]>
+  /**
+   * GET a key and report the HTTP status and service error code, discarding
+   * any body. Tells invalid keys (`InvalidAccessKeyId`,
+   * `SignatureDoesNotMatch`) from missing permission (`AccessDenied`).
+   */
+  check: (key: string) => Promise<{ status: number, code?: string }>
 }
 
 /** A bucket the keys can see. */

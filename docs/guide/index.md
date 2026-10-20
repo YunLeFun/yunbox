@@ -8,6 +8,8 @@ git push / clone ──▶ git-lfs ──▶ git-yunbox lfs-agent ──▶ 腾�
 
 传输代理用本机保存的密钥签名，直接上传、下载 COS。
 
+想用 Cloudflare R2（下载流量免费）、AWS S3 或 MinIO？见[接入 R2 和 S3 兼容存储](./r2)。
+
 ## 安装
 
 ```bash

@@ -9,12 +9,12 @@ import { runInit } from './init.ts'
 
 export const cloneHelp = `用法：git yunbox clone <仓库地址> [目录]
 
-clone 一个用 YunBox 直连 COS 的仓库：
+clone 一个用 YunBox 直连对象存储（COS 或 S3 兼容存储）的仓库：
   1. 先 clone Git 历史，暂不下载 LFS 素材（git-lfs 还不知道去哪里下载）
   2. 在新目录里运行 git yunbox init，登记直连 COS 的传输代理
   3. git lfs pull 下载当前版本的素材
 
-需要先用 yunbox login 保存自己的腾讯云密钥。
+需要先用 yunbox login 保存自己的密钥（S3 兼容存储用 yunbox login --provider s3）。
 `
 
 /** Run `git yunbox clone`. */
@@ -36,7 +36,7 @@ export async function runClone(context: CliContext, args: string[]): Promise<num
 
   const repo: CliContext = { ...context, cwd: target }
   if (await readStorageLocation(repo, target) === undefined) {
-    throw new CliError(`clone 完成，但仓库里没有 ${LOCATION_FILE}，它还没有用 YunBox 直连 COS 管理素材，所以没有下载素材。\n`
+    throw new CliError(`clone 完成，但仓库里没有 ${LOCATION_FILE}，它还没有用 YunBox 直连对象存储管理素材，所以没有下载素材。\n`
       + `  在 ${target} 里运行 git yunbox init 接入，或者用普通的 git lfs pull`)
   }
   const code = await runInit(repo, [])

@@ -18,6 +18,7 @@
 - 素材类型可以用预置组合快速选择：`game`、`design`、`media`、`all`，`git yunbox init --types` 也接受。
 - macOS 客户端新增「素材类型」面板：查看每种素材是否走 LFS 和文件数，一键添加预置组合，添加或移除单个类型，并把作为普通文件提交的素材从下一次提交起改用 LFS（操作前确认，历史不变）。
 - pre-push 拦下推送（禁推时段、超出预算、在确认框里取消）时，在本机记下是哪个仓库、什么时间、什么原因；macOS 客户端侧边栏新增「最近被拦截」，列出这些仓库，点一下即可打开检查。
+- 支持 Cloudflare R2、AWS S3、MinIO 等 S3 兼容存储：`git yunbox init --preset r2`（或 `aws`、`minio`、`--endpoint`）接入，`yunbox login --provider s3` 保存密钥，推送、clone、`doctor` 和推送检查都和 COS 一样可用。R2 的 token 只能限定到 bucket，建议每个项目一个 bucket，详见新的「接入 R2 和 S3 兼容存储」指南。
 - 文档新增「从 GitHub LFS 迁移」指南：把 GitHub LFS 或其他 LFS 服务里的全部历史素材搬到自己的 COS，包含验证、协作者切换和回滚方法。
 
 ### 变更

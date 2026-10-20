@@ -3,6 +3,7 @@
 import type { CliContext } from '../context.ts'
 import type { CosLocation } from '../cos/location.ts'
 import type { selectCategories } from '../gitattributes.ts'
+import type { AddressingStyle, S3Location } from '../s3/location.ts'
 import type { AccessKeys, BucketSummary, ObjectStore, StorageLocation, StorageProvider } from '../storage/provider.ts'
 import type { InitOptions } from './init.ts'
 import { existsSync } from 'node:fs'
@@ -14,7 +15,8 @@ import { LEGACY_LOCATION_FILE, LOCATION_FILE, normalizeLocation } from '../cos/l
 import { readGitConfig, runGit, runGitChecked } from '../git.ts'
 import { askRequired, createLineReader } from '../prompt.ts'
 import { printStep } from '../report.ts'
-import { describeStorage, providerOf, readStorageLocation, requireStorageCredentials, sameStorage, writeStorageLocation } from '../storage/config.ts'
+import { isR2, normalizeS3Location, S3_PRESETS } from '../s3/location.ts'
+import { describeStorage, parseProviderId, providerById, providerOf, readStorageLocation, requireStorageCredentials, sameStorage, writeStorageLocation } from '../storage/config.ts'
 import { cosProvider } from '../storage/cos.ts'
 import { prefixed, PROBE_OPERATIONS, READ_CHECK_KEY, StorageRequestError } from '../storage/provider.ts'
 import { AGENT_NAME } from './lfs-agent.ts'
@@ -44,7 +46,7 @@ export async function runInitCos(
     throw new CliError(`存储位置的配置不对：${error.message}`)
   })
   const choosing = values.bucket !== undefined || values.region !== undefined || values.prefix !== undefined || values.create === true || existing === undefined
-  const provider = choosing ? cosProvider as StorageProvider : providerOf(existing!)
+  const provider = choosing ? chooseProvider(values, existing) : providerOf(existing!)
   const { label } = provider
 
   const resolved = await requireStorageCredentials(context.env, provider)
@@ -61,7 +63,9 @@ export async function runInitCos(
       printStep(context, { status: 'pass', title: `${label} 位置`, detail: `沿用 ${LOCATION_FILE}：${describeStorage(location)}` })
     }
     else {
-      location = await chooseCosLocation(context, repo, root, values, credentials, ask, existing)
+      location = provider.id === 's3'
+        ? await chooseS3Location(context, repo, root, values, ask, existing)
+        : await chooseCosLocation(context, repo, root, values, credentials, ask, existing)
       if (existing !== undefined && !sameStorage(existing, location) && !values.force)
         throw new CliError(`${LOCATION_FILE} 里已经配置了 ${describeStorage(existing)}，和 ${describeStorage(location)} 不同。确认要替换时加 --force`)
     }
@@ -135,6 +139,29 @@ export async function runInitCos(
   finally {
     ask.close()
   }
+}
+
+const S3_OPTIONS = ['preset', 'endpoint', 'account-id', 'addressing'] as const
+
+/** `--provider`, else `--cos`, else S3 when an S3-only option is given, else the configured provider, else COS. */
+function chooseProvider(values: InitOptions, existing: StorageLocation | undefined): StorageProvider {
+  const s3Options = S3_OPTIONS.filter(option => values[option] !== undefined)
+  let provider: StorageProvider
+  if (values.provider !== undefined)
+    provider = providerById(parseProviderId(values.provider))
+  else if (values.cos)
+    provider = providerById('cos')
+  else if (s3Options.length > 0)
+    provider = providerById('s3')
+  else
+    provider = existing === undefined ? providerById('cos') : providerOf(existing)
+  if (provider.id !== 's3' && s3Options.length > 0)
+    throw new CliError(`${s3Options.map(option => `--${option}`).join('、')} 只用于 S3 兼容存储（--provider s3）`, USAGE_EXIT_CODE)
+  if (provider.id !== 'cos' && values.cos)
+    throw new CliError('--cos 和 --provider s3 只能选一个', USAGE_EXIT_CODE)
+  if (provider.buckets === undefined && values.create)
+    throw new CliError(`${provider.label} 不支持用 --create 新建 bucket，请先在服务的控制台里建好私有 bucket`, USAGE_EXIT_CODE)
+  return provider
 }
 
 /** What to check when the keys cannot reach the location. */
@@ -235,6 +262,74 @@ async function listBuckets(context: CliContext, credentials: AccessKeys): Promis
       throw new CliError('这把密钥不能列出 bucket（受限的子账号通常如此）。请直接指定：git yunbox init --bucket <名称-APPID> --region <地域> --prefix <前缀>', USAGE_EXIT_CODE)
     throw new CliError(`列出 bucket 失败：${(error as Error).message}`)
   }
+}
+
+async function chooseS3Location(
+  context: CliContext,
+  repo: CliContext,
+  root: string,
+  values: InitOptions,
+  ask: ReturnType<typeof createLineReader>,
+  existing: StorageLocation | undefined,
+): Promise<S3Location> {
+  const previous = existing?.provider === 's3' ? existing : undefined
+  let preset = values.preset === undefined ? undefined : S3_PRESETS.find(entry => entry.id === values.preset)
+  if (values.preset !== undefined && preset === undefined)
+    throw new CliError(`--preset 只能是 ${S3_PRESETS.map(entry => entry.id).join('、')}，不是「${values.preset}」`, USAGE_EXIT_CODE)
+  if (preset === undefined && values['account-id'] !== undefined)
+    preset = S3_PRESETS.find(entry => entry.id === 'r2')
+  let endpoint = values.endpoint
+  if (endpoint === undefined && preset === undefined && previous === undefined) {
+    const answer = (await askRequired(ask, `存储服务：${S3_PRESETS.map(entry => `${entry.id}（${entry.label}）`).join('、')}，或者直接输入 endpoint 地址 [r2]：`, '--preset 或 --endpoint')) || 'r2'
+    if (/^https?:\/\//i.test(answer)) {
+      endpoint = answer
+    }
+    else {
+      preset = S3_PRESETS.find(entry => entry.id === answer.toLowerCase())
+      if (preset === undefined)
+        throw new CliError(`「${answer}」不是 ${S3_PRESETS.map(entry => entry.id).join('、')} 之一，也不是 http(s) 地址`, USAGE_EXIT_CODE)
+    }
+  }
+  // Changing only the bucket or prefix keeps the configured service.
+  const fromPrevious = preset === undefined && values.endpoint === undefined ? previous : undefined
+  const region = values.region ?? fromPrevious?.region ?? preset?.region ?? 'us-east-1'
+  if (endpoint === undefined) {
+    if (preset?.endpoint !== undefined) {
+      let accountId: string | undefined
+      if (preset.id === 'r2') {
+        accountId = (values['account-id'] ?? await askRequired(ask, 'Cloudflare 账户 ID（R2 概览页右侧的 Account ID）：', '--account-id')).trim().toLowerCase()
+        if (!/^[\da-f]{32}$/.test(accountId))
+          throw new CliError('R2 账户 ID 是 32 位十六进制字符，在 Cloudflare 控制台的 R2 概览页可以复制', USAGE_EXIT_CODE)
+      }
+      endpoint = preset.endpoint({ region, accountId })
+    }
+    else if (fromPrevious !== undefined) {
+      endpoint = fromPrevious.endpoint
+    }
+    else {
+      endpoint = await askRequired(ask, `${preset?.label ?? 'S3'} 的 endpoint 地址（不含 bucket，例如 https://minio.example.com）：`, '--endpoint')
+    }
+  }
+  const addressingStyle = (values.addressing ?? preset?.addressingStyle ?? fromPrevious?.addressingStyle ?? 'path') as AddressingStyle
+  const bucket = values.bucket ?? previous?.bucket ?? await askRequired(ask, 'bucket 名称（先在服务的控制台里建好私有 bucket）：', '--bucket')
+  const suggested = existing?.prefix || await suggestPrefix(repo, root)
+  const prefix = values.prefix ?? ((await askRequired(ask, `bucket 里的目录前缀 [${suggested}]：`, '--prefix')) || suggested)
+  let location: S3Location
+  try {
+    location = normalizeS3Location({ endpoint, bucket, region, prefix, addressingStyle })
+  }
+  catch (error) {
+    throw new CliError((error as Error).message, USAGE_EXIT_CODE)
+  }
+  if (isR2(location)) {
+    printStep(context, {
+      status: 'warn',
+      title: 'R2 权限范围',
+      detail: 'R2 的 API token 只能限定到 bucket，不能限定到前缀：能访问这个 bucket 的 token 可以读写其中所有前缀的素材',
+      fixes: ['每个项目单独建一个 R2 bucket，给协作者的 token 只授权这个 bucket 的「对象读和写」（只需要拉取的人给「对象只读」）'],
+    })
+  }
+  return location
 }
 
 /** Whether the keys can at least read: a HEAD of a key that never exists answers 404 rather than 403. */

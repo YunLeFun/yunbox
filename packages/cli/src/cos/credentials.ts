@@ -10,7 +10,7 @@ import { defaultSecretStores } from './secret-store.ts'
 
 export { credentialsFilePath } from './secret-store.ts'
 
-/** Where a set of COS credentials came from, for messages; never the values. */
+/** Where a set of credentials came from, for messages; never the values. */
 export type CredentialSource = 'env' | SecretStoreKind | 'tccli'
 
 /** Credentials plus where they came from. */
@@ -52,19 +52,9 @@ export async function resolveCredentials(env: NodeJS.ProcessEnv, stores?: Secret
       description: 'TENCENTCLOUD_* 环境变量',
     }
   }
-  let failure: Error | undefined
-  for (const store of storesFor(env, stores)) {
-    let keys: StoredKeys | undefined
-    try {
-      keys = await store.read()
-    }
-    catch (error) {
-      failure ??= error as Error
-      continue
-    }
-    if (keys !== undefined)
-      return { credentials: { secretId: keys.secretId, secretKey: keys.secretKey }, source: store.kind, description: store.description }
-  }
+  const { resolved, failure } = await readStores(storesFor(env, stores))
+  if (resolved !== undefined)
+    return resolved
   const tccli = env.YUNBOX_TCCLI_CREDENTIAL || join(env.HOME || homedir(), '.tccli', 'default.credential')
   if (existsSync(tccli)) {
     let value: { secretId?: unknown, secretKey?: unknown, token?: unknown, expiresAt?: unknown }
@@ -87,6 +77,27 @@ export async function resolveCredentials(env: NodeJS.ProcessEnv, stores?: Secret
   if (failure !== undefined)
     throw new CliError(failure.message)
   return undefined
+}
+
+/**
+ * The keys in the first store that has some. A store that cannot be read is
+ * skipped; the first such error is returned for when nothing else is found.
+ */
+export async function readStores(stores: SecretStore[]): Promise<{ resolved?: ResolvedCredentials, failure?: Error }> {
+  let failure: Error | undefined
+  for (const store of stores) {
+    let keys: StoredKeys | undefined
+    try {
+      keys = await store.read()
+    }
+    catch (error) {
+      failure ??= error as Error
+      continue
+    }
+    if (keys !== undefined)
+      return { resolved: { credentials: { secretId: keys.secretId, secretKey: keys.secretKey }, source: store.kind, description: store.description } }
+  }
+  return failure === undefined ? {} : { failure }
 }
 
 /** Like {@link resolveCredentials}, but explains how to configure credentials when there are none. */

@@ -68,9 +68,12 @@ export function configDirectory(env: NodeJS.ProcessEnv): string {
   return join(base, 'yunbox')
 }
 
-/** The per-user credentials file: `credentials.json` in {@link configDirectory}. */
-export function credentialsFilePath(env: NodeJS.ProcessEnv): string {
-  return join(configDirectory(env), 'credentials.json')
+/**
+ * The per-user credentials file in {@link configDirectory}: `credentials.json`
+ * for COS (as before providers existed), `credentials-<provider>.json` for the others.
+ */
+export function credentialsFilePath(env: NodeJS.ProcessEnv, provider = 'cos'): string {
+  return join(configDirectory(env), provider === 'cos' ? 'credentials.json' : `credentials-${provider}.json`)
 }
 
 /** The plain JSON file with owner-only permissions (0600); the fallback on every platform. */
@@ -123,8 +126,6 @@ export type SecurityRunner = (args: string[], input?: string) => Promise<Command
 
 /** `security` exit code for "item not found" (errSecItemNotFound). */
 const SECURITY_NOT_FOUND = 44
-const KEYCHAIN_ACCOUNT = 'cos'
-const KEYCHAIN_LABEL = 'YunBox COS credentials'
 
 const runSecurity: SecurityRunner = (args, input) => new Promise((resolve, reject) => {
   // A locked keychain shows an unlock dialog; leave the user time to answer it.
@@ -144,13 +145,16 @@ export interface KeychainOptions {
   keychain?: string
   /** Generic-password service name; `yunbox` by default. */
   service?: string
+  /** Generic-password account: the provider id, `cos` by default. */
+  account?: string
   run?: SecurityRunner
 }
 
 /**
  * The macOS keychain, through the system `security` tool (no dependency).
  *
- * The item is a generic password (service `yunbox`, account `cos`) whose data
+ * The item is a generic password (service `yunbox`, account `cos`, or the
+ * provider id such as `s3` for other providers) whose data
  * is the same JSON as the file. The SecretKey never appears in an argv:
  * writing sends `add-generic-password … -X <hex>` to `security -i` on stdin,
  * and reading gets the data from `find-generic-password -w` on stdout. The
@@ -162,17 +166,19 @@ export class KeychainSecretStore implements SecretStore {
   readonly description: string
   readonly #keychain: string[]
   readonly #service: string
+  readonly #account: string
   readonly #run: SecurityRunner
 
   constructor(options: KeychainOptions = {}) {
     this.#service = options.service ?? 'yunbox'
+    this.#account = options.account ?? 'cos'
     this.#keychain = options.keychain === undefined ? [] : [options.keychain]
     this.#run = options.run ?? runSecurity
-    this.description = `macOS 钥匙串（${this.#service}）`
+    this.description = this.#account === 'cos' ? `macOS 钥匙串（${this.#service}）` : `macOS 钥匙串（${this.#service} / ${this.#account}）`
   }
 
   async read(): Promise<StoredKeys | undefined> {
-    const result = await this.#run(['find-generic-password', '-s', this.#service, '-a', KEYCHAIN_ACCOUNT, '-w', ...this.#keychain])
+    const result = await this.#run(['find-generic-password', '-s', this.#service, '-a', this.#account, '-w', ...this.#keychain])
     if (result.code === SECURITY_NOT_FOUND)
       return undefined
     if (result.code !== 0)
@@ -185,7 +191,8 @@ export class KeychainSecretStore implements SecretStore {
 
   async write(keys: StoredKeys): Promise<void> {
     const hex = Buffer.from(encode(keys), 'utf8').toString('hex')
-    const command = ['add-generic-password', '-U', '-s', this.#service, '-a', KEYCHAIN_ACCOUNT, '-l', quote(KEYCHAIN_LABEL), '-X', hex, ...this.#keychain.map(quote)].join(' ')
+    const label = `YunBox ${this.#account.toUpperCase()} credentials`
+    const command = ['add-generic-password', '-U', '-s', this.#service, '-a', this.#account, '-l', quote(label), '-X', hex, ...this.#keychain.map(quote)].join(' ')
     const result = await this.#run(['-i'], `${command}\n`)
     // `security -i` has no prompt to echo, but never let the hex payload reach a message anyway.
     if (result.code !== 0)
@@ -196,7 +203,7 @@ export class KeychainSecretStore implements SecretStore {
   }
 
   async delete(): Promise<boolean> {
-    const result = await this.#run(['delete-generic-password', '-s', this.#service, '-a', KEYCHAIN_ACCOUNT, ...this.#keychain])
+    const result = await this.#run(['delete-generic-password', '-s', this.#service, '-a', this.#account, ...this.#keychain])
     if (result.code === SECURITY_NOT_FOUND)
       return false
     if (result.code !== 0)
@@ -225,19 +232,26 @@ function firstLine(text: string): string {
  * Windows has no dependency-free way that this project has verified (see
  * docs/deploy.md), so it keeps the file under `%APPDATA%`.
  *
+ * Each provider has its own keychain item and file, so keys for COS and for
+ * an S3-compatible service never replace each other.
+ *
+ * @param env Environment with `YUNBOX_CREDENTIAL_STORE` and the directory settings.
+ * @param platform Defaults to this system.
+ * @param provider Provider id; `cos` by default.
  * @throws {Error} for an unknown setting, or `keychain` on another system.
  */
-export function defaultSecretStores(env: NodeJS.ProcessEnv, platform: NodeJS.Platform = process.platform): SecretStore[] {
+export function defaultSecretStores(env: NodeJS.ProcessEnv, platform: NodeJS.Platform = process.platform, provider = 'cos'): SecretStore[] {
   const mode = env.YUNBOX_CREDENTIAL_STORE || 'auto'
-  const file = new FileSecretStore(credentialsFilePath(env))
+  const file = new FileSecretStore(credentialsFilePath(env, provider))
+  const keychain = (): KeychainSecretStore => new KeychainSecretStore({ account: provider })
   if (mode === 'file')
     return [file]
   if (mode === 'keychain') {
     if (platform !== 'darwin')
       throw new Error('YUNBOX_CREDENTIAL_STORE=keychain 只支持 macOS；其他系统用 file')
-    return [new KeychainSecretStore()]
+    return [keychain()]
   }
   if (mode !== 'auto')
     throw new Error(`YUNBOX_CREDENTIAL_STORE 只能是 auto、keychain 或 file，不是「${mode}」`)
-  return platform === 'darwin' ? [new KeychainSecretStore(), file] : [file]
+  return platform === 'darwin' ? [keychain(), file] : [file]
 }

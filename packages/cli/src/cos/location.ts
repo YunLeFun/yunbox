@@ -16,6 +16,8 @@ const PREFIX_SEGMENT_PATTERN = /^[\w.-]+$/
  * `<prefix>/<oid[0:2]>/<oid[2:4]>/<oid>`.
  */
 export interface CosLocation {
+  /** Never set: only S3 locations carry a provider, so this one stays what 0.1.x wrote. */
+  provider?: 'cos'
   /** Bucket name including the APPID suffix. */
   bucket: string
   region: string

@@ -30,6 +30,7 @@
     "@antfu/eslint-config": "catalog:",
     "@antfu/ni": "catalog:",
     "@cloudbase/signature-nodejs": "catalog:",
+    "@smithy/signature-v4": "catalog:",
     "@types/node": "catalog:",
     "bumpp": "catalog:",
     "cos-nodejs-sdk-v5": "catalog:",

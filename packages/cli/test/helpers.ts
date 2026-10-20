@@ -1,11 +1,12 @@
 import type { CliContext } from '../src/context.ts'
 import { Buffer } from 'node:buffer'
 import { execFile } from 'node:child_process'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import process from 'node:process'
 import { PassThrough, Readable } from 'node:stream'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { runCli } from '../src/run.ts'
 
 /** An isolated HOME whose only credential helper is a plain file, so tests never touch a real keychain. */
@@ -104,4 +105,28 @@ export async function createRepository(sandbox: Sandbox, name = 'repo'): Promise
   await mkdir(directory)
   await git(sandbox, directory, 'init', '--quiet')
   return directory
+}
+
+/**
+ * Put a `git-yunbox` on the sandbox's PATH that runs this checkout's CLI
+ * source, the way the npm bin does, so git-lfs can start the transfer agent.
+ */
+export async function installGitYunbox(sandbox: Sandbox): Promise<void> {
+  const workspaceRoot = fileURLToPath(new URL('../../..', import.meta.url))
+  const cliSource = join(workspaceRoot, 'packages', 'cli', 'src', 'cli.ts')
+  const tsxLoader = pathToFileURL(join(workspaceRoot, 'node_modules', 'tsx', 'dist', 'loader.mjs')).href
+  const bin = join(sandbox.root, 'bin')
+  await mkdir(bin, { recursive: true })
+  // git-lfs runs agents through sh, which needs the extension-less script; npm also creates a .cmd on Windows.
+  const posix = (path: string): string => path.replaceAll('\\', '/')
+  const shim = join(bin, 'git-yunbox')
+  await writeFile(shim, `#!/bin/sh\nexec "${posix(process.execPath)}" --no-warnings --import "${tsxLoader}" "${posix(cliSource)}" "$@"\n`)
+  await chmod(shim, 0o755)
+  if (process.platform === 'win32')
+    await writeFile(join(bin, 'git-yunbox.cmd'), `@"${process.execPath}" --no-warnings --import "${tsxLoader}" "${cliSource}" %*\r\n`)
+  Object.assign(sandbox.env, {
+    PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
+    TSX_TSCONFIG_PATH: join(workspaceRoot, 'tsconfig.json'),
+    GIT_LFS_SKIP_SMUDGE: '0',
+  })
 }

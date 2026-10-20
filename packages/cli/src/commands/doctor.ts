@@ -3,7 +3,7 @@ import type { StoredCredential } from '../credentials.ts'
 import type { ProbeResult } from '../probe.ts'
 import type { StepReport } from '../report.ts'
 import type { ServiceUrl } from '../service-url.ts'
-import type { StorageLocation } from '../storage/provider.ts'
+import type { ProviderId, StorageLocation } from '../storage/provider.ts'
 import { parseArgs } from 'node:util'
 import { CliError, print, USAGE_EXIT_CODE } from '../context.ts'
 import { LEGACY_LOCATION_FILE, LOCATION_FILE, locationFiles } from '../cos/location.ts'
@@ -55,7 +55,10 @@ export interface DoctorJson {
    * `provider` tells which.
    */
   mode: 'cos' | 'server' | 'none'
-  location?: { bucket: string, region: string, prefix: string }
+  /** The object store in direct mode. */
+  provider?: ProviderId
+  /** `endpoint` only for S3-compatible storage: the service origin, without the bucket. */
+  location?: { bucket: string, region: string, prefix: string, endpoint?: string }
   steps: StepReport[]
 }
 
@@ -86,7 +89,7 @@ export async function runDoctor(context: CliContext, args: string[]): Promise<nu
       schemaVersion: 1,
       status: failures === 0 ? 'ok' : 'failed',
       mode: summary.mode,
-      ...(summary.location === undefined ? {} : { location: { bucket: summary.location.bucket, region: summary.location.region, prefix: summary.location.prefix } }),
+      ...(summary.location === undefined ? {} : { provider: providerOf(summary.location).id, location: jsonLocation(summary.location) }),
       steps,
     }
     context.stdout.write(`${JSON.stringify(output)}\n`)
@@ -99,6 +102,11 @@ export async function runDoctor(context: CliContext, args: string[]): Promise<nu
   }
   print(context, `${failures} 项检查未通过，按上面的修复命令处理后重新运行 yunbox doctor。`)
   return 1
+}
+
+function jsonLocation(location: StorageLocation): NonNullable<DoctorJson['location']> {
+  const { bucket, region, prefix } = location
+  return location.provider === 's3' ? { bucket, region, prefix, endpoint: location.endpoint } : { bucket, region, prefix }
 }
 
 async function diagnose(context: CliContext, report: (step: StepReport) => void, readOnly: boolean, summary: DoctorSummary): Promise<void> {
@@ -142,7 +150,7 @@ async function diagnose(context: CliContext, report: (step: StepReport) => void,
     location = await readStorageLocation(repo, root)
   }
   catch (error) {
-    report({ status: 'fail', title: 'COS 位置', detail: (error as Error).message, fixes: ['git yunbox init --cos --force   # 重新选择 bucket 和前缀'] })
+    report({ status: 'fail', title: '存储位置', detail: (error as Error).message, fixes: ['git yunbox init --force   # 重新选择 bucket 和前缀'] })
     return
   }
   if (location !== undefined) {
@@ -160,7 +168,7 @@ async function diagnose(context: CliContext, report: (step: StepReport) => void,
       status: 'fail',
       title: 'YunBox',
       detail: '这个仓库还没有接入 YunBox，git-lfs 会把素材推到代码托管平台自带的 LFS',
-      fixes: ['git yunbox init   # 直连 COS（推荐）', 'git yunbox init --url https://<YunBox 服务地址>/<owner>/<repo>   # 使用服务端'],
+      fixes: ['git yunbox init   # 直连腾讯云 COS（推荐）', 'git yunbox init --provider s3   # 直连 Cloudflare R2、AWS S3、MinIO 等 S3 兼容存储', 'git yunbox init --url https://<YunBox 服务地址>/<owner>/<repo>   # 使用服务端'],
     })
     return
   }

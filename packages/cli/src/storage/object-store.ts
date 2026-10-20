@@ -181,6 +181,17 @@ export class HttpObjectStore implements ObjectStore {
     return steps
   }
 
+  async check(key: string): Promise<{ status: number, code?: string }> {
+    const response = await this.#send('GET', key, {}, EMPTY_SHA256)
+    const status = response.statusCode ?? 0
+    if (status === 200) {
+      response.resume()
+      return { status }
+    }
+    const code = errorCode(await readText(response))
+    return code === undefined ? { status } : { status, code }
+  }
+
   #existing(key: string, actual: number, size: number): 'skipped' {
     if (actual !== size)
       throw new StorageRequestError(`${this.#transport.label} 里已有这个对象，但大小是 ${actual} 字节，不是 ${size} 字节。请联系管理员检查 ${key}`, 409)

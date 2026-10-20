@@ -20,6 +20,7 @@ catalog:
   '@antfu/eslint-config': ^9.5.1
   '@antfu/ni': ^30.6.0
   '@cloudbase/signature-nodejs': ^2.0.0
+  '@smithy/signature-v4': ^5.7.4
   '@types/node': ^24.19.2
   bumpp: ^12.3.0
   cos-nodejs-sdk-v5: ^3.0.0
