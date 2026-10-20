@@ -99,7 +99,7 @@ pnpm test
 
 - `packages/core`：LFS 协议类型、输入校验、存储接口、本地文件存储和 COS 存储
 - `packages/server`：基于 `node:http` 的 Batch、Verify、PUT 和 GET 服务，以及元数据存储（`metadata.ts` 定义接口，`metadata-local.ts` 和 `metadata-cloudbase.ts` 是两个实现）
-- `packages/cli`（包名 `yunbox`）：协作者使用的 `yunbox` / `git-yunbox` 命令
+- `packages/cli`（包名 `yunbox`）：协作者使用的 `yunbox` / `git-yunbox` 命令。直连模式的存储（COS、S3 兼容存储）是内置的提供方，不支持第三方插件；接口和新增步骤见 [`packages/cli/src/storage/README.md`](./packages/cli/src/storage/README.md)
 
 以及官网 `docs/`（`@yunbox/docs`，VitePress）：首页的演示组件在 `docs/.vitepress/theme/components/`，`deploy.md`、`inspect.md` 直接作为站点页面，`plan.md`、`goal*.md` 是内部规划，不进站点。文档里指向仓库其他位置的相对链接，构建时改写成 GitHub 地址，所以同一份 Markdown 在 GitHub 和官网上都能点。
 

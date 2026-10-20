@@ -27,6 +27,7 @@
 ## 日常约定
 
 - 用户能感知的改动（新功能、行为变化、修复），在 [`docs/changelog.md`](./docs/changelog.md) 和 [`docs/en/changelog.md`](./docs/en/changelog.md) 的「未发布 / Unreleased」下各写一条，按「新增 / 变更 / 修复」（Added / Changed / Fixed）分组，写给用户看，不写实现细节。两份要列出同样的版本，`pnpm test` 会检查；`pnpm release` 会把它们标上版本号。
+- 直连模式的存储提供方只做内置实现，不加载第三方插件（插件会经手用户密钥）。新增或修改提供方按 [`packages/cli/src/storage/README.md`](./packages/cli/src/storage/README.md)：签名手写、用官方测试向量测试，传输逻辑复用 `HttpObjectStore`，命令按能力判断而不是按提供方判断。
 - 改了 macOS 客户端的界面文字，运行 `./script/sync_strings.sh` 并在 `apps/macos/Localization/Localizable.xcstrings` 补上英文；传给 `String` 的文字写成 `String(localized: "…")`。
 
 ## 已完成：M1 协议验证版（2026-10-15）
