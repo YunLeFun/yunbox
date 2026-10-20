@@ -1,5 +1,5 @@
 import type { Sandbox } from './helpers.ts'
-import { readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createRepository, createSandbox, git, runYunBox } from './helpers.ts'
@@ -37,6 +37,10 @@ describe('push freeze windows', () => {
         { window: '14:00-18:00', scope: 'local' },
       ],
       messages: { local: '联调时段' },
+      check: expect.objectContaining({ status: expect.stringMatching(/^(allowed|frozen)$/) }),
+      week: expect.arrayContaining([expect.objectContaining({ spans: expect.any(Array) })]),
+      pauses: [],
+      hook: 'none',
     })
     // set replaces the scope's windows instead of appending.
     await runYunBox(sandbox, repo, ['freeze', 'set', '13:00-14:00'])
@@ -122,5 +126,47 @@ describe('push freeze windows', () => {
     const broken = await runYunBox(sandbox, repo, hook, updates)
     expect(broken.code).toBe(2)
     expect(broken.stderr).toContain('yunbox.pushFreeze')
+  })
+
+  it('switches windows off and back on without losing them', async () => {
+    const { sandbox, repo } = await fixture()
+    await writeFile(join(repo, 'small.txt'), 'hello\n')
+    await git(sandbox, repo, 'add', '-A')
+    await git(sandbox, repo, 'commit', '-qm', 'test(freeze): record fixture')
+    const tip = await git(sandbox, repo, 'rev-parse', 'HEAD')
+    const updates = `refs/heads/main ${tip} refs/heads/main ${'0'.repeat(40)}\n`
+    const hook = ['inspect', '--push', '--stdin']
+    await runYunBox(sandbox, repo, ['freeze', 'set', '24/7', '--shared'])
+    expect((await runYunBox(sandbox, repo, hook, updates)).code).toBe(1)
+    const off = await runYunBox(sandbox, repo, ['freeze', 'off', '--for', '1h'])
+    expect(off.code).toBe(0)
+    expect(off.stdout).toContain('自动恢复')
+    expect(await git(sandbox, repo, 'config', '--local', 'yunbox.pushFreezePausedUntil')).toMatch(/^\d{4}-\d\d-\d\dT/)
+    const passed = await runYunBox(sandbox, repo, hook, updates)
+    expect(passed.code).toBe(0)
+    expect(passed.stderr).toContain('禁推时段已关闭')
+    const list = JSON.parse((await runYunBox(sandbox, repo, ['freeze', 'list', '--json'])).stdout)
+    expect(list.check).toMatchObject({ status: 'paused', window: '24/7', pause: { scope: 'local' } })
+    expect(list.windows).toHaveLength(1)
+    expect((await runYunBox(sandbox, repo, ['freeze', 'on'])).code).toBe(0)
+    expect((await runYunBox(sandbox, repo, hook, updates)).code).toBe(1)
+    // Off everywhere on this machine, until switched back on.
+    expect((await runYunBox(sandbox, repo, ['freeze', 'off', '--global'])).code).toBe(0)
+    expect(await git(sandbox, repo, 'config', '--global', 'yunbox.pushFreezePausedUntil')).toBe('forever')
+    expect((await runYunBox(sandbox, repo, ['freeze', 'check'])).stdout).toContain('暂不生效')
+    expect((await runYunBox(sandbox, repo, ['freeze', 'on', '--global'])).code).toBe(0)
+    expect((await runYunBox(sandbox, repo, ['freeze', 'check'])).code).toBe(1)
+  })
+
+  it('rejects bad pauses and committed ones', async () => {
+    const { sandbox, repo } = await fixture()
+    expect((await runYunBox(sandbox, repo, ['freeze', 'off', '--for', '1h', '--until', '18:00'])).code).toBe(2)
+    expect((await runYunBox(sandbox, repo, ['freeze', 'off', '--for', 'soon'])).code).toBe(2)
+    expect((await runYunBox(sandbox, repo, ['freeze', 'off', '--shared'])).code).toBe(2)
+    await mkdir(join(repo, '.yunbox'))
+    await git(sandbox, repo, 'config', '--file', '.yunbox/config', 'yunbox.pushFreezePausedUntil', 'forever')
+    const broken = await runYunBox(sandbox, repo, ['freeze', 'check'])
+    expect(broken.code).toBe(2)
+    expect(broken.stderr).toContain('不能提交到仓库')
   })
 })

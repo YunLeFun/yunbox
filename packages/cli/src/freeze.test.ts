@@ -1,6 +1,6 @@
 import type { FreezeConfig, FreezeScope } from './freeze.ts'
 import { describe, expect, it } from 'vitest'
-import { checkFreeze, formatFreezeBlock, parseDays, parseFreezeWindow, parseMoment, withDays } from './freeze.ts'
+import { activePauses, checkFreeze, formatFreezeBlock, formatPauseEnd, freezeTimeline, parseDays, parseFreezeWindow, parseMoment, pauseEnd, withDays } from './freeze.ts'
 
 function config(...windows: string[]): FreezeConfig {
   return { windows: windows.map(text => ({ ...parseFreezeWindow(text), scope: 'local' as FreezeScope })), messages: {}, timeZones: {} }
@@ -119,5 +119,43 @@ describe('checkFreeze', () => {
     expect(text).toContain('夜间维护')
     expect(formatFreezeBlock(checkFreeze(config('Fr 18:00-24:00; Sa,Su'), at('sat', '10:00')))).toContain('周一 00:00 后可以推送')
     expect(formatFreezeBlock(checkFreeze(config('00:00-24:00'), at('mon', '00:00')))).toContain('接下来 7 天都不能推送')
+  })
+})
+
+describe('freezeTimeline', () => {
+  it('lists merged frozen stretches for the next seven local days', () => {
+    const week = freezeTimeline(config('Mo-Fr 09:00-12:00,12:00-18:00', 'Fr 22:00-02:00'), at('fri', '08:00'))
+    expect(week.map(day => day.weekday)).toEqual(['fri', 'sat', 'sun', 'mon', 'tue', 'wed', 'thu'])
+    expect(week[0]).toEqual({ weekday: 'fri', date: '2026-10-23', spans: [{ start: '09:00', end: '18:00' }, { start: '22:00', end: '24:00' }] })
+    expect(week[1]!.spans).toEqual([{ start: '00:00', end: '02:00' }])
+    expect(week[2]!.spans).toEqual([])
+    expect(freezeTimeline(config('24/7'), at('mon', '08:00'), 1)[0]!.spans).toEqual([{ start: '00:00', end: '24:00' }])
+  })
+})
+
+describe('pauses', () => {
+  it('lets a pause switch windows off until it ends, the repository first', () => {
+    const now = at('mon', '10:00')
+    const paused: FreezeConfig = { ...config('Mo-Fr 09:00-18:00'), pauses: { global: 'forever', local: at('mon', '11:00').toISOString() } }
+    expect(checkFreeze(paused, now)).toMatchObject({ status: 'paused', window: 'Mo-Fr 09:00-18:00', pause: { scope: 'local', until: at('mon', '11:00').toISOString() } })
+    expect(activePauses(paused, at('mon', '12:00'))).toEqual([{ scope: 'global', until: null }])
+    const expired: FreezeConfig = { ...config('Mo-Fr 09:00-18:00'), pauses: { local: at('mon', '09:30').toISOString() } }
+    expect(checkFreeze(expired, now).status).toBe('frozen')
+    expect(checkFreeze({ ...config('Sa,Su'), pauses: { global: 'forever' } }, now)).toMatchObject({ status: 'allowed', pause: { scope: 'global', until: null } })
+  })
+
+  it('works out when a timed pause ends', () => {
+    const now = at('tue', '15:20')
+    expect(pauseEnd({ for: '1h30m' }, now)).toEqual(at('tue', '16:50'))
+    expect(pauseEnd({ for: '2d' }, now).getDate()).toBe(22)
+    expect(pauseEnd({ until: '18:00' }, now)).toEqual(at('tue', '18:00'))
+    expect(pauseEnd({ until: '09:00' }, now)).toEqual(new Date(2026, 9, 21, 9, 0))
+    expect(pauseEnd({ until: '24:00' }, now)).toEqual(new Date(2026, 9, 21, 0, 0))
+    expect(pauseEnd({ until: 'Mo 09:00' }, now)).toEqual(new Date(2026, 9, 26, 9, 0))
+    for (const text of ['', '0m', '1x', '31d', '1h 30m'])
+      expect(() => pauseEnd({ for: text }, now), text).toThrow(TypeError)
+    expect(formatPauseEnd(at('tue', '18:00').toISOString(), now)).toBe('至 今天 18:00')
+    expect(formatPauseEnd(new Date(2026, 9, 21, 0, 0).toISOString(), now)).toBe('至 明天 00:00')
+    expect(formatPauseEnd(null, now)).toBe('直到重新开启')
   })
 })

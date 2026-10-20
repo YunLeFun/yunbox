@@ -6,15 +6,20 @@ import { parseArgs } from 'node:util'
 import { CliError, print, USAGE_EXIT_CODE } from '../context.ts'
 import { LOCATION_FILE } from '../cos/location.ts'
 import {
+  activePauses,
   checkFreeze,
   formatFreezeBlock,
+  formatPauseEnd,
   FREEZE_KEY,
   FREEZE_MESSAGE_KEY,
+  FREEZE_PAUSE_KEY,
   FREEZE_TIME_ZONE_KEY,
+  freezeTimeline,
   isValidTimeZone,
   parseDays,
   parseFreezeWindow,
   parseMoment,
+  pauseEnd,
   readFreezeConfig,
   SCOPE_LABELS,
   weekdayLabel,
@@ -27,6 +32,8 @@ export const freezeHelp = `用法：
   yunbox freeze [list] [--json]
   yunbox freeze set <时段>... [--days <星期>] [--message <说明>] [--timezone <时区>] [--shared | --global]
   yunbox freeze clear [--shared | --global]
+  yunbox freeze off [--for <时长> | --until "[星期] HH:MM"] [--global]
+  yunbox freeze on [--global]
   yunbox freeze check [--at "[星期] HH:MM"] [--json]
 
 设置禁推时段。处在任一时段内时，yunbox hook install 安装的 pre-push 包装层
@@ -51,6 +58,9 @@ export const freezeHelp = `用法：
   list     列出所有生效的时段、说明和时区（默认）
   set      替换该位置的全部时段
   clear    删除该位置的全部时段、说明和时区
+  off      快速关闭：所有时段暂不生效，规则保留；--for / --until 到点自动恢复，否则直到 on。
+           默认只关本仓库，--global 关本机所有仓库；不能写进团队配置
+  on       提前恢复（删除该位置的关闭）
   check    判断现在（或 --at 指定的本机时间）能否推送：退出码 0 可以，1 处于禁推时段
 
 选项：
@@ -58,6 +68,8 @@ export const freezeHelp = `用法：
   --message <说明>    被拦截时显示的说明；"" 删除
   --timezone <时区>   按这个 IANA 时区计算该位置的时段，例如 Asia/Shanghai；"" 删除，改用本机时区。
                       团队成员不在同一时区时，给 --shared 的时段设上
+  --for <时长>        off 的时长：30m、1h、1h30m、2d（最长 30 天）
+  --until <时间>      off 到这个本机时间为止，例如 18:00、"Mo 09:00"；24:00 表示今天结束
   --json              list / check 输出 JSON（schemaVersion 1），便于脚本和 AI 工具读取
   -h, --help          显示帮助
 
@@ -65,6 +77,8 @@ export const freezeHelp = `用法：
   yunbox freeze set "Mo-Fr 09:00-18:00" --message "工作时间禁止推送，请在 18:00 后推送"
   yunbox freeze set "Fr 18:00-24:00; Sa,Su" --shared --timezone Asia/Shanghai
   yunbox freeze check --at "Fr 17:30"
+  yunbox freeze off --for 1h            # 紧急修复：本仓库 1 小时内不拦截
+  yunbox freeze off --global --until 24:00
 `
 
 type Scope = 'local' | 'shared' | 'global'
@@ -83,6 +97,8 @@ export async function runFreeze(context: CliContext, args: string[]): Promise<nu
         shared: { type: 'boolean' },
         global: { type: 'boolean' },
         at: { type: 'string' },
+        for: { type: 'string' },
+        until: { type: 'string' },
         json: { type: 'boolean' },
         help: { type: 'boolean', short: 'h' },
       },
@@ -103,6 +119,8 @@ export async function runFreeze(context: CliContext, args: string[]): Promise<nu
     check: ['json', 'at'],
     set: ['days', 'message', 'timezone', 'shared', 'global'],
     clear: ['shared', 'global'],
+    off: ['for', 'until', 'global'],
+    on: ['global'],
   }
   if (!(operation in accepted))
     throw usage(`未知子命令：${operation}`)
@@ -116,7 +134,39 @@ export async function runFreeze(context: CliContext, args: string[]): Promise<nu
   if (operation === 'set' && !rest.length)
     throw usage('请给出至少一个时段，例如 yunbox freeze set 10:00-12:00 14:00-18:00')
 
+  if (values.for !== undefined && values.until !== undefined)
+    throw usage('--for 和 --until 只能选一个')
+
   const root = await findRepositoryRoot(context)
+  if (operation === 'off' || operation === 'on') {
+    const scope: Scope = values.global ? 'global' : 'local'
+    if (scope === 'local' && root === undefined)
+      throw new CliError('当前目录不在 Git 仓库里；要关闭本机所有仓库的禁推时段请加 --global')
+    const repo = { ...context, cwd: root ?? context.cwd }
+    const target = await scopeArgs(scope, root, false)
+    const now = new Date()
+    if (operation === 'off') {
+      let until: string | null = null
+      try {
+        if (values.for !== undefined || values.until !== undefined)
+          until = pauseEnd({ for: values.for, until: values.until }, now).toISOString()
+      }
+      catch (error) {
+        throw usage((error as Error).message)
+      }
+      await runGitChecked(repo, ['config', ...target, FREEZE_PAUSE_KEY, until ?? 'forever'])
+      print(context, `已关闭禁推时段（${SCOPE_LABELS[scope]}），${until === null ? '直到运行 yunbox freeze on' : `${formatPauseEnd(until, now)} 自动恢复`}`)
+      print(context, '规则都保留；关闭期间推送不会被拦截，pre-push 会提示一句')
+    }
+    else {
+      await unsetAll(repo, target, FREEZE_PAUSE_KEY)
+      print(context, `已恢复禁推时段（${SCOPE_LABELS[scope]}）`)
+      const others = activePauses(await readConfig(repo, root), now)
+      for (const pause of others)
+        print(context, `注意：${SCOPE_LABELS[pause.scope]} 仍然关闭，${formatPauseEnd(pause.until, now)}；用 yunbox freeze on${pause.scope === 'global' ? ' --global' : ''} 恢复`)
+    }
+    return 0
+  }
   if (operation === 'set' || operation === 'clear') {
     const scope: Scope = values.shared ? 'shared' : values.global ? 'global' : 'local'
     if (scope !== 'global' && root === undefined)
@@ -143,7 +193,8 @@ export async function runFreeze(context: CliContext, args: string[]): Promise<nu
     }
     else {
       const target = await scopeArgs(scope, root, false)
-      for (const key of [FREEZE_KEY, FREEZE_MESSAGE_KEY, FREEZE_TIME_ZONE_KEY])
+      const keys = [FREEZE_KEY, FREEZE_MESSAGE_KEY, FREEZE_TIME_ZONE_KEY, ...(scope === 'shared' ? [] : [FREEZE_PAUSE_KEY])]
+      for (const key of keys)
         await unsetAll(repo, target, key)
       print(context, `已清除禁推时段（${SCOPE_LABELS[scope]}）`)
     }
@@ -164,10 +215,16 @@ export async function runFreeze(context: CliContext, args: string[]): Promise<nu
   const config = await readConfig(repo, root)
   if (operation === 'list') {
     if (values.json) {
+      const now = new Date()
       context.stdout.write(`${JSON.stringify({
         schemaVersion: 1,
         windows: config.windows.map(({ window, scope }) => ({ window, scope, ...(config.timeZones[scope] ? { timeZone: config.timeZones[scope] } : {}) })),
         messages: config.messages,
+        // What a pre-push would see right now, and whether this clone's wrapper enforces it.
+        check: checkFreeze(config, now),
+        week: freezeTimeline(config, now),
+        pauses: activePauses(config, now),
+        hook: root === undefined ? null : await installedHook(context, root),
       })}\n`)
     }
     else {
@@ -187,6 +244,8 @@ export async function runFreeze(context: CliContext, args: string[]): Promise<nu
     context.stdout.write(`${JSON.stringify({ schemaVersion: 1, ...check })}\n`)
   else if (check.status === 'frozen')
     context.stdout.write(formatFreezeBlock(check))
+  else if (check.status === 'paused')
+    print(context, `${weekdayLabel(check.weekday)} ${check.time} 可以推送：禁推时段已关闭（${SCOPE_LABELS[check.pause!.scope]}，${formatPauseEnd(check.pause!.until, moment)}），${check.window} 暂不生效`)
   else
     print(context, `${weekdayLabel(check.weekday)} ${check.time} 可以推送`)
   return check.status === 'frozen' ? 1 : 0
@@ -202,6 +261,9 @@ async function readConfig(context: CliContext, root: string | undefined): Promis
 }
 
 function printList(context: CliContext, config: FreezeConfig): void {
+  const now = new Date()
+  for (const pause of activePauses(config, now))
+    print(context, `已关闭（${SCOPE_LABELS[pause.scope]}）：${formatPauseEnd(pause.until, now)}，期间不拦截推送`)
   if (!config.windows.length) {
     print(context, '没有设置禁推时段')
     return

@@ -12,6 +12,11 @@ export const FREEZE_KEY = 'yunbox.pushFreeze'
 export const FREEZE_MESSAGE_KEY = 'yunbox.pushFreezeMessage'
 /** IANA time zone the windows of the same scope are written in; this machine's zone when unset. */
 export const FREEZE_TIME_ZONE_KEY = 'yunbox.pushFreezeTimeZone'
+/**
+ * Turns every window off without deleting it: an ISO 8601 moment after which they apply again, or `forever`.
+ * Only personal scopes may hold it; a committed pause would switch the team's rules off for everyone.
+ */
+export const FREEZE_PAUSE_KEY = 'yunbox.pushFreezePausedUntil'
 
 const MINUTES_PER_DAY = 24 * 60
 /** How far ahead `until` is searched before a freeze counts as permanent. */
@@ -63,11 +68,20 @@ export interface FreezeWindow extends ParsedFreezeWindow {
   scope: FreezeScope
 }
 
-/** Every configured window plus each scope's message and time zone. */
+/** Every configured window plus each scope's message, time zone and pause. */
 export interface FreezeConfig {
   windows: FreezeWindow[]
   messages: Partial<Record<FreezeScope, string>>
   timeZones: Partial<Record<FreezeScope, string>>
+  /** Raw `pushFreezePausedUntil` per scope: an ISO moment or `forever`. */
+  pauses?: Partial<Record<FreezeScope, string>>
+}
+
+/** Windows switched off by `yunbox freeze off`. */
+export interface FreezePause {
+  scope: FreezeScope
+  /** ISO 8601 moment the windows apply again; `null` until `yunbox freeze on`. */
+  until: string | null
 }
 
 /** A wall-clock moment in some time zone. */
@@ -80,7 +94,8 @@ export interface FreezeClock {
 
 /** Whether a push is allowed at a moment; when frozen, the blocking window and when pushing opens again. */
 export interface FreezeCheck extends FreezeClock {
-  status: 'allowed' | 'frozen'
+  /** `paused`: a window would block now, but `yunbox freeze off` switched the windows off. */
+  status: 'allowed' | 'frozen' | 'paused'
   /** The zone `weekday` / `time` / `until` are in; absent for this machine's zone. */
   timeZone?: string
   window?: string
@@ -88,6 +103,8 @@ export interface FreezeCheck extends FreezeClock {
   message?: string
   /** When pushing opens again (`daysAhead` 0 is today); `null` when no gap appears within 7 days. */
   until?: (FreezeClock & { daysAhead: number }) | null
+  /** The pause in effect, whether or not a window would block now. */
+  pause?: FreezePause
 }
 
 /** Human-readable name of each scope for messages. */
@@ -219,8 +236,13 @@ export function inWindow(window: Pick<ParsedFreezeWindow, 'week'>, weekday: numb
  */
 export function checkFreeze(config: FreezeConfig, now: Date): FreezeCheck {
   const blocking = blockingWindow(config, now)
+  const pause = activePauses(config, now)[0]
   if (blocking === undefined)
-    return { status: 'allowed', ...toClock(wallClock(now)) }
+    return { status: 'allowed', ...toClock(wallClock(now)), ...(pause ? { pause } : {}) }
+  if (pause) {
+    const timeZone = config.timeZones[blocking.scope]
+    return { status: 'paused', ...toClock(wallClock(now, timeZone)), ...(timeZone ? { timeZone } : {}), window: blocking.window, scope: blocking.scope, pause }
+  }
   const timeZone = config.timeZones[blocking.scope]
   const current = wallClock(now, timeZone)
   let until: FreezeCheck['until'] = null
@@ -245,6 +267,95 @@ export function checkFreeze(config: FreezeConfig, now: Date): FreezeCheck {
   }
 }
 
+/** Scopes a pause may be written to, in the order a pause takes effect. */
+const PAUSE_SCOPES: FreezeScope[] = ['local', 'worktree', 'command', 'global', 'system']
+
+/** Pauses still in effect at `now`, the repository's own first. */
+export function activePauses(config: FreezeConfig, now: Date): FreezePause[] {
+  const pauses: FreezePause[] = []
+  for (const scope of PAUSE_SCOPES) {
+    const value = config.pauses?.[scope]
+    if (value === undefined)
+      continue
+    if (value === 'forever')
+      pauses.push({ scope, until: null })
+    else if (Date.parse(value) > now.getTime())
+      pauses.push({ scope, until: new Date(value).toISOString() })
+  }
+  return pauses
+}
+
+/**
+ * When `yunbox freeze off --for` / `--until` ends. Durations are `30m`, `1h`,
+ * `1h30m` or `2d` (at most 30 days); a clock time is the next such moment in
+ * this machine's zone, `24:00` meaning the end of today.
+ *
+ * @throws {TypeError} explaining the expected format.
+ */
+export function pauseEnd(options: { for?: string, until?: string }, now: Date): Date {
+  if (options.for !== undefined) {
+    const match = /^(?:(\d+)d)?(?:(\d+)h)?(?:(\d+)m(?:in)?)?$/i.exec(options.for.trim())
+    const minutes = match ? Number(match[1] ?? 0) * MINUTES_PER_DAY + Number(match[2] ?? 0) * 60 + Number(match[3] ?? 0) : 0
+    if (!(minutes > 0 && minutes <= 30 * MINUTES_PER_DAY))
+      throw new TypeError(`时长「${options.for}」格式不对，例如 30m、1h、1h30m、2d（最长 30 天）`)
+    return new Date(now.getTime() + minutes * 60_000)
+  }
+  const text = options.until!.trim()
+  if (text === '24:00')
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
+  const moment = parseMoment(text, now)
+  if (moment.getTime() <= now.getTime())
+    moment.setDate(moment.getDate() + (CLOCK_PATTERN.exec(text)?.[1] === undefined ? 1 : 7))
+  return moment
+}
+
+/** `今天 17:30`, `明天 09:00` or `10月25日 09:00` in this machine's zone; `null` means until switched back on. */
+export function formatPauseEnd(until: string | null, now: Date): string {
+  if (until === null)
+    return '直到重新开启'
+  const date = new Date(until)
+  const days = Math.round((Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())) / 86_400_000)
+  const day = days === 0 ? '今天' : days === 1 ? '明天' : `${date.getMonth() + 1}月${date.getDate()}日`
+  return `至 ${day} ${formatMinutes(date.getHours() * 60 + date.getMinutes())}`
+}
+
+/** One local calendar day and the frozen stretches in it, for timelines. */
+export interface FreezeDay {
+  /** `mon` … `sun`. */
+  weekday: typeof WEEKDAYS[number]
+  /** `YYYY-MM-DD` in this machine's zone. */
+  date: string
+  /** Merged frozen stretches, `HH:MM` to `HH:MM` (`24:00` for the end of the day). */
+  spans: { start: string, end: string }[]
+}
+
+/**
+ * The frozen stretches of `days` local calendar days starting with the day of
+ * `now`, in this machine's zone, with every window evaluated in its own zone.
+ */
+export function freezeTimeline(config: FreezeConfig, now: Date, days = 7): FreezeDay[] {
+  const timeline: FreezeDay[] = []
+  for (let offset = 0; offset < days; offset++) {
+    const day = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset)
+    const spans: FreezeDay['spans'] = []
+    let start: number | undefined
+    for (let minute = 0; minute <= MINUTES_PER_DAY; minute++) {
+      const frozen = minute < MINUTES_PER_DAY && config.windows.length > 0
+        && blockingWindow(config, new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, minute)) !== undefined
+      if (frozen && start === undefined) {
+        start = minute
+      }
+      else if (!frozen && start !== undefined) {
+        spans.push({ start: formatMinutes(start), end: formatMinutes(minute) })
+        start = undefined
+      }
+    }
+    const date = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`
+    timeline.push({ weekday: WEEKDAYS[day.getDay()]!, date, spans })
+  }
+  return timeline
+}
+
 /** The text shown when a push is blocked. */
 export function formatFreezeBlock(check: FreezeCheck): string {
   const zone = check.timeZone ? `（${check.timeZone}）` : ''
@@ -266,8 +377,8 @@ export function formatFreezeBlock(check: FreezeCheck): string {
  * @throws {TypeError} naming the scope of an invalid value.
  */
 export async function readFreezeConfig(context: CliContext, root: string | undefined): Promise<FreezeConfig> {
-  const config: FreezeConfig = { windows: [], messages: {}, timeZones: {} }
-  const keys = [FREEZE_KEY, FREEZE_MESSAGE_KEY, FREEZE_TIME_ZONE_KEY]
+  const config: FreezeConfig = { windows: [], messages: {}, timeZones: {}, pauses: {} }
+  const keys = [FREEZE_KEY, FREEZE_MESSAGE_KEY, FREEZE_TIME_ZONE_KEY, FREEZE_PAUSE_KEY]
   const entries: { scope: FreezeScope, key: string, value: string }[] = []
   if (root !== undefined) {
     const file = join(root, LOCATION_FILE)
@@ -287,6 +398,13 @@ export async function readFreezeConfig(context: CliContext, root: string | undef
     // Like `git config --get`, the last message or zone of a scope wins.
     if (key === FREEZE_MESSAGE_KEY) {
       config.messages[scope] = value
+    }
+    else if (key === FREEZE_PAUSE_KEY) {
+      if (scope === 'shared')
+        throw new TypeError(`${label}：不能提交到仓库，暂停只能写在本仓库或全局配置里`)
+      if (value !== 'forever' && Number.isNaN(Date.parse(value)))
+        throw new TypeError(`${label}：「${value}」应为 ISO 8601 时间或 forever，用 yunbox freeze on 恢复`)
+      config.pauses![scope] = value
     }
     else if (key === FREEZE_TIME_ZONE_KEY) {
       if (!isValidTimeZone(value))

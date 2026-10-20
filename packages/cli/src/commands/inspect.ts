@@ -2,7 +2,7 @@ import type { CliContext } from '../context.ts'
 import { Buffer } from 'node:buffer'
 import { parseArgs } from 'node:util'
 import { confirmPush } from '../confirm.ts'
-import { checkFreeze, formatFreezeBlock, readFreezeConfig } from '../freeze.ts'
+import { checkFreeze, formatFreezeBlock, formatPauseEnd, readFreezeConfig, SCOPE_LABELS } from '../freeze.ts'
 import { inspectGit, InspectionError, resolveInspectionRange } from '../inspect-git.ts'
 import { formatInspection, inspectPush } from '../inspect.ts'
 
@@ -73,6 +73,8 @@ export async function runInspect(context: CliContext, args: string[]): Promise<n
       catch (error) {
         throw new InspectionError(error instanceof TypeError ? error.message : '无法读取禁推时段配置')
       }
+      if (freeze.status === 'paused' && !json)
+        context.stderr.write(`禁推时段已关闭（${SCOPE_LABELS[freeze.pause!.scope]}，${formatPauseEnd(freeze.pause!.until, new Date())}），本次推送不受 ${freeze.window} 限制。\n`)
       if (freeze.status === 'frozen') {
         if (json)
           context.stdout.write(`${JSON.stringify({ schemaVersion: 1, status: 'frozen', freeze })}\n`)
