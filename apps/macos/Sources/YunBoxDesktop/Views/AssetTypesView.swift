@@ -89,13 +89,7 @@ struct AssetTypesSheet: View {
                         }
                         if let output = types.output {
                             Divider()
-                            Label(output.succeeded ? "已完成" : "未完成（退出码 \(output.exitCode)）",
-                                  systemImage: output.succeeded ? "checkmark.circle" : "xmark.octagon")
-                                .foregroundStyle(output.succeeded ? .green : .orange)
-                            Text(output.text).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(10).background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
-                                .id(Self.outputID)
+                            CommandOutputView(output: output).id(Self.outputID)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)

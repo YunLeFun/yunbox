@@ -46,3 +46,14 @@ private let doctorJSON = #"""
     )
     #expect(String(decoding: quiet.data, as: UTF8.self) == "out")
 }
+
+@Test func recognisesTheStepMarksAtTheStartOfOutputLines() {
+    let output = CommandOutput(exitCode: 1, text: "✓ git lfs install：已启用\n! .gitattributes：跳过 *.zip\n    建议：\n      git yunbox types add archive --renormalize\n✗ COS 密钥\n- hook：未安装\n错误：未知的素材类型：nope\n\n下一步：确认改动后提交\n")
+    #expect(output.lines.map(\.mark) == [.pass, .warn, nil, nil, .fail, .skip, .error, nil, nil])
+    #expect(output.lines[0].marker == "✓ ")
+    #expect(output.lines[0].body == "git lfs install：已启用")
+    #expect(output.lines[6].body == "未知的素材类型：nope")
+    // Indented fix lines keep their indentation and get no mark.
+    #expect(output.lines[3].body == "      git yunbox types add archive --renormalize")
+    #expect(output.lines.map { $0.marker + $0.body }.joined(separator: "\n") == output.text.trimmingCharacters(in: .newlines))
+}

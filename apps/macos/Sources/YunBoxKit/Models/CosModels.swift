@@ -96,4 +96,29 @@ public struct CommandOutput: Sendable {
         self.exitCode = exitCode
         self.text = text
     }
+
+    /// How a line of CLI output starts: `printStep`'s `✓` / `!` / `✗` / `-`, or the `错误：` of a failed command.
+    public enum Mark: Sendable, Equatable {
+        case pass, warn, fail, skip, error
+    }
+
+    /// One output line and the mark it starts with; `mark` and `body` together are the line's full text.
+    public struct Line: Sendable, Equatable {
+        public let mark: Mark?
+        /// The marker as printed (`✓`, `错误：` …), empty when `mark` is `nil`.
+        public let marker: String
+        public let body: String
+    }
+
+    /// The output split into lines, with the step marks the CLI prints at the start of a line recognised.
+    /// Indented lines (fix commands, wrapped details) never carry a mark.
+    public var lines: [Line] {
+        text.trimmingCharacters(in: .newlines).split(separator: "\n", omittingEmptySubsequences: false).map { line in
+            let line = String(line)
+            for (marker, mark) in [("✓ ", Mark.pass), ("! ", .warn), ("✗ ", .fail), ("- ", .skip), ("错误：", .error)] where line.hasPrefix(marker) {
+                return Line(mark: mark, marker: marker, body: String(line.dropFirst(marker.count)))
+            }
+            return Line(mark: nil, marker: "", body: line)
+        }
+    }
 }
