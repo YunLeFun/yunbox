@@ -228,6 +228,16 @@
         }
       }
     },
+    "%@（默认）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ (default)"
+          }
+        }
+      }
+    },
     "%lld" : {
       "shouldTranslate" : false
     },
@@ -541,6 +551,22 @@
     "⌘%lld" : {
       "shouldTranslate" : false
     },
+    "「%@」上次检查使用 %@ / %@ / %@。" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "「%1$@」上次检查使用 %2$@ / %3$@ / %4$@。"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The last check of “%@” used %@ / %@ / %@."
+          }
+        }
+      }
+    },
     "一直关闭，直到重新开启" : {
       "localizations" : {
         "en" : {
@@ -801,6 +827,16 @@
         }
       }
     },
+    "全部恢复默认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore All Defaults"
+          }
+        }
+      }
+    },
     "关闭" : {
       "localizations" : {
         "en" : {
@@ -1051,6 +1087,16 @@
         }
       }
     },
+    "只有 %@，是否选错了单位？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only %@. Is the unit right?"
+          }
+        }
+      }
+    },
     "只有全局规则" : {
       "localizations" : {
         "en" : {
@@ -1071,12 +1117,12 @@
         }
       }
     },
-    "可执行文件路径（留空自动查找）" : {
+    "可执行文件路径" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Executable path (leave empty to find it automatically)"
+            "value" : "Executable path"
           }
         }
       }
@@ -1575,6 +1621,16 @@
         }
       }
     },
+    "常用值" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Common values"
+          }
+        }
+      }
+    },
     "并排" : {
       "localizations" : {
         "en" : {
@@ -1741,6 +1797,16 @@
         }
       }
     },
+    "恢复默认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Restore Default"
+          }
+        }
+      }
+    },
     "打开云匣" : {
       "localizations" : {
         "en" : {
@@ -1807,6 +1873,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Shown When a Push Is Blocked"
+          }
+        }
+      }
+    },
+    "按 1024 进制计算，也可以直接输入 900k、2m 这样的大小。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Units are 1024-based. You can also type sizes such as 900k or 2m."
           }
         }
       }
@@ -1937,16 +2013,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Search paths or object IDs"
-          }
-        }
-      }
-    },
-    "支持字节或 k / m / g，均按 1024 进制。更改将在下次检查生效。" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bytes, or k / m / g in units of 1024. Changes apply from the next check."
           }
         }
       }
@@ -2871,6 +2937,16 @@
         }
       }
     },
+    "自动查找" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find automatically"
+          }
+        }
+      }
+    },
     "自动检查更新" : {
       "localizations" : {
         "en" : {
@@ -3197,6 +3273,16 @@
         }
       }
     },
+    "重新检查「%@」" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check “%@” Again"
+          }
+        }
+      }
+    },
     "重新检查未完成，显示的是上次的结果：%@" : {
       "localizations" : {
         "en" : {
@@ -3253,6 +3339,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Within budget"
+          }
+        }
+      }
+    },
+    "预算已更改，下次检查时生效。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Budgets changed. They apply from the next check."
           }
         }
       }

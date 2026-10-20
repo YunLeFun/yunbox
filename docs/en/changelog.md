@@ -14,6 +14,11 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 - The macOS app shows in the menu bar whether the current repository can push, with today's and the next 7 days' freeze windows, one-click presets and a quick off switch.
 - The macOS app's COS panel copies a setup prompt for AI coding assistants.
 
+### Changed
+
+- The website and documentation are now available at [yunbox.yunle.fun](https://yunbox.yunle.fun/).
+- Budgets in the macOS app are now edited as a number and a unit, with common values and Restore Default. After changing them you can check the current repository again right away, and when the app follows Git config it shows the budgets the last check actually used.
+
 ## 0.1.4 - 2026-10-19
 
 ### Added

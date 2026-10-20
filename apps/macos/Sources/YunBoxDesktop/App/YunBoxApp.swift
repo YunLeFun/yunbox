@@ -55,7 +55,7 @@ struct YunBoxApp: App {
                 Button("复制 JSON 报告") { store.copyJSON() }.keyboardShortcut("c", modifiers: [.command, .shift]).disabled(store.result == nil)
             }
         }
-        Settings { SettingsView(updater: updater) }
+        Settings { SettingsView(updater: updater, inspector: store) }
         Window("禁推时段", id: "freeze") {
             FreezeEditorView(freeze: freeze)
         }

@@ -145,12 +145,7 @@ final class InspectorStore {
             do {
                 let defaults = UserDefaults.standard
                 let client = try InspectionClient.bundled(nodeOverride: defaults.string(forKey: "nodePath") ?? "")
-                var limits: [String] = []
-                if defaults.bool(forKey: "overrideLimits") {
-                    limits = ["--git-limit", defaults.string(forKey: "gitLimit") ?? "900k",
-                              "--lfs-limit", defaults.string(forKey: "lfsLimit") ?? "100m",
-                              "--file-limit", defaults.string(forKey: "fileLimit") ?? "10m"]
-                }
+                let limits = BudgetSetting.arguments(in: defaults, overriding: defaults.bool(forKey: "overrideLimits"))
                 let next = try await client.inspect(repository: repository, limits: limits)
                 guard requestID == id else { return }
                 let now = Date()
