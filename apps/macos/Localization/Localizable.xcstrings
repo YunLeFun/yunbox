@@ -333,6 +333,22 @@
         }
       }
     },
+    "%lld 个素材对象，%lld 个已在 COS" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To upload: %1$lld · already in COS: %2$lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld 个素材对象，%2$lld 个已在 COS"
+          }
+        }
+      }
+    },
     "%lld 字节" : {
       "localizations" : {
         "en" : {
@@ -466,6 +482,16 @@
         }
       }
     },
+    "COS 里已有这个对象，推送时跳过" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "COS already has this object; the push skips it"
+          }
+        }
+      }
+    },
     "Git" : {
       "shouldTranslate" : false
     },
@@ -521,6 +547,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "LFS pointers"
+          }
+        }
+      }
+    },
+    "LFS 需上传" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LFS to upload"
           }
         }
       }
@@ -1801,6 +1837,16 @@
         }
       }
     },
+    "已在 COS" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In COS"
+          }
+        }
+      }
+    },
     "已复制" : {
       "localizations" : {
         "en" : {
@@ -1847,6 +1893,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Committed before the LFS rule existed"
+          }
+        }
+      }
+    },
+    "已查询 COS：已有的 LFS 对象推送时跳过，不计入上传量。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "COS was checked: LFS objects already there are skipped by the push and not counted as uploads."
           }
         }
       }

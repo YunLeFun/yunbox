@@ -89,6 +89,19 @@ describe('renderConfirmationHtml', () => {
     expect(html).toContain('无 → 2.00 KiB')
   })
 
+  it('meters the LFS bytes still to upload once COS has been checked', () => {
+    const lfsFile = (oid: string, bytes: number, onRemote: boolean) => ({ oid, bytes, paths: [`${oid}.psd`], exceedsFileLimit: false, onRemote })
+    const checked = report('docs/guide.md')
+    checked.git.files = []
+    checked.lfs = { candidateBytes: 9216, candidateCount: 2, remoteChecked: true, uploadBytes: 1024, exceedsLimit: false, files: [lfsFile('b', 8192, true), lfsFile('c', 1024, false)] }
+    const html = renderConfirmationHtml(checked)
+    expect(html).toContain('LFS 上传')
+    expect(html).toContain('1 个素材，1 个已在 COS')
+    expect(html).not.toContain('LFS 候选')
+    // The largest file in COS is not uploaded, so the per-file meter shows the 1 KiB one.
+    expect(html).not.toContain('8.00 KiB')
+  })
+
   it('keeps the budgets and column titles out of the scrolling list', () => {
     const html = renderConfirmationHtml(report('docs/guide.md'))
     const list = html.indexOf('<div class="list">')

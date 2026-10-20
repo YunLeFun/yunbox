@@ -28,7 +28,9 @@ export const inspectHelp = `用法：yunbox inspect --push [选项]
 
 size 支持字节及 k/m/g、KiB/MiB/GiB（1024 进制）。退出码：0 未超限，1 超限，2 检查失败。
 Git 配置：yunbox.inspectGitBytes / yunbox.inspectLfsBytes / yunbox.inspectFileBytes；命令行优先。
-LFS 候选量不等于实际上传量：未查询 LFS 服务，远端已有对象可能跳过。
+直连 COS 的仓库在本机有密钥时，用 HEAD 查询 LFS 候选是否已在 COS（并发 8，共 5 秒），
+已有的不计入上传量；查询失败或超时时上传量按未知处理，不影响推送。其他情况下 LFS 候选量
+不等于实际上传量，远端已有对象可能跳过。YUNBOX_INSPECT_REMOTE_TIMEOUT_MS=0 关闭查询。
 `
 
 /** CLI entry for the versioned push inspection contract. */

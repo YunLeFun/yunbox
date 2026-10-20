@@ -17,6 +17,16 @@ private let reportJSON = #"""
     #expect(result.json == Data(reportJSON.utf8))
 }
 
+@Test func decodesLFSObjectsAlreadyInCOS() throws {
+    let json = #"{"schemaVersion":1,"status":"ok","limits":{"gitBytes":921600,"lfsBytes":104857600,"fileBytes":10485760},"warnings":[],"git":{"packBytes":10,"packComplete":true,"packCapBytes":10485760,"exceedsLimit":false,"blobBytes":0,"blobCount":0,"pointerBytes":0,"files":[]},"lfs":{"candidateBytes":3072,"candidateCount":2,"remoteChecked":true,"uploadBytes":1024,"exceedsLimit":false,"files":[{"oid":"b","bytes":2048,"paths":["b.psd"],"exceedsFileLimit":false,"onRemote":true},{"oid":"c","bytes":1024,"paths":["c.psd"],"exceedsFileLimit":false,"onRemote":false}]}}"#
+    let report = try InspectionResult.decode(Data(json.utf8), exitCode: 0).report
+    #expect(report.lfs.remoteChecked)
+    #expect(report.lfs.uploadBytes == 1024)
+    #expect(report.lfs.remoteCount == 1)
+    #expect(report.files.map(\.object.onRemote) == [true, false])
+    #expect(try InspectionResult.decode(Data(reportJSON.utf8), exitCode: 1).report.files.allSatisfy { $0.object.onRemote == nil })
+}
+
 @Test func rejectsSchemaMismatchAndInconsistentExitCode() {
     #expect(throws: InspectionFailure.self) { try InspectionResult.decode(Data(reportJSON.utf8), exitCode: 0) }
     #expect(throws: InspectionFailure.self) { try InspectionResult.decode(Data(reportJSON.replacingOccurrences(of: "\"schemaVersion\":1", with: "\"schemaVersion\":2").utf8), exitCode: 1) }

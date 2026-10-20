@@ -11,13 +11,14 @@ yunbox inspect --push --git-limit 900k --lfs-limit 100m --file-limit 10m --top 2
 yunbox inspect --push --confirm   # 超限时弹窗确认，见下文
 ```
 
-默认比较 HEAD 与本地 upstream 快照；没有 upstream 时检查 HEAD 的全部历史并提示。`--stdin` 接受 Git pre-push 的四列引用更新，支持多分支和删除，不能与 `--base` / `--head` 合用。只有显式提供 `--remote <name/url>` 才会在新分支或缺少旧 tip 时查询远端 Git refs；查询失败或远端对象不在本地时保守估算。不会 fetch 或下载 LFS 内容。
+默认比较 HEAD 与本地 upstream 快照；没有 upstream 时检查 HEAD 的全部历史并提示。`--stdin` 接受 Git pre-push 的四列引用更新，支持多分支和删除，不能与 `--base` / `--head` 合用。只有显式提供 `--remote <name/url>` 才会在新分支或缺少旧 tip 时查询远端 Git refs；查询失败或远端对象不在本地时保守估算。不会 fetch 或下载 LFS 内容；直连 COS 的仓库会查询 LFS 对象是否已上传，见下文。
 
 ## 统计口径
 
 - **Git pack**：本地 thin-pack 估算，包括提交、目录、普通文件及 LFS 指针。计数超过 `max(10 MiB, Git 限额)` 时停止，报告下界而非精确值；不包含协议握手开销。
 - **Git 文件明细**：普通 blob 的原始大小，不含识别出的 LFS 指针。同一内容按对象 ID 去重，不同历史版本分别统计，包括后来已删除的大文件。原始大小不等于压缩、增量后的网络上传量。
-- **LFS 候选量**：从推送历史的指针读取素材大小，按 LFS SHA-256 去重。新分支保留完整历史候选，即使 Git pack 可排除远端其他分支已有的对象。尚不查询 LFS Batch API，远端可能已有部分对象，实际上传量未知。
+- **LFS 候选量**：从推送历史的指针读取素材大小，按 LFS SHA-256 去重。新分支保留完整历史候选，即使 Git pack 可排除远端其他分支已有的对象。
+- **LFS 实际上传量**：仓库[直连 COS](./guide/) 且本机有密钥（`yunbox login`、`TENCENTCLOUD_*` 或 `tccli auth login`）时，对每个候选向 COS 发一次 HEAD（和传输代理上传前的检查相同，只需 `HeadObject` 权限），已存在且大小一致的不计入上传量，`uploadBytes` 给出确定值；LFS 预算、单文件预算和变更文件的上传大小都只按需要上传的对象计算。查询最多同时 8 个请求、总共 5 秒；任一请求失败（无权限、网络错误）或超时，整次查询作废，按原来的方式只给候选量，并在提示里说明原因，不会阻止推送，也不会把查不到当作已上传。环境变量 `YUNBOX_INSPECT_REMOTE_TIMEOUT_MS` 可以调整时限，`0` 关闭查询。使用 YunBox 服务端（`lfs.url`）或未接入的仓库不查询，实际上传量未知。
 - **变更文件**：按路径汇总推送提交中的改动，类似 `git diff --stat` 加上大小：状态（新增、修改、删除，以及「临时」：在本次提交中新增后又删除，内容仍会上传）、推送前后的大小（LFS 为素材大小）、本次上传的版本数和原始大小合计。按本次上传大小降序；同一内容被多个路径使用时每个路径都计入。前后状态取最早和最新一次改动，多分支推送时为近似值。
 - **单文件限额**：同时适用于普通 Git 文件和 LFS 素材。文本显示前 10 个变更文件（`--top` 可调至 100）；JSON 包含所有变更、对象、已找到的路径、精确字节数和超限标记。路径未知的对象单独列出对象 ID。
 
@@ -42,11 +43,12 @@ git config yunbox.inspectFileBytes 10m
 | `git.packBytes` / `packComplete` | 完整估算值；不完整时 `packBytes` 为 `packCapBytes + 1`，代表下界 |
 | `git.blobBytes` / `blobCount` / `pointerBytes` | Git blob 原始大小与数量（含指针），以及其中指针的大小 |
 | `git.exceedsLimit` / `lfs.exceedsLimit` | 各自总量是否超过预算；单文件超限另见每条明细 |
-| `changes` | 每个变更路径一条：`{ path, status, storage, beforeBytes, afterBytes, beforeOid, afterOid, versions, pushBytes, exceedsFileLimit }`。`status` 为 `added`、`modified`、`deleted` 或 `transient`；`storage` 为 `git` 或 `lfs`；路径不存在或旧对象不在本地时大小为 `null`；`versions` 为 `0` 表示没有新内容需要上传（如删除）。新增字段，`schemaVersion` 仍为 `1` |
+| `changes` | 每个变更路径一条：`{ path, status, storage, beforeBytes, afterBytes, beforeOid, afterOid, versions, pushBytes, exceedsFileLimit }`。`status` 为 `added`、`modified`、`deleted` 或 `transient`；`storage` 为 `git` 或 `lfs`；路径不存在或旧对象不在本地时大小为 `null`；`versions` 为 `0` 表示没有新内容需要上传（如删除，或 LFS 对象已在 COS）。新增字段，`schemaVersion` 仍为 `1` |
 | `changes[].beforeOid` / `afterOid` | 推送前、推送后的内容 ID，用于读取对应版本：LFS 文件为素材的 SHA-256（本地位于 `.git/lfs/objects/<前 2 位>/<3–4 位>/<oid>`，可能尚未下载），普通文件为 Git blob ID（`git cat-file blob <oid>`）。与对应的大小同时为 `null`。不要从工作区读取，工作区可能与推送的提交不同。新增字段，`schemaVersion` 仍为 `1` |
-| `git.files` / `lfs.files` | 完整对象列表，每条为 `{ oid, bytes, paths, exceedsFileLimit }`，按大小降序 |
+| `git.files` / `lfs.files` | 完整对象列表，每条为 `{ oid, bytes, paths, exceedsFileLimit }`，按大小降序。`exceedsFileLimit` 表示超过单文件预算且需要上传，COS 上已有的 LFS 对象为 `false` |
+| `lfs.files[].onRemote` | 仅在 `lfs.remoteChecked` 为 `true` 时提供：COS 上是否已有这个对象（推送时跳过）。新增字段，`schemaVersion` 仍为 `1` |
 | `lfs.candidateBytes` / `candidateCount` | 去重后的 LFS 候选大小和数量 |
-| `lfs.remoteChecked` / `uploadBytes` | 当前固定为 `false` / `null`，不能把未知上传量当成 `0` |
+| `lfs.remoteChecked` / `uploadBytes` | 查询了 COS 时为 `true` / 需要上传的 LFS 字节数；否则为 `false` / `null`，不能把未知上传量当成 `0`。`lfs.exceedsLimit` 在已查询时按 `uploadBytes` 判断，否则按 `candidateBytes` |
 | `warnings` | 保守估算、upstream 快照等提示 |
 | `error` | 仅失败时提供 `{ code: "INSPECTION_FAILED", message }`，不返回原始 Git 错误或远端 URL |
 

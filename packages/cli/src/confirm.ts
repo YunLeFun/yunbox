@@ -387,13 +387,16 @@ export function renderConfirmationHtml(report: PushInspection): string {
   const { changes, shown } = listedChanges(report)
   const hidden = changes.slice(DIALOG_ROWS)
   const largest = Math.max(1, ...shown.map(change => change.pushBytes))
-  const largestFile = Math.max(0, ...[...report.git.files, ...report.lfs.files].map(file => file.bytes))
+  // LFS objects already in COS are not uploaded, so they do not count towards the per-file budget.
+  const largestFile = Math.max(0, ...[...report.git.files, ...report.lfs.files].filter(file => !file.onRemote).map(file => file.bytes))
   const counts = (['added', 'modified', 'deleted', 'transient'] as const)
     .map(status => [status, changes.filter(change => change.status === status).length] as const)
     .filter(([, count]) => count > 0)
   const meters = [
     meter('Git pack', report.git.packComplete ? report.git.packBytes : report.git.packCapBytes, report.limits.gitBytes, report.git.exceedsLimit, report.git.packComplete ? '压缩后预计上传' : '估算已截断，实际更大', !report.git.packComplete),
-    meter('LFS 候选', report.lfs.candidateBytes, report.limits.lfsBytes, report.lfs.exceedsLimit, `${report.lfs.candidateCount} 个素材，远端已有的会跳过`),
+    report.lfs.uploadBytes === null
+      ? meter('LFS 候选', report.lfs.candidateBytes, report.limits.lfsBytes, report.lfs.exceedsLimit, `${report.lfs.candidateCount} 个素材，远端已有的会跳过`)
+      : meter('LFS 上传', report.lfs.uploadBytes, report.limits.lfsBytes, report.lfs.exceedsLimit, `${report.lfs.files.filter(file => !file.onRemote).length} 个素材，${report.lfs.files.filter(file => file.onRemote).length} 个已在 COS`),
     meter('最大单文件', largestFile, report.limits.fileBytes, [...report.git.files, ...report.lfs.files].some(file => file.exceedsFileLimit), '原始大小'),
   ]
   const rows = shown.map((change, index) => row(change, largest, previewVersions(change).length ? index : undefined)).join('')

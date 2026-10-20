@@ -60,9 +60,12 @@ export class CosDirectClient {
     this.#origin = new URL(location.endpoint ?? `https://${location.bucket}.cos.${location.region}.myqcloud.com`)
   }
 
-  /** Size and ETag of a key, or `undefined` when it does not exist. */
-  async head(key: string): Promise<{ size: number, etag: string } | undefined> {
-    const response = await this.#send('HEAD', key)
+  /**
+   * Size and ETag of a key, or `undefined` when it does not exist. Aborting
+   * `options.signal` cancels the request with a {@link CosClientError}.
+   */
+  async head(key: string, options: { signal?: AbortSignal } = {}): Promise<{ size: number, etag: string } | undefined> {
+    const response = await this.#send('HEAD', key, {}, undefined, options.signal)
     response.resume()
     if (response.statusCode === 404)
       return undefined
@@ -176,7 +179,7 @@ export class CosDirectClient {
     return steps
   }
 
-  #send(method: string, key: string, signedHeaders: Record<string, string> = {}, writeBody?: (outgoing: NodeJS.WritableStream) => Promise<void>): Promise<IncomingMessage> {
+  #send(method: string, key: string, signedHeaders: Record<string, string> = {}, writeBody?: (outgoing: NodeJS.WritableStream) => Promise<void>, signal?: AbortSignal): Promise<IncomingMessage> {
     const credentials = this.#credentials()
     const headers: Record<string, string> = { host: this.#origin.host, ...signedHeaders }
     const authorization = createCosAuthorization({
@@ -193,7 +196,7 @@ export class CosDirectClient {
     const url = new URL(`/${key.split('/').map(cosEncode).join('/')}`, this.#origin)
     const send = url.protocol === 'http:' ? httpRequest : httpsRequest
     return new Promise((resolve, reject) => {
-      const outgoing = send(url, { method, headers: requestHeaders, timeout: REQUEST_TIMEOUT_MS }, resolve)
+      const outgoing = send(url, { method, headers: requestHeaders, timeout: REQUEST_TIMEOUT_MS, signal }, resolve)
       outgoing.on('timeout', () => outgoing.destroy(new CosClientError(`连接 COS 超时（${method}）`, 0)))
       outgoing.on('error', error => reject(error instanceof CosClientError ? error : new CosClientError(`无法连接 COS（${method}）：${error.message}`, 0)))
       if (writeBody === undefined)
