@@ -67,6 +67,7 @@ export default defineConfig({
         items: [
           { text: '快速开始', link: '/guide/' },
           { text: '协作者加入', link: '/guide/collaborators' },
+          { text: '从 GitHub LFS 迁移', link: '/guide/migrate' },
           { text: 'macOS 客户端', link: '/guide/macos' },
           { text: '禁推时段', link: '/guide/freeze' },
           { text: '用 AI 编程助手接入', link: '/guide/ai' },

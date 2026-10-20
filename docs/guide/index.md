@@ -24,7 +24,7 @@ git-lfs 出于安全考虑，不允许仓库通过 `.lfsconfig` 指定传输程�
 
 ## 管理员：给仓库接上 COS
 
-第一次接入只需要做一次，用管理员身份：
+第一次接入只需要做一次，用管理员身份。仓库已经在用 GitHub LFS 等服务存素材的，按[从 GitHub LFS 迁移](./migrate)操作：
 
 ```bash
 tccli auth login             # 浏览器登录腾讯云，临时密钥约 2 小时有效

@@ -13,6 +13,7 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 - `yunbox freeze off` switches push freezes off for a while or until a given time, and they come back on by themselves.
 - The macOS app shows in the menu bar whether the current repository can push, with today's and the next 7 days' freeze windows, one-click presets and a quick off switch.
 - The macOS app's COS panel copies a setup prompt for AI coding assistants.
+- A new guide, “Migrating from GitHub LFS” (in Chinese), shows how to move every past version of your assets from GitHub LFS or another LFS service to your own COS bucket, check the result, switch collaborators over and roll back.
 
 ## 0.1.4 - 2026-10-19
 
