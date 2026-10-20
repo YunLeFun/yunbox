@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { compareVersions, parseVersion } from './git.ts'
-import { mergeGitAttributes, selectCategories } from './gitattributes.ts'
+import { ASSET_CATEGORIES, mergeGitAttributes, removeGitAttributes, selectCategories, yunBoxPatterns } from './gitattributes.ts'
 import { isSecureServiceUrl, parseServiceUrl } from './service-url.ts'
 
 describe('parseServiceUrl', () => {
@@ -61,8 +61,53 @@ describe('mergeGitAttributes', () => {
     expect(merged.added.get('audio')).not.toContain('*.wav')
   })
 
+  it('leaves out excluded patterns', () => {
+    const merged = mergeGitAttributes('', selectCategories(['archive']), { exclude: new Set(['*.zip']) })
+    expect(merged.added.get('archive')).toEqual(['*.7z', '*.rar'])
+    expect(merged.content).not.toContain('*.zip')
+    expect(mergeGitAttributes('', selectCategories(['archive']), { exclude: new Set(['*.zip', '*.7z', '*.rar']) }).content).toBe('')
+  })
+
   it('rejects unknown categories', () => {
     expect(() => selectCategories(['texture', 'nope'])).toThrow('nope')
+  })
+
+  it('expands presets and mixes them with categories', () => {
+    expect(selectCategories(['design']).map(category => category.id)).toEqual(['texture', 'source', 'font'])
+    expect(selectCategories(['media,archive', 'texture']).map(category => category.id)).toEqual(['texture', 'audio', 'video', 'archive'])
+    expect(selectCategories(['game']).map(category => category.id)).not.toContain('archive')
+    expect(selectCategories(['all'])).toEqual(ASSET_CATEGORIES)
+  })
+})
+
+describe('removeGitAttributes', () => {
+  const lfs = 'filter=lfs diff=lfs merge=lfs -text'
+
+  it('removes only the categories asked for and is the inverse of adding them', () => {
+    const base = '# project\r\n*.txt text eol=crlf\r\n'
+    const first = mergeGitAttributes(base, selectCategories(['texture', 'audio'])).content
+    const both = mergeGitAttributes(first, selectCategories(['archive'])).content
+    const removed = removeGitAttributes(both, selectCategories(['archive']))
+    expect(removed.content).toBe(first)
+    expect(removed.removed.get('archive')).toEqual(['*.zip', '*.7z', '*.rar'])
+    const all = removeGitAttributes(first, selectCategories(['texture', 'audio']))
+    expect(all.content).toBe(base)
+    expect(removeGitAttributes(mergeGitAttributes('', selectCategories(['font'])).content, selectCategories(['font'])).content).toBe('')
+    expect(removeGitAttributes(base, selectCategories(['texture']))).toEqual({ content: base, removed: new Map() })
+  })
+
+  it('keeps hand-written rules inside and right after the block', () => {
+    const generated = mergeGitAttributes('', selectCategories(['archive', 'font'])).content
+    // An edited line, a rule that git lfs track appended, and one out of alignment.
+    const edited = generated
+      .replace(`*.7z  ${lfs}\n`, `*.7z  ${lfs} lockable\n`)
+      .concat(`*.zip ${lfs}\n*.c ${lfs}\n`)
+    expect([...yunBoxPatterns(edited).keys()]).toEqual(['*.ttf', '*.otf', '*.zip', '*.rar'])
+    const removed = removeGitAttributes(edited, selectCategories(['font', 'archive']))
+    expect(removed.removed.get('archive')).toEqual(['*.zip', '*.rar'])
+    expect(removed.content).toBe(`# YunBox：以下素材由 Git LFS 管理（git yunbox init 生成）\n# 压缩包\n*.7z  ${lfs} lockable\n*.zip ${lfs}\n*.c ${lfs}\n`)
+    // Rules before the header are never YunBox's.
+    expect(yunBoxPatterns(`# 压缩包\n*.zip ${lfs}\n`).size).toBe(0)
   })
 })
 

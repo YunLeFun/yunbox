@@ -89,15 +89,11 @@ struct CosSheet: View {
                     }
                     if let output {
                         Divider()
-                        Label(output.succeeded ? "已完成" : "未完成（退出码 \(output.exitCode)）",
-                              systemImage: output.succeeded ? "checkmark.circle" : "xmark.octagon")
-                            .foregroundStyle(output.succeeded ? .green : .orange)
-                        Text(output.text).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(10).background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6))
+                        CommandOutputView(output: output)
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
             }
+            .sheetScrollMargins()
             HStack {
                 Text("密钥只保存在这台电脑上（钥匙串），仓库里只记录 bucket、地域和前缀。")
                     .font(.caption).foregroundStyle(.secondary)
@@ -230,7 +226,11 @@ private struct SetupForm: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("接入：把素材直传到 COS").font(.headline)
             if loading {
-                ProgressView("正在读取 bucket…").controlSize(.small)
+                // Inline like the header's spinner; a titled ProgressView stacks and centres the spinner over its label.
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("正在读取 bucket…").font(.callout).foregroundStyle(.secondary)
+                }
             } else if let loadError, loadError.needsLogin {
                 Text(loadError.message).font(.callout).foregroundStyle(.secondary)
                 LoginForm(store: store, running: $running, output: $output)

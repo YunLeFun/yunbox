@@ -12,6 +12,7 @@ import { runLogin, runLogout } from './commands/login.ts'
 import { runPolicy } from './commands/policy.ts'
 import { runStatus } from './commands/status.ts'
 import { runSubaccount } from './commands/subaccount.ts'
+import { runTypes } from './commands/types.ts'
 import { CliError, printError, USAGE_EXIT_CODE } from './context.ts'
 
 /** Version reported by `yunbox --version`. */
@@ -28,6 +29,7 @@ export const mainHelp = `云匣 YunBox 命令行（版本 ${CLI_VERSION}）
   subaccount  用管理员身份新建 / 授权 / 删除只给 YunBox 用的子账号，并保存长期密钥
   policy   输出给协作者子账号用的最小权限 CAM 策略 JSON（不改动账号）
   init     在当前仓库接入 YunBox：.gitattributes、.lfsconfig，git-lfs 直连 COS
+  types    按素材类型查看、添加、移除 .gitattributes 里的 LFS 规则（支持 game 等预置组合）
   clone    clone 一个直连 COS 的仓库并下载素材
   buckets  列出本机密钥能看到的 COS bucket
   doctor   检查配置、连通性和读写权限，并给出修复命令
@@ -48,6 +50,7 @@ const COMMANDS: Record<string, (context: CliContext, args: string[]) => Promise<
   'logout': runLogout,
   'policy': runPolicy,
   'init': runInit,
+  'types': runTypes,
   'clone': runClone,
   // Started by git-lfs, not by people; see lfs-agent.ts.
   'lfs-agent': runLfsAgent,

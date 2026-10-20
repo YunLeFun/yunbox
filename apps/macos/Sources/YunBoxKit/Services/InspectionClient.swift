@@ -51,6 +51,26 @@ public struct InspectionClient: Sendable {
         )
     }
 
+    /// `git yunbox types --json`: which asset types go through LFS and which assets were committed as ordinary files.
+    public func assetTypes(repository: URL) async throws -> AssetTypesReport {
+        let output = try await ProcessRunner.run(
+            executable: node, arguments: [cli.path, "types", "list", "--json"],
+            directory: repository, environment: environment(), timeout: 60
+        )
+        return try AssetTypesReport.decode(output.data, exitCode: output.exitCode)
+    }
+
+    /// `git yunbox types add`: append the LFS rules of these types or presets; with `renormalize`, also stage the
+    /// committed files they catch so the next commit stores them as LFS pointers.
+    public func addAssetTypes(repository: URL, ids: [String], renormalize: Bool = false) async throws -> CommandOutput {
+        try await text(arguments: [cli.path, "types", "add"] + ids + (renormalize ? ["--renormalize"] : []), directory: repository, timeout: 120)
+    }
+
+    /// `git yunbox types remove`: delete the rules YunBox generated for these types.
+    public func removeAssetTypes(repository: URL, ids: [String]) async throws -> CommandOutput {
+        try await text(arguments: [cli.path, "types", "remove"] + ids, directory: repository, timeout: 60)
+    }
+
     /// `yunbox freeze list --json`: windows, the current verdict and the pre-push wrapper. `directory` need not be a repository.
     public func freezeStatus(directory: URL) async throws -> FreezeStatus {
         let output = try await ProcessRunner.run(

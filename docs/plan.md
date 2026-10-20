@@ -211,12 +211,26 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **`init` 先校验后修改**：地址、素材类型和 `--token-stdin` 读到的 token 全部校验通过后，才执行 `git lfs install` 和写文件，参数错误时仓库保持原样。
 - **`lfs.url` 的格式**：必须是 `<origin>/<owner>/<repo>`（末尾斜杠会去掉），owner 和 repo 用 `@yunbox/core` 的规则校验；拒绝带用户名、密码、查询参数或 `#` 的地址；除 `localhost`、`127.0.0.0/8`、`[::1]` 以外必须是 https。`.lfsconfig` 里已有不同地址时不覆盖，需要 `--force`。
 - **`.gitattributes` 合并规则**：按扩展名模式（`*.png`）判断，只要已有任何规则（包括不走 LFS 的 `*.wav binary`），就不再添加，并提示哪些扩展名没有走 LFS。已有内容逐字保留，新规则沿用文件原来的换行符（CRLF 或 LF）。再次运行或增加 `--types` 时只追加缺少的规则。
+- **不改变已提交文件的 LFS 归属**：新增的规则如果会匹配到已经作为普通文件提交的文件，就不加这条规则，并列出这些文件和改用 LFS 的命令（`git lfs track` + `git add --renormalize`）。是否匹配交给 `git check-attr` 判断（大小写折叠、子目录里的 `.gitattributes` 都按 Git 的规则），否则这些文件会显示为已修改，提交后新的 clone 里 `git lfs fsck` 报错。迁移已有 LFS 仓库时最容易遇到。
 - **凭据**：用户名固定写 `yunbox`（服务端忽略用户名）。token 只从标准输入或不回显的交互输入读取，命令行参数里出现 `--token` / `--password` 会直接报错。存入前检查格式（`ybx_` 开头、无空白），存入后用 `git credential fill` 读回核对。已有凭据时默认保留；换 token 时先 `reject` 旧凭据再 `approve` 新的，避免同一主机留下两条。没有配置凭据管理器时，`git credential approve` 会静默成功但什么都不保存，所以先用 `git config --get-urlmatch credential.helper` 检查，没有就报错并给出各平台的配置命令。
 - **非交互地读凭据**：`doctor` 和 `init` 查询凭据时设置 `GIT_TERMINAL_PROMPT=0`、清空 `GIT_ASKPASS` / `core.askPass`，并设置 `GCM_INTERACTIVE=never` / `credential.interactive=false`，保证只读取已保存的凭据，不弹终端提示或 Git Credential Manager 的登录窗口。
 - **`doctor` 的权限试探**：对 `<lfs.url>/objects/batch` 发三次请求，对象固定为 `yunbox doctor probe` 的 SHA-256（19 字节）：不带凭据的 download 判断连通性（期望 401 或 200 的 LFS JSON 响应），带 token 的 download 判断读权限，带 token 的 upload 判断写权限。upload batch 只会签发上传地址，不写任何数据，所以对 COS 存储也没有副作用。401 报告「token 无效或已吊销」，403 报告「没有权限」或「只有读权限」，并附上服务端的 message 和 request_id。不跟随重定向，避免把 token 发给其他 origin；`lfs.url` 是非本机的 http 时，跳过所有需要 token 的检查。`doctor` 只诊断，不会像 git-lfs 那样在 401 后删除凭据。
 - **`doctor` 退出码**：任一项 `fail` 时为 1，`warn`（例如 `lfs.locksverify` 没设为 false）不影响退出码。只读 token 默认算失败，因为大多数接入者要推送；只需要拉取的人用 `--read-only`。
 - **`status` 的数据来源**：`git lfs ls-files --json`（git-lfs 3.2.0 引入，所以最低版本定为 3.2.0），按 oid 去重统计对象数量和总大小，`downloaded` 字段给出本地已下载的数量。git 最低版本定为 2.30.0，只是测试过的下限，没有依赖更新版本的特性。
 - **`git yunbox --help`**：Git 会把 `git <命令> --help` 改写成 `git help <命令>` 去找 man 手册，所以 CLI 提供 `help` 子命令，文档里写 `git yunbox help`。
+
+### 按素材类型管理 LFS 规则：`git yunbox types`（2026-10-20）
+
+- **只管 YunBox 生成的那一段，不做通用的 `.gitattributes` 编辑器**：`types add` 复用 `init` 的合并逻辑（只追加缺少的规则，已有规则一律不动）；`types remove` 只删 YunBox 自己写的行。命令名不叫 `track` / `untrack`，避免和 `git lfs track` 混淆；路径、目录级规则和其他属性仍然用 `git lfs track` 或手动编辑。
+- **怎样认出 YunBox 写的行**：文件里没有额外的结束标记，旧仓库也没有，所以按格式识别：在 `# YunBox：…` 标题之后、`# <类型名>` 注释下面，`*.<扩展名>` 加对齐空格加完全相同的 `filter=lfs diff=lfs merge=lfs -text`，扩展名属于这个类型、按类型里的顺序排列、属性列对齐。空行或其他注释结束一段。改过的行（例如加了 `lockable`）、`git lfs track` 紧接在后面追加的行（顺序或对齐对不上）都算手写，不删。一段里的规则全部删掉时连注释一起删，所有段都删掉时删标题，并顺带删掉因此多出来的空行；其余内容逐字保留，包括 CRLF。`git lfs track` 会重写文件并去掉空行，所以段之间的空行不能作为唯一的分隔依据。
+- **是否走 LFS 只问 Git**：`list` 对每个扩展名用 `git check-attr filter` 查根目录下的一个探测文件名（`yunbox-types-probe.<扩展名>`），对每个已加入 Git 的素材文件逐个查，不自己解析 glob。所以子目录里的 `.gitattributes`、`core.ignorecase`、手写规则都按 Git 的规则算。探测只代表根目录的扩展名规则；`assets/**/*.png` 这类路径规则只体现在逐个文件的结果里。
+- **「普通文件」看暂存区里的内容**：读 `git ls-files --stage`，用 `git cat-file` 检查每个素材文件的 blob 是不是 LFS 指针（复用 `inspect` 的指针解析，只读 1 KiB 以下的 blob）。不是指针的列为普通文件，并给出原因：扩展名大小写不同而小写规则匹配不到（`core.ignorecase=false`，Linux 和 CI 上的 `HERO.PNG`）、已有规则但提交时还没有（会显示为已修改）、没有规则。
+- **大写扩展名暂不自动加规则**：没有改成生成 `*.[pP][nN][gG]`，因为这会让 `init` 按模式判断「已有规则」的逻辑、`git lfs track` 的写法和人工阅读都变复杂，而 macOS / Windows 默认能匹配。`list` 把这类文件单独列出，并给出 `git lfs track '*.PNG'` 加 `git add --renormalize` 的命令；试点里常见时再考虑生成大小写不敏感的规则。
+- **`add --renormalize` 是唯一会动暂存区的操作**：不加时和 `init` 一样，会匹配到已提交普通文件的规则不加，只提示；加上后规则照加，再对这些类型里「被 LFS 规则匹配、但暂存区里不是指针」的文件执行 `git --literal-pathspecs add --renormalize --pathspec-from-file`（逐个文件，不用 `*.zip` 这样的 pathspec，因为 pathspec 不跟随 `core.ignorecase`，文件名里也可能有 `[`），并把 `.gitattributes` 一起加入暂存区。不提交、不改历史；这些文件当前的内容会一起进入暂存区，帮助里写明。规则直接写进 YunBox 那一段，而不是调用 `git lfs track`，这样以后还能用 `types remove` 删掉。
+- **`remove` 不碰 LFS 指针**：删掉规则后，已经作为 LFS 指针提交的文件会显示为已修改。命令只列出这些文件，给出两条路：撤销（`git checkout -- .gitattributes` 或重新 `types add`），或从下一次提交起改存为普通文件（`git add --renormalize .`，历史里的 LFS 对象不变，检出旧版本仍要从 LFS 下载）。同一扩展名仍被手写规则或 `git lfs track` 走 LFS 时，也提示一句。
+- **预置组合只是类型的组合**：`game`（除压缩包外的全部，压缩包常是构建产物或第三方 SDK）、`design`、`media`、`all`，`init --types` 和 `types add/remove` 都接受，可以和类型混写。预置不引入新扩展名；Unreal 的 `.uasset` / `.umap` 这类引擎专用格式要先作为新类型加进 `ASSET_CATEGORIES`，会改变 `init` 的默认规则，另行决定。
+- **JSON 给 macOS 客户端**：`types --json` 输出 `schemaVersion: 1`，包含每个类型的状态（`lfs` / `partial` / `none`）、每个扩展名的 `lfs`、`managed`（是否在 YunBox 那一段里，即能否用 `remove` 删掉）、`files`、`lfsFiles`，预置组合，以及普通文件列表；出错时输出 `{ status: "error", error: { code: "TYPES_FAILED", message } }`。`add` / `remove` 暂不提供 JSON，客户端需要时再加。
+- **以后的 `lockable`**：goal-g2.md 计划按类型给规则加 `lockable`，也放在这个命令里（例如 `types add model --lockable`）。到时要同时更新识别规则：带 `lockable` 的 YunBox 行目前会被当作手写。
 
 ### 提前返回错误时的连接处理（2026-10-17）
 
@@ -372,7 +386,7 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - Windows 上 GUI Git 客户端（Fork、SourceTree、GitHub Desktop）自带或调用的 sh 和 PATH 可能找不到 `git-yunbox`；还没实测。找不到时重新运行 `git yunbox init` 会改写成绝对路径。
 - Windows 下 npm 生成的 `git-yunbox` shim（`git-yunbox.cmd`、`git-yunbox.ps1` 和无扩展名的 sh 脚本）能否被 Git for Windows 的 `git yunbox` 找到，**仍未实测**；自动测试只在 macOS / Linux 上用 sh shim 验证了 `git yunbox` 和 `yunbox` 输出一致。阶段 5 要在 Windows 上实测，不行就改用 Node SEA 或 `bun build --compile` 打成单个可执行文件。
 - 命令行目前只能从仓库 `pnpm pack` 后 `npm install -g` 安装，协作者需要 Node.js 22.18+。npm 包名和发布方式还没定；如果试点里有人没有 Node.js，就需要单文件可执行程序。
-- `.gitattributes` 只生成小写扩展名的规则（`*.png`）。Linux 和 CI 上 Git 默认区分大小写，`HERO.PNG` 这类文件不会走 LFS，会作为普通文件提交进 Git 历史。macOS 和 Windows 上 `core.ignorecase=true` 时能匹配。如果试点素材里常见大写扩展名，要考虑生成 `*.[pP][nN][gG]` 这种规则，或在 `doctor` 里检查已提交的非 LFS 大文件。
+- `.gitattributes` 只生成小写扩展名的规则（`*.png`）。Linux 和 CI 上 Git 默认区分大小写，`HERO.PNG` 这类文件不会走 LFS，会作为普通文件提交进 Git 历史。macOS 和 Windows 上 `core.ignorecase=true` 时能匹配。如果试点素材里常见大写扩展名，要考虑生成 `*.[pP][nN][gG]` 这种规则，或在 `doctor` 里检查已提交的非 LFS 大文件。**2026-10-20**：`git yunbox types` 会列出这类文件并给出改用 LFS 的命令，但仍然只生成小写规则，见上面「按素材类型管理 LFS 规则」。
 - `doctor` 在 Windows 上给出的修复命令里有 `printf ... | git credential reject` 和 `curl`，在 PowerShell 和 cmd 里不能直接照做，Git Bash 里可以。Windows 实测时要决定是否按平台输出不同的命令。
 - `init` 的交互输入在 Windows 终端（尤其是 Git Bash 的 mintty）里能否进入 raw 模式、是否会回显，需要实测；不行时可以用 `--token-stdin`。
 - 凭据只按 `protocol` + `host` 保存。用户设置了 `credential.useHttpPath=true` 时，git-lfs 查询凭据会带上路径，可能找不到 `init` 存的凭据；`doctor` 也按 host 查询，所以这种情况下 `doctor` 通过而 push 仍会提示输入。

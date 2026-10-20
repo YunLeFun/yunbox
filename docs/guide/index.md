@@ -24,7 +24,7 @@ git-lfs 出于安全考虑，不允许仓库通过 `.lfsconfig` 指定传输程�
 
 ## 管理员：给仓库接上 COS
 
-第一次接入只需要做一次，用管理员身份：
+第一次接入只需要做一次，用管理员身份。仓库已经在用 GitHub LFS 等服务存素材的，按[从 GitHub LFS 迁移](./migrate)操作：
 
 ```bash
 tccli auth login             # 浏览器登录腾讯云，临时密钥约 2 小时有效
@@ -35,6 +35,14 @@ git push
 ```
 
 `git yunbox init` 会按素材类型生成 `.gitattributes`（贴图、设计源文件、模型、音频、视频、字体、压缩包），把 bucket、地域和前缀写进 `.yunbox/config`。这个文件提交到仓库供全组共享，**不含任何密钥**。
+
+以后想看哪些类型已经走 LFS、增减类型，用 `git yunbox types`：
+
+```bash
+git yunbox types                 # 每个类型是否走 LFS、有多少文件，以及作为普通文件提交的素材
+git yunbox types add model,audio # 也可以写预置组合：game、design、media、all
+git yunbox types remove video    # 只删 YunBox 生成的规则，手写的不动
+```
 
 然后给自己换一把长期密钥，不用每两小时重新登录：
 

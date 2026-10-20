@@ -1,7 +1,7 @@
 import type { Sandbox } from './helpers.ts'
 import { Buffer } from 'node:buffer'
 import { randomBytes } from 'node:crypto'
-import { access, readFile, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ASSET_CATEGORIES } from '../src/gitattributes.ts'
@@ -105,6 +105,43 @@ describe('git yunbox init', () => {
     expect(extended).toContain('*.fbx')
     expect(extended.match(/^# YunBox：/gm)).toHaveLength(1)
     expect(extended.match(/^\*\.jpg /gm)).toHaveLength(1)
+  })
+
+  it('does not add rules that would catch files already committed outside LFS', async () => {
+    const { sandbox, repo } = await setup()
+    await writeFile(join(repo, '.gitattributes'), '*.psd filter=lfs diff=lfs merge=lfs -text\n')
+    await mkdir(join(repo, 'build'))
+    await writeFile(join(repo, 'build', 'pack.zip'), 'zip')
+    await writeFile(join(repo, 'Logo.PNG'), 'png')
+    await git(sandbox, repo, 'add', '.')
+    await git(sandbox, repo, 'commit', '--quiet', '-m', 'plain files')
+
+    // Whether *.png catches Logo.PNG depends on core.ignorecase; git decides either way.
+    const result = await runYunBox(sandbox, repo, ['init', '--url', SERVICE_URL, '--types', 'archive,texture', '--skip-credential'])
+    expect(result.code).toBe(0)
+    expect(result.stdout).toContain('*.zip（build/pack.zip）')
+    const attributes = await readFile(join(repo, '.gitattributes'), 'utf8')
+    expect(attributes).not.toContain('*.zip')
+    expect(attributes).toContain('*.7z')
+    expect(attributes).toContain('*.jpg')
+    expect(await git(sandbox, repo, 'status', '--porcelain', '--untracked-files=no')).toBe('M .gitattributes')
+
+    // Nothing to add at all: the file is left exactly as it was.
+    await git(sandbox, repo, 'checkout', '--', '.gitattributes')
+    await writeFile(join(repo, 'a.7z'), '7z')
+    await writeFile(join(repo, 'a.rar'), 'rar')
+    await git(sandbox, repo, 'add', 'a.7z', 'a.rar')
+    await git(sandbox, repo, 'commit', '--quiet', '-m', 'more plain files')
+    expect((await runYunBox(sandbox, repo, ['init', '--types', 'archive', '--skip-credential'])).code).toBe(0)
+    expect(await git(sandbox, repo, 'status', '--porcelain', '--untracked-files=no')).toBe('')
+
+    // The suggested commands move such files to LFS from the next commit on.
+    await git(sandbox, repo, 'lfs', 'track', '*.zip')
+    await git(sandbox, repo, 'add', '.gitattributes')
+    await git(sandbox, repo, 'add', '--renormalize', '--', '*.zip')
+    await git(sandbox, repo, 'commit', '--quiet', '-m', 'zip in LFS')
+    expect(await git(sandbox, repo, 'lfs', 'ls-files', '--name-only')).toBe('build/pack.zip')
+    expect(await git(sandbox, repo, 'status', '--porcelain', '--untracked-files=no')).toBe('')
   })
 
   it('refuses unsafe or conflicting input before changing anything', async () => {
