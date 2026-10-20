@@ -15,6 +15,7 @@
 - macOS 客户端的 COS 面板可以复制一段给 AI 编程助手的接入说明。
 - `git yunbox types` 按素材类型管理 LFS 规则：查看每个类型是否走 LFS、有多少文件，列出作为普通文件提交的素材（包括 Linux 上大小写不同的扩展名，例如 `HERO.PNG`）；`add` 追加类型，`--renormalize` 把已提交的文件从下一次提交起改存为 LFS；`remove` 只删除 YunBox 生成的规则。`--json` 供图形界面读取。
 - 素材类型可以用预置组合快速选择：`game`、`design`、`media`、`all`，`git yunbox init --types` 也接受。
+- macOS 客户端新增「素材类型」面板：查看每种素材是否走 LFS 和文件数，一键添加预置组合，添加或移除单个类型，并把作为普通文件提交的素材从下一次提交起改用 LFS（操作前确认，历史不变）。
 - 文档新增「从 GitHub LFS 迁移」指南：把 GitHub LFS 或其他 LFS 服务里的全部历史素材搬到自己的 COS，包含验证、协作者切换和回滚方法。
 
 ### 修复

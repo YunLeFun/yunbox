@@ -15,6 +15,7 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 - The macOS app's COS panel copies a setup prompt for AI coding assistants.
 - `git yunbox types` manages LFS rules by asset type: it shows whether each type goes through LFS and how many files it has, and lists assets committed as ordinary files (including extensions in a different case on Linux, such as `HERO.PNG`). `add` adds types, with `--renormalize` to store already-committed files in LFS from the next commit on; `remove` deletes only the rules YunBox generated. `--json` is for graphical tools.
 - Presets pick common sets of asset types at once: `game`, `design`, `media` and `all`, also accepted by `git yunbox init --types`.
+- The macOS app has an Asset Types panel: see whether each kind of asset goes through LFS and how many files it has, add a preset in one click, add or remove single types, and move assets committed as ordinary files to LFS from the next commit on (after a confirmation; history stays as it is).
 - A new guide, “Migrating from GitHub LFS” (in Chinese), shows how to move every past version of your assets from GitHub LFS or another LFS service to your own COS bucket, check the result, switch collaborators over and roll back.
 
 ### Fixed

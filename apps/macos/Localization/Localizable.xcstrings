@@ -87,6 +87,34 @@
         }
       }
     },
+    "%@ · %lld 个文件" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ · %2$lld file"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%1$@ · %2$lld files"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$lld 个文件"
+          }
+        }
+      }
+    },
     "%@ · 本应禁推：%@" : {
       "localizations" : {
         "en" : {
@@ -146,6 +174,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ h"
+          }
+        }
+      }
+    },
+    "%@ 都已走 LFS" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ already go through LFS"
           }
         }
       }
@@ -317,6 +355,44 @@
         }
       }
     },
+    "%lld 条来自其他规则" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld from another rule"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld from other rules"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld/%lld 走 LFS" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld of %2$lld in LFS"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld/%2$lld 走 LFS"
+          }
+        }
+      }
+    },
     "+%lld" : {
       "shouldTranslate" : false
     },
@@ -425,6 +501,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The LFS remote has not been queried, so the actual upload size is unknown; objects already on the remote may be skipped."
+          }
+        }
+      }
+    },
+    "LFS 指针" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LFS pointers"
           }
         }
       }
@@ -561,6 +647,16 @@
         }
       }
     },
+    "不走 LFS" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not in LFS"
+          }
+        }
+      }
+    },
     "不针对项目（只设置全局）" : {
       "localizations" : {
         "en" : {
@@ -671,12 +767,82 @@
         }
       }
     },
+    "从下一次提交起改用 LFS…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use LFS from the Next Commit…"
+          }
+        }
+      }
+    },
+    "从下一次提交起用 LFS 存储 %lld 个「%@」文件？" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Store %1$lld “%2$@” file in LFS from the next commit?"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Store %1$lld “%2$@” files in LFS from the next commit?"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "从下一次提交起用 LFS 存储 %1$lld 个「%2$@」文件？"
+          }
+        }
+      }
+    },
     "从最近列表移除" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Remove from Recents"
+          }
+        }
+      }
+    },
+    "会加上这一类的 LFS 规则，并对这些文件运行 git add --renormalize：把 .gitattributes 和这些文件当前的内容加入暂存区，从下一次提交起存为 LFS 指针。已有的提交（历史）不变，不会自动提交。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adds this type's LFS rules and runs git add --renormalize on these files: .gitattributes and the files' current content are staged, and from the next commit on they are stored as LFS pointers. Earlier commits (history) stay as they are. Nothing is committed for you."
+          }
+        }
+      }
+    },
+    "作为普通文件提交的素材（%lld 个）" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Assets committed as ordinary files (%lld)"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Assets committed as ordinary files (%lld)"
+                }
+              }
+            }
           }
         }
       }
@@ -797,6 +963,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "All"
+          }
+        }
+      }
+    },
+    "全部类型" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All types"
+          }
+        }
+      }
+    },
+    "全部走 LFS" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All in LFS"
           }
         }
       }
@@ -961,6 +1147,16 @@
         }
       }
     },
+    "加入暂存区" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stage Files"
+          }
+        }
+      }
+    },
     "包装层不检查时段" : {
       "localizations" : {
         "en" : {
@@ -997,6 +1193,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Per-file budget %@"
+          }
+        }
+      }
+    },
+    "压缩包" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Archives"
           }
         }
       }
@@ -1047,6 +1253,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Change"
+          }
+        }
+      }
+    },
+    "只删除 YunBox 生成的规则，手写或 git lfs track 加的规则保留。已经存为 LFS 指针的文件不会改动，但不再匹配 LFS 规则后会显示为已修改。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only the rules YunBox generated are deleted; rules written by hand or added by git lfs track stay. Files already stored as LFS pointers are left alone, but they show as modified once no LFS rule matches them."
           }
         }
       }
@@ -1231,6 +1447,16 @@
         }
       }
     },
+    "图片和音视频" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Images, audio and video"
+          }
+        }
+      }
+    },
     "在 Finder 中显示" : {
       "localizations" : {
         "en" : {
@@ -1351,6 +1577,16 @@
         }
       }
     },
+    "字体" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fonts"
+          }
+        }
+      }
+    },
     "安装" : {
       "localizations" : {
         "en" : {
@@ -1417,6 +1653,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Invalid object ID."
+          }
+        }
+      }
+    },
+    "展开扩展名" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show extensions"
           }
         }
       }
@@ -1545,6 +1791,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Committed content · identical content counted once, each historical version counted · original file size is not the compressed upload size"
+          }
+        }
+      }
+    },
+    "已有 LFS 规则，但提交时还没有" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Committed before the LFS rule existed"
           }
         }
       }
@@ -1771,6 +2027,16 @@
         }
       }
     },
+    "扩展名大小写不同" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Extension in a different case"
+          }
+        }
+      }
+    },
     "找不到这个仓库，可能已移动或删除。" : {
       "localizations" : {
         "en" : {
@@ -1807,6 +2073,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Shown When a Push Is Blocked"
+          }
+        }
+      }
+    },
+    "按仓库根目录的规则判断每种素材是否走 LFS；文件数是已加入 Git 的文件。这里只增删 YunBox 生成的 .gitattributes 规则，不会提交。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Whether each kind of asset goes through LFS, judged by the rules at the repository root; file counts are files added to Git. Only the .gitattributes rules YunBox generated are added or removed here, and nothing is committed."
+          }
+        }
+      }
+    },
+    "按素材类型查看和调整 LFS 规则" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View and change the LFS rules by asset type"
           }
         }
       }
@@ -1951,12 +2237,48 @@
         }
       }
     },
+    "收起扩展名" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide extensions"
+          }
+        }
+      }
+    },
+    "改动写入 .gitattributes（改用 LFS 时还有暂存区），确认后自己提交。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changes go to .gitattributes (and the staging area when moving files to LFS); review and commit them yourself."
+          }
+        }
+      }
+    },
     "文件" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "File"
+          }
+        }
+      }
+    },
+    "文件 %lld 个，LFS 指针 %lld 个" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Files: %1$lld, LFS pointers: %2$lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "文件 %1$lld 个，LFS 指针 %2$lld 个"
           }
         }
       }
@@ -2067,6 +2389,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Could not read push freezes."
+          }
+        }
+      }
+    },
+    "无法读取素材类型。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not read the asset types."
           }
         }
       }
@@ -2261,6 +2593,16 @@
         }
       }
     },
+    "未走 LFS" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not in LFS"
+          }
+        }
+      }
+    },
     "未选择仓库" : {
       "localizations" : {
         "en" : {
@@ -2307,6 +2649,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No new file content in this range"
+          }
+        }
+      }
+    },
+    "来源" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Source"
+          }
+        }
+      }
+    },
+    "来自其他规则" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other rule"
           }
         }
       }
@@ -2451,6 +2813,16 @@
         }
       }
     },
+    "模型和动画" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Models and animation"
+          }
+        }
+      }
+    },
     "正在分析已提交的历史…" : {
       "localizations" : {
         "en" : {
@@ -2491,6 +2863,16 @@
         }
       }
     },
+    "正在读取素材类型…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading asset types…"
+          }
+        }
+      }
+    },
     "正在重新检查…" : {
       "localizations" : {
         "en" : {
@@ -2517,6 +2899,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Set per project"
+          }
+        }
+      }
+    },
+    "没有 LFS 规则" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No LFS rule"
           }
         }
       }
@@ -2561,6 +2953,16 @@
         }
       }
     },
+    "没有文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No files"
+          }
+        }
+      }
+    },
     "没有设置禁推时段" : {
       "localizations" : {
         "en" : {
@@ -2591,6 +2993,22 @@
         }
       }
     },
+    "添加：%@（git yunbox types add %@）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Adds %1$@ (git yunbox types add %2$@)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "添加：%1$@（git yunbox types add %2$@）"
+          }
+        }
+      }
+    },
     "清除%@规则" : {
       "localizations" : {
         "en" : {
@@ -2607,6 +3025,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Clear Recents"
+          }
+        }
+      }
+    },
+    "游戏项目（不含压缩包）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Game project (no archives)"
           }
         }
       }
@@ -2791,6 +3219,36 @@
         }
       }
     },
+    "移除…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove…"
+          }
+        }
+      }
+    },
+    "移除「%@」的 LFS 规则？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove the LFS rules for “%@”?"
+          }
+        }
+      }
+    },
+    "移除规则" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove Rules"
+          }
+        }
+      }
+    },
     "立即检查" : {
       "localizations" : {
         "en" : {
@@ -2827,6 +3285,74 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "System Git config"
+          }
+        }
+      }
+    },
+    "素材类型" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asset Types"
+          }
+        }
+      }
+    },
+    "素材类型 · %lld 个未走 LFS" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Asset types · %lld file not in LFS"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Asset types · %lld files not in LFS"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "素材类型 · %lld/%lld 走 LFS" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asset types · %1$lld of %2$lld in LFS"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "素材类型 · %1$lld/%2$lld 走 LFS"
+          }
+        }
+      }
+    },
+    "素材类型…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Asset Types…"
+          }
+        }
+      }
+    },
+    "素材类型说明" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "About Asset Types"
           }
         }
       }
@@ -2917,6 +3443,26 @@
         }
       }
     },
+    "规则只写了小写扩展名，区分大小写的系统（Linux、CI）上匹配不到。要单独为这些扩展名加规则，见下面的命令。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The rules only name lower-case extensions, which do not match on case-sensitive systems (Linux, CI). These extensions need rules of their own; see the commands below."
+          }
+        }
+      }
+    },
+    "视频" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Video"
+          }
+        }
+      }
+    },
     "设为当前" : {
       "localizations" : {
         "en" : {
@@ -2947,6 +3493,26 @@
         }
       }
     },
+    "设计源文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Design source files"
+          }
+        }
+      }
+    },
+    "设计稿" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Design"
+          }
+        }
+      }
+    },
     "语言" : {
       "localizations" : {
         "en" : {
@@ -2973,6 +3539,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Choose a Git repository folder on this Mac."
+          }
+        }
+      }
+    },
+    "贴图和图片" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Textures and images"
+          }
+        }
+      }
+    },
+    "走 LFS" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LFS"
           }
         }
       }
@@ -3047,6 +3633,28 @@
         }
       }
     },
+    "还有 %lld 个" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld more"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld more"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "还没有检查，请先运行 doctor" : {
       "localizations" : {
         "en" : {
@@ -3063,6 +3671,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No projects yet"
+          }
+        }
+      }
+    },
+    "这一类还没有 LFS 规则；直接添加类型时，会因为这些文件跳过对应的扩展名。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This type has no LFS rule yet. Adding the type on its own skips the extensions of these files."
           }
         }
       }
@@ -3087,12 +3705,42 @@
         }
       }
     },
+    "这些文件在规则加入之前就提交了，现在会显示为已修改。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These files were committed before the rule was added and now show as modified."
+          }
+        }
+      }
+    },
+    "这些文件属于上面的素材类型，但在 Git 里是普通文件，不是 LFS 指针。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "These files belong to the asset types above but are stored in Git as ordinary files, not LFS pointers."
+          }
+        }
+      }
+    },
     "这是上次检查的结果，仓库可能已有新的提交。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "This is the previous result; the repository may have new commits."
+          }
+        }
+      }
+    },
+    "这条规则是手写的或由 git lfs track 添加，这里不会删除；要改用文本编辑器修改 .gitattributes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This rule was written by hand or added by git lfs track and is not removed here; edit .gitattributes in a text editor to change it"
           }
         }
       }
@@ -3207,12 +3855,32 @@
         }
       }
     },
+    "重新读取" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reload"
+          }
+        }
+      }
+    },
     "重试" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Retry"
+          }
+        }
+      }
+    },
+    "音频" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Audio"
           }
         }
       }
@@ -3263,6 +3931,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Budget Settings"
+          }
+        }
+      }
+    },
+    "预置组合" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Presets"
           }
         }
       }

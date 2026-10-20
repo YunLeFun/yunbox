@@ -4,6 +4,7 @@ import YunBoxKit
 
 struct ContentView: View {
     @Bindable var store: InspectorStore
+    @Bindable var types: AssetTypesStore
 
     var body: some View {
         NavigationSplitView {
@@ -61,9 +62,12 @@ struct ContentView: View {
                             .font(.caption).foregroundStyle(.secondary)
                         }
                         Spacer(minLength: 0)
+                        AssetTypesChip(types: types)
                         CosStatusChip(store: store)
                     }
                     .padding(.horizontal, 24).padding(.vertical, 18)
+                    // Also re-reads after switching repositories; the CLI only looks at .gitattributes and the index.
+                    .task(id: repository.path) { types.refresh() }
                     Divider()
                 }
                 if let report = store.result?.report {
@@ -103,6 +107,7 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $store.showingCos) { CosSheet(store: store) }
+        .sheet(isPresented: $types.showing) { AssetTypesSheet(types: types) }
         .fileImporter(isPresented: $store.choosingRepository, allowedContentTypes: [.folder]) { result in
             if case .success(let url) = result { store.select(url) }
         }

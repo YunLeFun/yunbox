@@ -7,6 +7,7 @@ public enum DocsPage: String, CaseIterable, Sendable, Identifiable {
     case freeze = "guide/freeze"
     case freezeSyntax = "guide/freeze#时段写法"
     case freezeQuickOff = "guide/freeze#快速关闭"
+    case assetTypes = "guide/macos#素材类型"
     case ai = "guide/ai"
     case inspect = "inspect"
     case changelog = "changelog"
@@ -23,6 +24,7 @@ public enum DocsPage: String, CaseIterable, Sendable, Identifiable {
         case .freeze: String(localized: "禁推时段")
         case .freezeSyntax: String(localized: "时段写法")
         case .freezeQuickOff: String(localized: "快速关闭")
+        case .assetTypes: String(localized: "素材类型")
         case .ai: String(localized: "用 AI 编程助手接入")
         case .inspect: String(localized: "推送体积检查")
         case .changelog: String(localized: "更新日志")

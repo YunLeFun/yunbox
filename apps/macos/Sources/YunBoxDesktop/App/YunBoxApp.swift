@@ -7,6 +7,7 @@ struct YunBoxApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var store: InspectorStore
     @State private var freeze: FreezeStore
+    @State private var types: AssetTypesStore
     @State private var updater = UpdaterStore()
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
 
@@ -14,11 +15,12 @@ struct YunBoxApp: App {
         let store = InspectorStore()
         _store = State(initialValue: store)
         _freeze = State(initialValue: FreezeStore(inspector: store))
+        _types = State(initialValue: AssetTypesStore(inspector: store))
     }
 
     var body: some Scene {
         Window("云匣 YunBox", id: "main") {
-            ContentView(store: store)
+            ContentView(store: store, types: types)
                 .frame(minWidth: 880, minHeight: 600)
                 .onOpenURL { store.select($0) }
                 .task { if store.repository != nil { store.inspect(); store.checkCos() } }
@@ -53,6 +55,8 @@ struct YunBoxApp: App {
                 Button("取消检查") { store.cancel() }.keyboardShortcut(".").disabled(!store.isInspecting)
                 Divider()
                 Button("复制 JSON 报告") { store.copyJSON() }.keyboardShortcut("c", modifiers: [.command, .shift]).disabled(store.result == nil)
+                Divider()
+                Button("素材类型…") { types.showing = true }.disabled(store.repository == nil)
             }
         }
         Settings { SettingsView(updater: updater) }
