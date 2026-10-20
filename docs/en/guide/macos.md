@@ -6,14 +6,16 @@ A small native SwiftUI app. It runs the YunBox command line bundled inside it, s
 
 Download the latest `YunBox-macOS.zip` from [the website](/en/#download), unzip it and drag YunBox into Applications. You need macOS 14 or later and Node.js 22.18+ on your Mac.
 
-::: warning First launch
-The app isn't notarized by Apple yet. If the first launch says the developer can't be verified, go to System Settings → Privacy & Security and click Open Anyway, or run this in Terminal:
+From 0.1.5 on, the app is notarized by Apple, so it opens with a double-click and macOS no longer says the developer can't be verified.
+
+::: details Version 0.1.4 and earlier
+These versions aren't notarized. If the first launch says the developer can't be verified, go to System Settings → Privacy & Security and click Open Anyway, or run this in Terminal:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/YunBox.app
 ```
 
-You only need to do this once: later versions arrive through the app's own updates and won't ask again.
+Apps from 0.1.4 and earlier can't update themselves yet, so download the latest version and replace the app.
 :::
 
 You can also build it from source, with Xcode or developer tools that include Swift 6:

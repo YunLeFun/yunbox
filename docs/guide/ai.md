@@ -31,6 +31,8 @@
 8. 把 .gitattributes 和 .yunbox/config 的改动给我看，由我决定是否提交；不要 git push。
 ```
 
+仓库用 Cloudflare R2 或其他 S3 兼容存储时，把第 3、4 步换成：「和我确认 bucket 和 endpoint，然后按 `git yunbox init --help` 里的 `--preset r2`（或 `aws`、`minio`）接入」，密钥由我自己用 `yunbox login --provider s3` 保存，见[接入 R2 和 S3 兼容存储](./r2)。
+
 终端里没有 `yunbox` 命令时先运行 `npm install -g yunbox`（需要 Node.js 22.18+）。
 
 ## 可以交给 AI 的命令

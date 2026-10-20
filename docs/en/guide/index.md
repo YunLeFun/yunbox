@@ -1,6 +1,6 @@
 # Quick start
 
-YunBox lets git-lfs store your assets directly in your own Tencent Cloud COS bucket. Your code stays on GitHub or wherever you host it. Large files such as PSDs, models, audio and video are signed by a transfer agent on each person's computer and uploaded straight to COS, **with no server in between**.
+YunBox lets git-lfs store your assets directly in your own Tencent Cloud COS bucket, or in S3-compatible storage such as Cloudflare R2, AWS S3 or MinIO. Your code stays on GitHub or wherever you host it. Large files such as PSDs, models, audio and video are signed by a transfer agent on each person's computer and uploaded straight to COS, **with no server in between**.
 
 ```
 git push / clone ──▶ git-lfs ──▶ git-yunbox lfs-agent ──▶ Tencent Cloud COS
@@ -8,8 +8,10 @@ git push / clone ──▶ git-lfs ──▶ git-yunbox lfs-agent ──▶ Tenc
 
 The transfer agent signs requests with the key saved on your machine and uploads to or downloads from COS directly.
 
+This page walks through Tencent Cloud COS. Want Cloudflare R2 (no egress fees), AWS S3 or MinIO instead? See [Cloudflare R2 and S3-compatible storage](./r2).
+
 ::: tip Before you start
-YunBox currently works with **Tencent Cloud COS only**, so you need a Tencent Cloud account and a COS bucket. The command line prints its messages in Chinese for now; the commands, options and JSON output are the same in any language.
+The command line prints its messages in Chinese for now; the commands, options and JSON output are the same in any language.
 :::
 
 ## Install

@@ -13,7 +13,7 @@ import SymbolIcon from './SymbolIcon.vue'
 const t = useCopy({
   zh: {
     label: '素材装进云匣，Git 里只留下指针',
-    stored: '存进你的 COS',
+    stored: '存进你的 bucket',
     assets: (count: number) => `${count} 个素材`,
     git: 'Git 仓库增加',
     pointersOnly: '只有指针',
@@ -25,7 +25,7 @@ const t = useCopy({
   },
   en: {
     label: 'Assets go into YunBox; Git keeps only pointers',
-    stored: 'Stored in your COS',
+    stored: 'Stored in your bucket',
     assets: (count: number) => `${count} ${count === 1 ? 'asset' : 'assets'}`,
     git: 'Added to Git',
     pointersOnly: 'pointers only',

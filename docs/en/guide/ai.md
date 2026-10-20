@@ -31,6 +31,8 @@ Work through these steps in order, and read each JSON result before deciding the
 8. Show me the changes to .gitattributes and .yunbox/config and let me decide whether to commit; don't git push.
 ```
 
+If the repository uses Cloudflare R2 or another S3-compatible service, replace steps 3 and 4 with: "Confirm the bucket and endpoint with me, then connect with `--preset r2` (or `aws`, `minio`) as described in `git yunbox init --help`." You save the key yourself with `yunbox login --provider s3`; see [Cloudflare R2 and S3-compatible storage](./r2).
+
 If your terminal doesn't have the `yunbox` command yet, run `npm install -g yunbox` first (it needs Node.js 22.18+).
 
 The CLI's human-readable messages are in Chinese for now, but JSON field names and status values (such as `ok`, `fail` and `frozen`) are in English, and coding assistants read the rest fine.
