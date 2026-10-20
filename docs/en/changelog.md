@@ -4,6 +4,7 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ## Unreleased
 
+
 ### Added
 
 - The macOS app updates itself: it checks once a day in the background, or on demand from YunBox → Check for Updates…; updates and their notes are verified by signature.
@@ -18,18 +19,15 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 - The macOS app has an Asset Types panel: see whether each kind of asset goes through LFS and how many files it has, add a preset in one click, add or remove single types, and move assets committed as ordinary files to LFS from the next commit on (after a confirmation; history stays as it is).
 - A new guide, “Migrating from GitHub LFS” (in Chinese), shows how to move every past version of your assets from GitHub LFS or another LFS service to your own COS bucket, check the result, switch collaborators over and roll back.
 
-### Fixed
-
-- `git yunbox init` no longer adds LFS rules for file types that already have files committed outside LFS, so those files no longer show up as modified or break new clones. It lists them and shows the commands to move them to LFS.
-
 ### Changed
 
 - The website and documentation are now available at [yunbox.yunle.fun](https://yunbox.yunle.fun/).
 - Budgets in the macOS app are now edited as a number and a unit, with common values and Restore Default. After changing them you can check the current repository again right away, and when the app follows Git config it shows the budgets the last check actually used.
-
-### Changed
-
 - In repositories connected directly to COS, the push check first asks COS which LFS assets are already there and budgets only what actually needs uploading, so a new branch is no longer flagged for assets the remote already has. If the lookup fails or times out, it counts every asset as before and never blocks the push.
+
+### Fixed
+
+- `git yunbox init` no longer adds LFS rules for file types that already have files committed outside LFS, so those files no longer show up as modified or break new clones. It lists them and shows the commands to move them to LFS.
 
 ## 0.1.4 - 2026-10-19
 
