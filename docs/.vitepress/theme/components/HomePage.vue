@@ -1,9 +1,10 @@
 <script setup lang="ts">
-/** The landing page: hero, how a push travels, setup, push check, keys, downloads. */
+/** The landing page: hero, how a push travels, setup, push check, freeze windows and AI, keys, downloads. */
 import { withBase } from 'vitepress'
 import ConfirmDialogMock from './ConfirmDialogMock.vue'
 import CopyCommand from './CopyCommand.vue'
 import DownloadPanel from './DownloadPanel.vue'
+import FreezePanelMock from './FreezePanelMock.vue'
 import HeroBox from './HeroBox.vue'
 import InspectorMock from './InspectorMock.vue'
 import KeyBoundary from './KeyBoundary.vue'
@@ -87,6 +88,34 @@ import TerminalDemo from './TerminalDemo.vue'
     <section class="section">
       <div class="wrap">
         <header class="section-head">
+          <h2>到点不让推送</h2>
+          <p>
+            用 <code>opening_hours</code> 写法设定禁推时段，例如 <code>Mo-Fr 09:00-18:00; We off</code>。本仓库、团队、全局三层规则同时生效，命中时推送在上传前被中断；紧急修复时 <code>yunbox freeze off --for 1h</code> 快速关闭，规则保留，到点自动恢复。
+          </p>
+        </header>
+        <div class="freeze-grid">
+          <div class="freeze-copy">
+            <h3>菜单栏里随时看到</h3>
+            <p>当前仓库处在禁推时段时，菜单栏的云匣图标右上角会多一个圆点。点开面板：现在能不能推、今天和未来 7 天的禁推分布、每个项目的规则。勾选预设就能设置，右上角的开关和定时按钮可以一次关闭所有仓库。这里的演示面板可以直接操作：勾选预设、拨动开关试试。</p>
+            <pre class="freeze-commands" aria-label="命令行示例"><code><span>yunbox freeze set "Mo-Fr 09:00-18:00"</span>
+<span>yunbox freeze off --until 18:00</span>
+<span>yunbox freeze check --json</span></code></pre>
+
+            <h3>交给 AI 接入</h3>
+            <p>客户端的 COS 面板里有「复制给 AI 的接入说明」，粘贴给 Claude Code、Codex 或 Cursor 即可。云匣的命令都不需要交互、都有 JSON 输出，编程助手可以自己检查、接入、设时段；只有保存腾讯云密钥这一步留给你自己。</p>
+            <p class="freeze-links">
+              <a :href="withBase('/guide/freeze')">禁推时段的写法和场景</a>
+              <a :href="withBase('/guide/ai')">用 AI 编程助手接入</a>
+            </p>
+          </div>
+          <FreezePanelMock />
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-alt">
+      <div class="wrap">
+        <header class="section-head">
           <h2>密钥不离开你的电脑</h2>
           <p>仓库里只记录素材放在哪个 bucket、哪个前缀。访问 COS 的密钥每人一把，存在各自电脑的钥匙串里。</p>
         </header>
@@ -94,7 +123,7 @@ import TerminalDemo from './TerminalDemo.vue'
       </div>
     </section>
 
-    <section id="download" class="section section-alt">
+    <section id="download" class="section">
       <div class="wrap">
         <header class="section-head">
           <h2>下载云匣</h2>
@@ -160,12 +189,14 @@ import TerminalDemo from './TerminalDemo.vue'
 
 .hero-lead code,
 .section-head code,
-.confirm-lead code {
+.confirm-lead code,
+.freeze-copy p code {
   padding: 0;
   background: none;
   color: var(--yb-label);
   font-family: var(--yb-font-mono);
   font-size: 0.86em;
+  white-space: nowrap;
 }
 
 .hero-actions {
@@ -207,7 +238,8 @@ import TerminalDemo from './TerminalDemo.vue'
 }
 
 .btn:focus-visible,
-.section-foot a:focus-visible {
+.section-foot a:focus-visible,
+.freeze-links a:focus-visible {
   outline: 2px solid var(--yb-accent);
   outline-offset: 3px;
 }
@@ -283,10 +315,76 @@ import TerminalDemo from './TerminalDemo.vue'
   text-decoration: underline;
 }
 
+.freeze-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+  align-items: start;
+  gap: 56px;
+}
+
+.freeze-copy h3 {
+  margin: 0;
+  color: var(--yb-label);
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.freeze-copy h3:not(:first-child) {
+  margin-top: 40px;
+}
+
+.freeze-copy p {
+  margin: 12px 0 0;
+  color: var(--yb-label-2);
+  font-size: 16px;
+  line-height: 1.75;
+}
+
+.freeze-commands {
+  margin: 20px 0 0;
+  padding: 14px 16px;
+  border-radius: var(--yb-radius-card);
+  background: var(--yb-code-bg);
+  box-shadow: inset 0 0 0 0.5px var(--yb-separator);
+  overflow-x: auto;
+  font-family: var(--yb-font-mono);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.freeze-commands span::before {
+  content: '$ ';
+  color: var(--yb-term-prompt);
+  user-select: none;
+}
+
+.freeze-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  margin-top: 20px !important;
+}
+
+.freeze-links a {
+  color: var(--yb-accent);
+  font-size: 15px;
+  text-decoration: none;
+}
+
+.freeze-links a:hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 960px) {
   .hero-grid {
     grid-template-columns: 1fr;
     gap: 48px;
+  }
+
+  .freeze-grid {
+    grid-template-columns: 1fr;
+    gap: 40px;
   }
 }
 
@@ -313,6 +411,10 @@ import TerminalDemo from './TerminalDemo.vue'
   }
 
   .section-head p {
+    font-size: 15px;
+  }
+
+  .freeze-copy p {
     font-size: 15px;
   }
 

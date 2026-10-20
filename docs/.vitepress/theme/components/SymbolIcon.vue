@@ -23,7 +23,9 @@ export type SymbolName
     | 'gearshape' | 'checkmark.circle.fill' | 'exclamationmark.circle.fill' | 'xmark.circle.fill'
     | 'info.circle' | 'sidebar.left' | 'icloud' | 'laptopcomputer' | 'arrow.triangle.branch'
     | 'key' | 'lock' | 'terminal' | 'arrow.down.circle' | 'magnifyingglass' | 'checkmark.shield'
-    | 'square.on.square.dashed' | 'arrow.up.doc'
+    | 'square.on.square.dashed' | 'arrow.up.doc' | 'hand.raised' | 'pause' | 'arrow.up' | 'globe'
+    | 'timer' | 'chevron.right' | 'plus.circle' | 'slider.horizontal.3' | 'macwindow'
+    | 'questionmark.circle' | 'power' | 'plus'
 </script>
 
 <template>
@@ -125,6 +127,52 @@ export type SymbolName
     <template v-else-if="name === 'square.on.square.dashed'">
       <rect x="3" y="3" width="13" height="13" rx="2.5" stroke-dasharray="2.5 2.5" />
       <rect x="8" y="8" width="13" height="13" rx="2.5" />
+    </template>
+    <template v-else-if="name === 'hand.raised'">
+      <path d="M8.5 12V6.5a1.4 1.4 0 0 1 2.8 0V11m0-6.3a1.4 1.4 0 0 1 2.8 0V11m0-5a1.4 1.4 0 0 1 2.8 0V12m0-3.2a1.4 1.4 0 0 1 2.8 0V14c0 4-2.8 7-6.6 7-2.6 0-4.1-1.2-5.4-3.2l-2.2-3.4a1.4 1.4 0 0 1 2.3-1.6l1.3 1.7V12" />
+    </template>
+    <template v-else-if="name === 'pause'">
+      <path d="M8.5 5.5v13M15.5 5.5v13" />
+    </template>
+    <template v-else-if="name === 'arrow.up'">
+      <path d="M12 19.5v-15m-6.5 6.5L12 4.5l6.5 6.5" />
+    </template>
+    <template v-else-if="name === 'globe'">
+      <circle cx="12" cy="12" r="9.5" />
+      <ellipse cx="12" cy="12" rx="4" ry="9.5" />
+      <path d="M2.5 12h19" />
+    </template>
+    <template v-else-if="name === 'timer'">
+      <circle cx="12" cy="13.5" r="8" />
+      <path d="M12 13.5V9.5M9.5 2.5h5M12 2.5v3" />
+    </template>
+    <template v-else-if="name === 'chevron.right'">
+      <path d="m9.5 5.5 6.5 6.5-6.5 6.5" />
+    </template>
+    <template v-else-if="name === 'plus.circle'">
+      <circle cx="12" cy="12" r="9.5" />
+      <path d="M12 7.5v9M7.5 12h9" />
+    </template>
+    <template v-else-if="name === 'slider.horizontal.3'">
+      <path d="M3 6.5h18M3 12h18M3 17.5h18" />
+      <circle cx="8" cy="6.5" r="2.2" fill="currentColor" />
+      <circle cx="15.5" cy="12" r="2.2" fill="currentColor" />
+      <circle cx="10" cy="17.5" r="2.2" fill="currentColor" />
+    </template>
+    <template v-else-if="name === 'macwindow'">
+      <rect x="3" y="4.5" width="18" height="15" rx="2.5" />
+      <path d="M3 9h18" />
+    </template>
+    <template v-else-if="name === 'questionmark.circle'">
+      <circle cx="12" cy="12" r="9.5" />
+      <path d="M9.5 9.5a2.5 2.5 0 1 1 3.7 2.2c-.8.4-1.2 1-1.2 1.8v.5" />
+      <circle cx="12" cy="17" r="0.6" fill="currentColor" />
+    </template>
+    <template v-else-if="name === 'plus'">
+      <path d="M12 5v14M5 12h14" />
+    </template>
+    <template v-else-if="name === 'power'">
+      <path d="M12 3v8.5M7 5.8a8 8 0 1 0 10 0" />
     </template>
   </svg>
 </template>
