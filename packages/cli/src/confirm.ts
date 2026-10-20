@@ -423,21 +423,30 @@ export function renderConfirmationHtml(report: PushInspection): string {
  * controlling terminal. Blocks (returns false) when nobody can be asked.
  */
 export async function confirmPush(context: CliContext, report: PushInspection, options: { remote?: string, updates?: string, head?: string } = {}): Promise<boolean> {
+  return await askPush(context, report, options) === 'continue'
+}
+
+/**
+ * Like {@link confirmPush}, but tells a “cancel” answer apart from nobody being
+ * asked (`undefined`, after explaining why on stderr).
+ */
+export async function askPush(context: CliContext, report: PushInspection, options: { remote?: string, updates?: string, head?: string } = {}): Promise<'continue' | 'cancel' | undefined> {
   const ui = confirmUi(context.env)
   const push = await describePush(context, options)
   const { source, target } = push
+  const answered = (answer: boolean): 'continue' | 'cancel' => answer ? 'continue' : 'cancel'
   if (ui === 'dialog' || (ui === 'auto' && process.platform === 'darwin' && !context.env.SSH_CONNECTION)) {
     const answer = await askDialog(context, report, push)
     if (answer !== undefined)
-      return answer
+      return answered(answer)
   }
   if (ui !== 'none') {
     const answer = await askTerminal(`\n${source}${target ? ` 推送到 ${target}` : ''}：超过限额，仍要继续推送吗？[y/N] `)
     if (answer !== undefined)
-      return answer
+      return answered(answer)
   }
   context.stderr.write('无法请求确认：没有可用的对话框或交互式终端。可提高限额（yunbox inspect --help）后重试。\n')
-  return false
+  return undefined
 }
 
 /**

@@ -55,17 +55,22 @@ function decode(text: string): StoredKeys | undefined {
 }
 
 /**
- * The per-user credentials file: `$YUNBOX_CONFIG_DIR/credentials.json`, else
- * `%APPDATA%\yunbox\` on Windows, else `$XDG_CONFIG_HOME/yunbox/` or
- * `~/.config/yunbox/`. It lives outside every repository.
+ * The per-user YunBox directory: `$YUNBOX_CONFIG_DIR`, else `%APPDATA%\yunbox\`
+ * on Windows, else `$XDG_CONFIG_HOME/yunbox/` or `~/.config/yunbox/`. It lives
+ * outside every repository.
  */
-export function credentialsFilePath(env: NodeJS.ProcessEnv): string {
+export function configDirectory(env: NodeJS.ProcessEnv): string {
   if (env.YUNBOX_CONFIG_DIR)
-    return join(env.YUNBOX_CONFIG_DIR, 'credentials.json')
+    return env.YUNBOX_CONFIG_DIR
   if (process.platform === 'win32' && env.APPDATA)
-    return join(env.APPDATA, 'yunbox', 'credentials.json')
+    return join(env.APPDATA, 'yunbox')
   const base = env.XDG_CONFIG_HOME || join(env.HOME || homedir(), '.config')
-  return join(base, 'yunbox', 'credentials.json')
+  return join(base, 'yunbox')
+}
+
+/** The per-user credentials file: `credentials.json` in {@link configDirectory}. */
+export function credentialsFilePath(env: NodeJS.ProcessEnv): string {
+  return join(configDirectory(env), 'credentials.json')
 }
 
 /** The plain JSON file with owner-only permissions (0600); the fallback on every platform. */

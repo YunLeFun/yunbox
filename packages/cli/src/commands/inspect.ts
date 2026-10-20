@@ -1,10 +1,11 @@
 import type { CliContext } from '../context.ts'
 import { Buffer } from 'node:buffer'
 import { parseArgs } from 'node:util'
-import { confirmPush } from '../confirm.ts'
+import { recordBlockedPush } from '../blocked-pushes.ts'
+import { askPush } from '../confirm.ts'
 import { checkFreeze, formatFreezeBlock, formatPauseEnd, readFreezeConfig, SCOPE_LABELS } from '../freeze.ts'
 import { inspectGit, InspectionError, resolveInspectionRange } from '../inspect-git.ts'
-import { formatInspection, inspectPush } from '../inspect.ts'
+import { exceededReasons, formatInspection, inspectPush } from '../inspect.ts'
 
 export const inspectHelp = `用法：yunbox inspect --push [选项]
 
@@ -16,7 +17,8 @@ export const inspectHelp = `用法：yunbox inspect --push [选项]
   --base <ref>        指定已存在的基准引用
   --head <ref>        指定待推送引用（默认 HEAD）
   --stdin             从 stdin 读取 Git pre-push 的引用更新，支持多个分支和删除；
-                      处在禁推时段（yunbox freeze）时直接中断，退出码 1
+                      处在禁推时段（yunbox freeze）时直接中断，退出码 1；
+                      拦下的推送记入本机配置目录的 blocked-pushes.json
   --remote <name/url>  新分支或旧 tip 缺失时，查询远端 Git refs 以改进 pack 估算
   --git-limit <size>  Git pack 限额（默认 900k）
   --lfs-limit <size>  LFS 候选总量限额（默认 100m）
@@ -76,6 +78,7 @@ export async function runInspect(context: CliContext, args: string[]): Promise<n
       if (freeze.status === 'paused' && !json)
         context.stderr.write(`禁推时段已关闭（${SCOPE_LABELS[freeze.pause!.scope]}，${formatPauseEnd(freeze.pause!.until, new Date())}），本次推送不受 ${freeze.window} 限制。\n`)
       if (freeze.status === 'frozen') {
+        await recordBlockedPush(context.env, { root: repo.cwd, at: new Date().toISOString(), reason: 'freeze', summary: `禁推时段 ${freeze.window}（${SCOPE_LABELS[freeze.scope!]}）` })
         if (json)
           context.stdout.write(`${JSON.stringify({ schemaVersion: 1, status: 'frozen', freeze })}\n`)
         else
@@ -92,12 +95,17 @@ export async function runInspect(context: CliContext, args: string[]): Promise<n
     const range = await resolveInspectionRange(repo, { updates, base: values.base, head: values.head, remote: values.remote })
     const report = await inspectPush(repo, range, limits)
     context.stdout.write(values.json ? `${JSON.stringify(report)}\n` : formatInspection(report, top))
-    if (report.status === 'exceeded' && values.confirm) {
-      const confirmed = await confirmPush(repo, report, { remote: values.remote, updates, head: values.head })
-      context.stderr.write(confirmed ? '已确认，继续推送。\n' : '已取消推送。\n')
-      return confirmed ? 0 : 1
-    }
-    return report.status === 'exceeded' ? 1 : 0
+    if (report.status === 'ok')
+      return 0
+    const answer = values.confirm ? await askPush(repo, report, { remote: values.remote, updates, head: values.head }) : undefined
+    if (values.confirm)
+      context.stderr.write(answer === 'continue' ? '已确认，继续推送。\n' : '已取消推送。\n')
+    if (answer === 'continue')
+      return 0
+    // Only a real push (from the hook) is remembered; manual checks block nothing.
+    if (values.stdin)
+      await recordBlockedPush(context.env, { root: repo.cwd, at: new Date().toISOString(), reason: answer === 'cancel' ? 'cancelled' : 'exceeded', summary: exceededReasons(report).join('；') })
+    return 1
   }
   catch (error) {
     // parseArgs and subprocess errors may contain user-supplied URLs: only emit controlled messages.

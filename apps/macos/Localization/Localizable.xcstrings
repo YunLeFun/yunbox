@@ -55,6 +55,17 @@
         }
       }
     },
+    "%@ · %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@"
+          }
+        }
+      },
+      "shouldTranslate" : false
+    },
     "%@ · %@\n%@（%@）" : {
       "localizations" : {
         "en" : {
@@ -827,6 +838,16 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "从下一次提交起用 LFS 存储 %1$lld 个「%2$@」文件？"
+          }
+        }
+      }
+    },
+    "从列表隐藏" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide from List"
           }
         }
       }
@@ -1801,6 +1822,16 @@
         }
       }
     },
+    "已取消推送" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push cancelled"
+          }
+        }
+      }
+    },
     "已复制" : {
       "localizations" : {
         "en" : {
@@ -2545,6 +2576,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Recent Repositories"
+          }
+        }
+      }
+    },
+    "最近被拦截" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recently Blocked"
           }
         }
       }
@@ -3635,6 +3676,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "LFS"
+          }
+        }
+      }
+    },
+    "超出限额" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Over budget"
           }
         }
       }
