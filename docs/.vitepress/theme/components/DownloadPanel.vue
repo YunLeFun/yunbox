@@ -33,7 +33,7 @@ const t = useCopy({
   },
   en: {
     macTitle: 'YunBox for macOS',
-    macLead: 'Pick a repository to see its push size, files over budget and COS connection status. You can also save your key and connect a bucket right from the window.',
+    macLead: 'Pick a repository to see its push size, files over budget and its storage connection status. You can also save your key and connect a bucket right from the window.',
     download: 'Download YunBox-macOS.zip',
     universal: 'Universal (Apple silicon and Intel)',
     separator: ' · ',

@@ -126,7 +126,7 @@ export default defineConfig({
       link: '/en/',
       title: 'YunBox',
       titleTemplate: ':title · YunBox',
-      description: 'Git LFS–compatible asset hosting: code stays in Git, assets go straight to your own Cloudflare R2, AWS S3, MinIO or Tencent Cloud COS bucket, with no server in between.',
+      description: 'Git LFS–compatible asset hosting: code stays in Git, assets go straight to your own S3-compatible bucket (Cloudflare R2, AWS S3, MinIO) or Tencent Cloud COS, with no server in between.',
       themeConfig: {
         siteTitle: 'YunBox',
         nav: [
