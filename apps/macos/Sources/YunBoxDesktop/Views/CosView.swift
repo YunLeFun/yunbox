@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import YunBoxKit
 
@@ -50,6 +51,7 @@ struct CosSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var output: CommandOutput?
     @State private var running = false
+    @State private var copiedPrompt = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -57,6 +59,10 @@ struct CosSheet: View {
                 Text("COS 直连").font(.title2.bold())
                 Spacer()
                 if store.isCheckingCos { ProgressView().controlSize(.small) }
+                Button { copyAIPrompt() } label: {
+                    Label(copiedPrompt ? "已复制" : "复制给 AI 的接入说明", systemImage: copiedPrompt ? "checkmark" : "sparkles")
+                }
+                .help("复制一段提示词，粘贴给 Claude Code、Codex 等编程助手，由它按步骤接入；密钥仍由你自己保存")
                 Button("重新检查") { store.checkCos() }.disabled(store.isCheckingCos || running)
             }
             if let location = store.cosReport?.location {
@@ -96,11 +102,28 @@ struct CosSheet: View {
                 Text("密钥只保存在这台电脑上（钥匙串），仓库里只记录 bucket、地域和前缀。")
                     .font(.caption).foregroundStyle(.secondary)
                 Spacer()
+                Link("接入说明", destination: DocsPage.quickStart.url).font(.callout)
+                Link("AI 接入说明", destination: DocsPage.ai.url).font(.callout)
                 Button("完成") { dismiss() }.keyboardShortcut(.defaultAction)
             }
         }
         .padding(24)
         .frame(width: 640, height: 680)
+    }
+}
+
+extension CosSheet {
+    /// Put a ready-to-paste prompt for an AI coding assistant on the clipboard.
+    func copyAIPrompt() {
+        guard let repository = store.repository else { return }
+        let client = try? store.client()
+        let prompt = AIOnboarding.prompt(repository: repository, report: store.cosReport, node: client?.node, cli: client?.cli)
+        NSPasteboard.general.clearContents()
+        copiedPrompt = NSPasteboard.general.setString(prompt, forType: .string)
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            copiedPrompt = false
+        }
     }
 }
 

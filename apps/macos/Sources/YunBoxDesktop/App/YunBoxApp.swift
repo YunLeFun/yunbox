@@ -5,7 +5,15 @@ import YunBoxKit
 @main
 struct YunBoxApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    @State private var store = InspectorStore()
+    @State private var store: InspectorStore
+    @State private var freeze: FreezeStore
+    @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
+
+    init() {
+        let store = InspectorStore()
+        _store = State(initialValue: store)
+        _freeze = State(initialValue: FreezeStore(inspector: store))
+    }
 
     var body: some Scene {
         Window("云匣 YunBox", id: "main") {
@@ -27,6 +35,13 @@ struct YunBoxApp: App {
                         .disabled(store.recentPaths.allSatisfy { $0 == store.repository?.path })
                 }
             }
+            CommandGroup(replacing: .help) {
+                ForEach([DocsPage.quickStart, .macOS, .freeze, .inspect, .ai]) { page in
+                    Link(page == .quickStart ? "云匣使用说明" : page.title, destination: page.url)
+                }
+                Divider()
+                Link("GitHub 仓库", destination: DocsPage.repository)
+            }
             CommandMenu("检查") {
                 Button("重新检查") { store.inspect() }.keyboardShortcut("r").disabled(store.isInspecting)
                 Button("取消检查") { store.cancel() }.keyboardShortcut(".").disabled(!store.isInspecting)
@@ -35,6 +50,17 @@ struct YunBoxApp: App {
             }
         }
         Settings { SettingsView() }
+        Window("禁推时段", id: "freeze") {
+            FreezeEditorView(freeze: freeze)
+        }
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
+        MenuBarExtra(isInserted: $showMenuBarExtra) {
+            FreezePanel(freeze: freeze)
+        } label: {
+            Image(nsImage: MenuBarIcon.image(badge: freeze.isFrozen))
+        }
+        .menuBarExtraStyle(.window)
     }
 }
 

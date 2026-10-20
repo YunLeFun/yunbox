@@ -51,6 +51,43 @@ public struct InspectionClient: Sendable {
         )
     }
 
+    /// `yunbox freeze list --json`: windows, the current verdict and the pre-push wrapper. `directory` need not be a repository.
+    public func freezeStatus(directory: URL) async throws -> FreezeStatus {
+        let output = try await ProcessRunner.run(
+            executable: node, arguments: [cli.path, "freeze", "list", "--json"],
+            directory: directory, environment: environment(), timeout: 30, mergeStandardError: true
+        )
+        return try FreezeStatus.decode(output.data, exitCode: output.exitCode)
+    }
+
+    /// `yunbox freeze set`: replace `scope`'s windows; a `nil` message or time zone leaves the stored one, `""` removes it.
+    public func setFreeze(directory: URL, rules: [String], scope: FreezeStatus.Scope, message: String?, timeZone: String?) async throws -> CommandOutput {
+        var arguments = [cli.path, "freeze", "set"] + rules + (scope.flag ?? [])
+        if let message { arguments += ["--message", message] }
+        if let timeZone { arguments += ["--timezone", timeZone] }
+        return try await text(arguments: arguments, directory: directory, timeout: 30)
+    }
+
+    /// `yunbox freeze clear` for one scope.
+    public func clearFreeze(directory: URL, scope: FreezeStatus.Scope) async throws -> CommandOutput {
+        try await text(arguments: [cli.path, "freeze", "clear"] + (scope.flag ?? []), directory: directory, timeout: 30)
+    }
+
+    /// `yunbox freeze off`: switch every window off for this repository (`.local`) or the machine (`.global`).
+    public func pauseFreeze(directory: URL, scope: FreezeStatus.Scope, option: FreezePauseOption) async throws -> CommandOutput {
+        try await text(arguments: [cli.path, "freeze", "off"] + option.arguments + (scope == .global ? ["--global"] : []), directory: directory, timeout: 30)
+    }
+
+    /// `yunbox freeze on`: end a pause early.
+    public func resumeFreeze(directory: URL, scope: FreezeStatus.Scope) async throws -> CommandOutput {
+        try await text(arguments: [cli.path, "freeze", "on"] + (scope == .global ? ["--global"] : []), directory: directory, timeout: 30)
+    }
+
+    /// `yunbox hook install`: the pre-push wrapper that enforces freeze windows and size limits.
+    public func installHook(repository: URL) async throws -> CommandOutput {
+        try await text(arguments: [cli.path, "hook", "install"], directory: repository, timeout: 30)
+    }
+
     private func text(arguments: [String], directory: URL, timeout: TimeInterval, input: Data? = nil) async throws -> CommandOutput {
         let output = try await ProcessRunner.run(
             executable: node, arguments: arguments, directory: directory, environment: environment(),

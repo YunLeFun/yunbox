@@ -45,18 +45,25 @@ struct ContentView: View {
         } detail: {
             VStack(spacing: 0) {
                 if let repository = store.repository {
-                    HStack(alignment: .top) {
+                    // The chip is centred on the title block and shares the report's 24-point right edge.
+                    HStack(alignment: .center, spacing: 16) {
                         VStack(alignment: .leading, spacing: 5) {
                             Text(repository.lastPathComponent).font(.title2.bold())
-                            Text(repository.path).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                            HStack(spacing: 6) {
+                                Text(repository.path)
+                                    .lineLimit(1).truncationMode(.middle)
+                                    .textSelection(.enabled)
+                                if let date = store.checkedAt {
+                                    Text("·")
+                                    Text("检查于 \(checkedLabel(date))").fixedSize()
+                                }
+                            }
+                            .font(.caption).foregroundStyle(.secondary)
                         }
-                        Spacer()
+                        Spacer(minLength: 0)
                         CosStatusChip(store: store)
-                        if let date = store.checkedAt {
-                            Text("检查于 \(checkedLabel(date))")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }.padding(24)
+                    }
+                    .padding(.horizontal, 24).padding(.vertical, 18)
                     Divider()
                 }
                 if let report = store.result?.report {

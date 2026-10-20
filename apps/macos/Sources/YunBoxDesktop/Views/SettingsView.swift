@@ -8,6 +8,7 @@ struct SettingsView: View {
     @AppStorage("lfsLimit") private var lfsLimit = "100m"
     @AppStorage("fileLimit") private var fileLimit = "10m"
     @AppStorage("nodePath") private var nodePath = ""
+    @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
     @State private var choosingNode = false
 
     var body: some View {
@@ -25,6 +26,11 @@ struct SettingsView: View {
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
+            Section("菜单栏") {
+                Toggle("在菜单栏显示禁推状态", isOn: $showMenuBarExtra)
+                Text("图标显示当前仓库现在能否推送，点开可以查看和快捷设置禁推时段（yunbox freeze）。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section("Node.js 运行环境") {
                 TextField("可执行文件路径（留空自动查找）", text: $nodePath)
                 HStack {
@@ -37,7 +43,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 540, height: 420)
+        .frame(width: 540, height: 500)
         .fileImporter(isPresented: $choosingNode, allowedContentTypes: [.item]) { result in
             if case .success(let url) = result { nodePath = url.path }
         }
