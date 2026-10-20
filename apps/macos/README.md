@@ -24,6 +24,10 @@ SwiftUI 原生小工具，调用应用内附带的 YunBox CLI，复用同一套 
 
 「帮助」菜单直接打开官网文档：使用说明、macOS 客户端、禁推时段、推送体积检查、用 AI 编程助手接入；菜单栏面板的「使用说明」、禁推时段编辑窗口的「查看时段写法和常见场景」、COS 面板的「接入说明」「AI 接入说明」也链接到对应页面（`DocsPage` 里统一维护，测试会核对页面和锚点都存在）。
 
+「云匣 YunBox → 检查更新…」和「设置 → 软件更新」由 [Sparkle](https://sparkle-project.org) 驱动：默认每天在后台检查一次 `releases/latest/download/appcast.xml`，可以关闭自动检查或改为自动下载并安装（Sparkle 自己保存这两个偏好）。不是从构建脚本打包的 `.app`（例如 `swift run`）不启动更新器，设置里会说明。
+
+界面有简体中文（源语言，直接写在代码里）和英文。「设置 → 语言」写入应用自己的 `AppleLanguages`，与「系统设置 → 通用 → 语言与地区 → 应用程序」是同一个设置，重新打开后生效，设置页提供「立即重新打开」。命令行输出的文字（`doctor` 的检查项、禁推时段的说明等）仍是中文。
+
 快捷键：`⌘O` 选择仓库、`⌘1`–`⌘9` 切换最近的仓库、`⌘R` 重新检查、`⌘.` 取消、`⇧⌘C` 复制 JSON、`⌘,` 打开设置。
 
 LFS 显示**候选上传量**，实际上传量保持未知；文件原始大小与 Git 压缩上传量不同。窗口中的检查与实际 pre-push 时收到的引用范围可能不同，最终推送仍由 [CLI / Workstation 钩子](../../docs/inspect.md) 按实际引用重新检查。
@@ -46,7 +50,21 @@ Codex 的 Run 按钮也调用此脚本。`--logs` / `--telemetry` 打开应用�
 
 应用图标源自 `assets/brand`，是 [YunLeFun/icons](https://github.com/YunLeFun/icons) 中 `assets/apps/yunbox/v1` 的固定副本，以 `manifest.json` 的 SHA-256 校验。Xcode 26+ 下，脚本用 `actool` 把分层的 `YunBox.icon` 编译进 `Assets.car` 并写入 `CFBundleIconName`，macOS 26 据此显示默认、深色、Clear 与着色外观；同时由 `yunbox-app-icon.svg` 渲染 `AppIcon.icns` 作为旧系统兜底。更新图标时先改中心仓库，再运行 `pnpm icons:sync --source /path/to/icons`；`pnpm icons:check` 只校验本地副本。
 
-当前是 ad-hoc 签名构建，尚未完成 Developer ID 签名和公证。发布版本时，`Release` 工作流用 `YUNBOX_SWIFT_BUILD_ARGS="-c release --arch arm64 --arch x86_64"` 构建通用二进制，打包成 `YunBox-macOS.zip` 附在 GitHub release 上，官网的下载按钮指向它；第一次打开需要在「系统设置 → 隐私与安全性」里放行。`Info.plist` 的版本号取自 `packages/cli/package.json`。`dist/`、Swift 构建缓存及本机运行路径均不提交。
+当前是 ad-hoc 签名构建，尚未完成 Developer ID 签名和公证。发布版本时，`Release` 工作流用 `YUNBOX_SWIFT_BUILD_ARGS="-c release --arch arm64 --arch x86_64"` 构建通用二进制，打包成 `YunBox-macOS.zip`，连同签名的 `appcast.xml` 附在 GitHub release 上（先建草稿，两个文件都上传后才发布），官网的下载按钮指向 zip，客户端从 appcast 自动更新；第一次打开需要在「系统设置 → 隐私与安全性」里放行。`Info.plist` 的版本号（`CFBundleShortVersionString` 和 Sparkle 比较用的 `CFBundleVersion`）取自 `packages/cli/package.json`。`dist/`、Swift 构建缓存及本机运行路径均不提交。
+
+### 自动更新的签名
+
+ad-hoc 签名每次构建都不同，Sparkle 只靠 EdDSA 判断更新是否可信：`Info.plist` 里有 `SUPublicEDKey`、`SUVerifyUpdateBeforeExtraction`（解压前验签）和 `SURequireSignedFeed`（appcast 和更新说明也要签名）。发布时 `script/sparkle_appcast.sh` 打包 `YunBox-macOS.zip`，用 `generate_appcast` 生成并签名 `appcast.xml`（内嵌 release 说明），再用应用里的公钥核对 zip 的签名。
+
+私钥保存在维护者的登录钥匙串（account `fun.yunle.yunbox`）和仓库 `sparkle` environment 的 secret `SPARKLE_ED_PRIVATE_KEY` 里，**不能丢**：丢失后已安装的客户端无法再自动更新。第一次配置或换一台机器时：
+
+```bash
+swift package --package-path apps/macos resolve   # 下载 Sparkle 工具
+apps/macos/.build/artifacts/sparkle/Sparkle/bin/generate_keys --account fun.yunle.yunbox -p   # 查看公钥，应与 build_and_run.sh 一致
+apps/macos/.build/artifacts/sparkle/Sparkle/bin/generate_keys --account fun.yunle.yunbox -x /dev/stdout | gh secret set SPARKLE_ED_PRIVATE_KEY --env sparkle
+```
+
+本地验证一次完整更新：把 `dist/YunBox.app` 复制两份，分别改低和改高版本号、把 `SUFeedURL` 指向本地 HTTP 服务后重新 ad-hoc 签名，对新版本运行 `SPARKLE_DOWNLOAD_URL_PREFIX=http://127.0.0.1:8765/ script/sparkle_appcast.sh <新版本.app> v<版本> <空目录>`，在该目录启动 `python3 -m http.server 8765`，打开旧版本选择「检查更新…」。
 
 ## 验证
 
@@ -58,6 +76,16 @@ swift test --package-path apps/macos
 ```
 
 测试覆盖退出码与 JSON 一致性、LFS 未知上传量、历史路径、取消和超时、输出限制、参数传递、最近列表的顺序和上限、缓存的读写和清理（包括忽略不兼容的缓存），以及真实 Git 仓库通过 CLI 返回超限报告。真实 CLI 测试需要上面的两个环境变量。CI 在 macOS 上构建 CLI、运行 Swift 测试并检查 `.app` 打包。
+
+## 界面文字和翻译
+
+界面文字直接用中文写在代码里：SwiftUI 的 `Text("…")`、`Button("…")` 等会自动本地化；传给 `String` 的文字要写成 `String(localized: "…")`，否则不会翻译。英文翻译在 [`Localization/Localizable.xcstrings`](Localization/Localizable.xcstrings)（Xcode 的字符串目录，可以用 Xcode 打开编辑）。改了界面文字后：
+
+```bash
+./script/sync_strings.sh   # 用编译器提取代码里的文字，合并进字符串目录，并检查每条都有英文
+```
+
+新增的文字在目录里没有英文时，脚本会列出来；在 Xcode 里或直接编辑 JSON 补上翻译（数量相关的文字用 plural 变体）。不再使用的文字会被标记出来，删掉即可。CI 运行 `./script/sync_strings.sh --check`，目录过期或缺翻译时失败。构建脚本用 `xcstringstool compile` 把目录编译成 `en.lproj`。
 
 ## 结构
 

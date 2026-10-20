@@ -8,8 +8,14 @@ struct FileTableView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("文件明细").font(.headline)
-                Text("\(store.visibleRows.count) / \(store.rows.count) 个对象 · 按大小降序\(store.rows.isEmpty ? "" : " · 选中文件查看推送前后的变化")")
-                    .font(.caption).foregroundStyle(.secondary)
+                Group {
+                    if store.rows.isEmpty {
+                        Text("\(store.visibleRows.count) / \(store.rows.count) 个对象 · 按大小降序")
+                    } else {
+                        Text("\(store.visibleRows.count) / \(store.rows.count) 个对象 · 按大小降序 · 选中文件查看推送前后的变化")
+                    }
+                }
+                .font(.caption).foregroundStyle(.secondary)
             }
             VSplitView {
                 table.frame(minHeight: 110)

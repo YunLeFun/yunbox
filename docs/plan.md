@@ -328,6 +328,22 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **快速关闭**：`yunbox freeze off [--for|--until] [--global]` 写 `yunbox.pushFreezePausedUntil`（ISO 时间或 `forever`），所有时段暂不生效、规则保留，到点自动恢复，推送时提示一句；只允许写在个人配置（本仓库或全局），读到团队 `.yunbox/config` 里的值时报错，避免一次提交关掉全队的规则。
 - **风险**：`git push --no-verify` 和没装包装层的 clone 都会绕过，这只是协作约定，不是服务端强制；需要强制时只能放到托管平台（如分支保护）或以后的服务端。
 
+### macOS 客户端自动更新（2026-10-20）
+
+- **用 Sparkle 2**（2.10.0，SwiftPM 依赖）：macOS 上非 App Store 分发的通行方案，自带后台检查、下载、校验、替换并重启，以及中文界面。没有自己写「查 GitHub Releases 再提示下载」，因为那样仍要用户手动替换应用。
+- **更新源放在 GitHub release**：每个 release 附带 `appcast.xml`，应用读 `releases/latest/download/appcast.xml`，不需要额外的服务器，也和官网下载按钮用同一个地址。release 先建成草稿，zip 和 appcast 都上传后才发布，`latest` 不会指向缺 appcast 的版本。
+- **信任只靠 EdDSA**：应用是 ad-hoc 签名，每次构建的签名身份都不同，Sparkle 无法用 Apple 代码签名比对新旧版本，只能用 EdDSA。所以打开了 `SUVerifyUpdateBeforeExtraction`（解压前先验签）和 `SURequireSignedFeed`（appcast 和内嵌的更新说明也要签名），更新源被篡改时既装不上，也改不了展示给用户的内容。公钥写在 `script/build_and_run.sh`，私钥只在维护者钥匙串（account `fun.yunle.yunbox`）和 GitHub `sparkle` environment 的 `SPARKLE_ED_PRIVATE_KEY` 里。发布脚本会用应用里的公钥核对 zip 的签名，密钥配错时发布失败，而不是发出没人能装的更新。
+- **版本号**：`CFBundleVersion` 改为和 `CFBundleShortVersionString` 一样取 CLI 的版本（以前固定为 `1`），Sparkle 用它比较新旧。
+- **风险**：私钥丢失后无法轮换（轮换需要 Developer ID 签名的 dmg），已安装的客户端只能手动下载新版本；要妥善备份。0.1.4 及以前的客户端没有 Sparkle，要手动更新一次。以后换成 Developer ID 签名和公证时，应用的签名身份会变，Sparkle 仍然靠 EdDSA 放行这次更新。
+- **分发方式（2026-10-20 决定）**：不上 Mac App Store，也暂不做 Developer ID 签名和公证。App Store 要求 App Sandbox，而客户端要调用用户自己的 Node.js、git、git-lfs，读写任意仓库和 `~/.gitconfig`、安装 pre-push 钩子，沙盒里都做不到；审核规则也不允许 Sparkle 这类自带更新机制。Developer ID 和公证需要付费的 Apple Developer Program，目前继续用 ad-hoc 签名加 Sparkle：用户第一次打开要在「隐私与安全性」里放行，之后的更新会去掉隔离标记，不再提示。代价是进不了 Homebrew 官方 cask（正在下架没有签名和公证的 cask）。将来有了以云乐坊名义注册的开发者账号，再在发布流程里加上签名、Hardened Runtime 和 `notarytool`，已安装的客户端可以直接更新过去。
+
+### macOS 客户端中英文界面和更新日志（2026-10-20）
+
+- **源语言是简体中文**：界面文字直接写在代码里，英文放在 Xcode 字符串目录 `apps/macos/Localization/Localizable.xcstrings`。没有 Xcode 工程，所以用编译器的 `-emit-localized-strings` 提取文字、`xcstringstool sync` 合并进目录（Xcode 也是这样做的），`xcstringstool compile` 在打包时生成 `en.lproj`；`script/sync_strings.sh --check` 在 CI 里保证目录不过期、每条都有英文。字符串放在 `Bundle.main` 而不是 SwiftPM 的 `Bundle.module`，所以 SwiftUI 的文字字面量不用改写就能本地化。`CFBundleDevelopmentRegion` 是 `zh-Hans`：系统语言既不是中文也不是英文时显示中文。
+- **语言切换用系统机制**：设置里的选择写入应用自己的 `AppleLanguages`，与系统设置的「应用程序语言」是同一个值，读取时只看应用自己的域，不受系统语言列表影响；重新打开后生效。Sparkle 的界面跟着同一个设置切换。
+- **更新日志两份**：`docs/changelog.md` 和 `docs/en/changelog.md`，Keep a Changelog 的格式，顶部是「未发布」。`pnpm release` 先检查两份都写了未发布的改动，bumpp 改版本号时把它们标上版本号和日期，和版本号同一个提交（只提交这几个文件）。发布工作流用对应版本的两段说明生成 GitHub release 说明，并以 `<description xml:lang>` 写进 appcast，Sparkle 按应用语言显示；appcast 改动后用 `sign_update` 重新签名。没有从提交记录自动生成，是因为提交信息是给开发者看的英文，更新提示要的是给用户看的中英文说明。
+- **还没做**：命令行输出、官网文档（除更新日志）仍只有中文；客户端显示的 `doctor` 检查项等来自命令行的文字在英文界面里也是中文。
+
 ### 后续风险
 
 - CloudBase 云托管绑定运行角色后是否以 `TENCENTCLOUD_*` 环境变量注入临时密钥**未核实**（云函数是这样做的）。如果不是，需要在服务端增加从平台元数据接口获取密钥的代码，或者临时改用只挂最小权限策略的子账号长期密钥。

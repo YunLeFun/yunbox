@@ -16,7 +16,7 @@ enum MenuBarIcon {
             return true
         }
         image.isTemplate = true
-        image.accessibilityDescription = badge ? "云匣：处于禁推时段" : "云匣"
+        image.accessibilityDescription = badge ? String(localized: "云匣：处于禁推时段") : String(localized: "云匣")
         return image
     }
 

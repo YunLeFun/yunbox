@@ -234,7 +234,7 @@ cd packages/cli && pnpm pack && npm install -g ./yunbox-0.1.0.tgz
 
 Windows 上 git-lfs 通过 Git for Windows 自带的 sh 启动传输代理，需要 npm / pnpm 生成的无扩展名 `git-yunbox` 脚本在 PATH 上；`git yunbox init` 找不到它时会改写成 Node.js 的绝对路径。
 
-发布新版本（维护者）：运行 `pnpm release`，它会修改 `packages/cli` 的版本、提交、打 `v*` tag 并推送；`Release` 工作流跑完全部检查后，通过 npm trusted publishing（OIDC）发布并自动附带 provenance。仓库里不保存任何 npm token：npm 只信任 `YunLeFun/yunbox` 的 `release.yml` 在 `npm` environment 里发布，包本身设置为「发布必须两步验证、禁止 token」。
+发布新版本（维护者）：先在 [`docs/changelog.md`](./docs/changelog.md) 和 [`docs/en/changelog.md`](./docs/en/changelog.md) 的「未发布 / Unreleased」里写好这次的改动，再运行 `pnpm release`，它会检查两份更新日志、修改 `packages/cli` 的版本、把「未发布」标上版本号和日期、提交、打 `v*` tag 并推送；`Release` 工作流跑完全部检查后，通过 npm trusted publishing（OIDC）发布并自动附带 provenance。仓库里不保存任何 npm token：npm 只信任 `YunLeFun/yunbox` 的 `release.yml` 在 `npm` environment 里发布，包本身设置为「发布必须两步验证、禁止 token」。同一个工作流随后构建 macOS 客户端，用 `sparkle` environment 里的 `SPARKLE_ED_PRIVATE_KEY` 给更新包和 `appcast.xml` 签名，一起附在 GitHub release 上（release 说明和客户端的更新提示都取自更新日志），已安装的客户端据此自动更新（见 [macOS 客户端 README](./apps/macos/README.md#自动更新的签名)）。
 
 `git yunbox --help` 会被 Git 改写成 `git help yunbox`（找 man 手册，会失败），查看帮助请用 `git yunbox help`、`git yunbox init -h` 或 `yunbox --help`。
 

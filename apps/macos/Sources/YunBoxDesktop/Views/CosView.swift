@@ -25,11 +25,11 @@ struct CosStatusChip: View {
     }
 
     private var label: String {
-        guard let report = store.cosReport else { return store.cosError == nil ? "正在检查 COS…" : "COS 状态未知" }
+        guard let report = store.cosReport else { return store.cosError == nil ? String(localized: "正在检查 COS…") : String(localized: "COS 状态未知") }
         switch report.mode {
-        case .cos: return report.isHealthy ? "直连 COS · 正常" : "直连 COS · 需要处理"
-        case .server: return report.isHealthy ? "YunBox 服务端 · 正常" : "YunBox 服务端 · 需要处理"
-        case .none: return "未接入 COS"
+        case .cos: return report.isHealthy ? String(localized: "直连 COS · 正常") : String(localized: "直连 COS · 需要处理")
+        case .server: return report.isHealthy ? String(localized: "YunBox 服务端 · 正常") : String(localized: "YunBox 服务端 · 需要处理")
+        case .none: return String(localized: "未接入 COS")
         }
     }
 
@@ -269,8 +269,8 @@ private struct SetupForm: View {
     }
 
     private var appIdHint: String {
-        if let appId = buckets.first.flatMap({ $0.name.split(separator: "-").last }) { return "bucket 名称（自动加上 -\(appId)）" }
-        return "bucket 名称，包含 -APPID"
+        if let appId = buckets.first.flatMap({ $0.name.split(separator: "-").last }) { return String(localized: "bucket 名称（自动加上 -\(String(appId))）") }
+        return String(localized: "bucket 名称，包含 -APPID")
     }
 
     /// The bucket and region the form currently points at.

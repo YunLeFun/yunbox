@@ -7,6 +7,7 @@ struct YunBoxApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @State private var store: InspectorStore
     @State private var freeze: FreezeStore
+    @State private var updater = UpdaterStore()
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
 
     init() {
@@ -24,6 +25,10 @@ struct YunBoxApp: App {
         }
         .defaultSize(width: 1120, height: 760)
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("检查更新…") { updater.checkForUpdates() }
+                    .disabled(!updater.canCheckForUpdates)
+            }
             CommandGroup(replacing: .newItem) {
                 Button("打开仓库…") { store.choosingRepository = true }.keyboardShortcut("o")
                 Menu("最近的仓库") {
@@ -37,8 +42,9 @@ struct YunBoxApp: App {
             }
             CommandGroup(replacing: .help) {
                 ForEach([DocsPage.quickStart, .macOS, .freeze, .inspect, .ai]) { page in
-                    Link(page == .quickStart ? "云匣使用说明" : page.title, destination: page.url)
+                    Link(page == .quickStart ? String(localized: "云匣使用说明") : page.title, destination: page.url)
                 }
+                Link(DocsPage.changelog.title, destination: DocsPage.changelog.url)
                 Divider()
                 Link("GitHub 仓库", destination: DocsPage.repository)
             }
@@ -49,7 +55,7 @@ struct YunBoxApp: App {
                 Button("复制 JSON 报告") { store.copyJSON() }.keyboardShortcut("c", modifiers: [.command, .shift]).disabled(store.result == nil)
             }
         }
-        Settings { SettingsView() }
+        Settings { SettingsView(updater: updater) }
         Window("禁推时段", id: "freeze") {
             FreezeEditorView(freeze: freeze)
         }

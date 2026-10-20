@@ -54,10 +54,10 @@ public struct InspectionReport: Decodable, Sendable {
 
         public var statusLabel: String {
             switch status {
-            case "added": "新增"
-            case "modified": "修改"
-            case "deleted": "删除"
-            case "transient": "临时"
+            case "added": String(localized: "新增")
+            case "modified": String(localized: "修改")
+            case "deleted": String(localized: "删除")
+            case "transient": String(localized: "临时")
             default: status
             }
         }
@@ -108,7 +108,7 @@ public struct FileRow: Identifiable, Sendable {
     public let kind: FileKind
     public let object: InspectionReport.ContentObject
     public var id: String { "\(kind.rawValue):\(object.oid)" }
-    public var path: String { object.paths.first ?? "路径未知 · \(object.oid.prefix(12))" }
+    public var path: String { object.paths.first ?? String(localized: "路径未知 · \(String(object.oid.prefix(12)))") }
 
     public func matches(_ query: String) -> Bool {
         query.isEmpty || object.oid.localizedCaseInsensitiveContains(query)
@@ -132,7 +132,7 @@ public struct InspectionResult: Sendable {
             throw InspectionFailure.invalidReport
         }
         if envelope.status == "error" {
-            throw InspectionFailure.cli(envelope.error?.message ?? "检查失败，请确认所选目录是已有提交的 Git 仓库。")
+            throw InspectionFailure.cli(envelope.error?.message ?? String(localized: "检查失败，请确认所选目录是已有提交的 Git 仓库。"))
         }
         guard (exitCode == 0 && envelope.status == "ok") || (exitCode == 1 && envelope.status == "exceeded"),
               let report = try? JSONDecoder().decode(InspectionReport.self, from: data) else {
@@ -148,11 +148,11 @@ public enum InspectionFailure: LocalizedError, Sendable {
 
     public var errorDescription: String? {
         switch self {
-        case .invalidReport: "无法读取检查报告。请重新构建 YunBox 客户端，确认 CLI 接口版本兼容。"
-        case .missingNode: "没有找到 Node.js。请在设置中选择 Node.js 可执行文件，然后重试。"
-        case .missingCLI: "应用内缺少检查组件，请使用构建脚本重新安装 YunBox。"
-        case .timedOut: "检查超过 120 秒，已停止。可先 fetch 补齐历史，或在终端用 --base 缩小范围。"
-        case .outputTooLarge: "报告超过 64 MiB，请在终端用 --base 缩小检查范围。"
+        case .invalidReport: String(localized: "无法读取检查报告。请重新构建 YunBox 客户端，确认 CLI 接口版本兼容。")
+        case .missingNode: String(localized: "没有找到 Node.js。请在设置中选择 Node.js 可执行文件，然后重试。")
+        case .missingCLI: String(localized: "应用内缺少检查组件，请使用构建脚本重新安装 YunBox。")
+        case .timedOut: String(localized: "检查超过 120 秒，已停止。可先 fetch 补齐历史，或在终端用 --base 缩小范围。")
+        case .outputTooLarge: String(localized: "报告超过 64 MiB，请在终端用 --base 缩小检查范围。")
         case .cli(let message): message
         }
     }

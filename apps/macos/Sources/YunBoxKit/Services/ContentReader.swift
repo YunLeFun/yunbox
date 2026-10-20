@@ -11,9 +11,9 @@ public enum ContentFailure: LocalizedError, Sendable {
 
     public var errorDescription: String? {
         switch self {
-        case .invalidID: "对象 ID 无效。"
-        case .unavailable: "这个版本不在本地：LFS 旧版本可能尚未下载，或仓库是部分克隆。"
-        case .diffFailed: "无法生成差异。"
+        case .invalidID: String(localized: "对象 ID 无效。")
+        case .unavailable: String(localized: "这个版本不在本地：LFS 旧版本可能尚未下载，或仓库是部分克隆。")
+        case .diffFailed: String(localized: "无法生成差异。")
         }
     }
 }

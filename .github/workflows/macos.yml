@@ -43,4 +43,6 @@ jobs:
           YUNBOX_TEST_NODE="$(node -p 'process.execPath')" \
           YUNBOX_TEST_CLI="$PWD/packages/cli/dist/cli.mjs" \
           swift test --package-path apps/macos
+      # Every interface string must be in the catalog with an English translation.
+      - run: ./script/sync_strings.sh --check
       - run: ./script/build_and_run.sh --build

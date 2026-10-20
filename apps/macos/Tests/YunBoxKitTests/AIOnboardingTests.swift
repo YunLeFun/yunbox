@@ -27,6 +27,10 @@ import Testing
     #expect(DocsPage.quickStart.url.absoluteString == "https://yunlefun.github.io/yunbox/guide/")
     #expect(DocsPage.freezeSyntax.url.path == "/yunbox/guide/freeze")
     #expect(DocsPage.freezeSyntax.url.fragment(percentEncoded: false) == "时段写法")
+    #expect(DocsPage.changelog.url(english: false).absoluteString == "https://yunlefun.github.io/yunbox/changelog")
+    #expect(DocsPage.changelog.url(english: true).absoluteString == "https://yunlefun.github.io/yunbox/en/changelog")
+    // Chinese-only pages stay Chinese in an English interface.
+    #expect(DocsPage.freeze.url(english: true) == DocsPage.freeze.url(english: false))
 }
 
 @Test func everyDocsPageExistsInTheRepository() throws {
@@ -35,9 +39,28 @@ import Testing
         let path = String(page.rawValue.split(separator: "#")[0])
         let file = path.hasSuffix("/") ? "\(path)index.md" : "\(path).md"
         #expect(FileManager.default.fileExists(atPath: docs.appending(path: file).path), "\(file)")
+        if DocsPage.englishPages.contains(page) {
+            #expect(FileManager.default.fileExists(atPath: docs.appending(path: "en/\(file)").path), "en/\(file)")
+        }
         if let anchor = page.url.fragment(percentEncoded: false) {
             let text = try String(contentsOf: docs.appending(path: file), encoding: .utf8)
             #expect(text.contains("## \(anchor)\n"), "\(file)#\(anchor)")
         }
     }
+}
+
+@Test func languageChoiceIsTheAppsOwnAppleLanguages() throws {
+    let domain = "fun.yunle.yunbox.tests.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: domain))
+    defer { defaults.removePersistentDomain(forName: domain) }
+    #expect(AppLanguage.stored(in: defaults, domain: domain) == .system)
+    AppLanguage.store(.english, in: defaults, domain: domain)
+    #expect(defaults.persistentDomain(forName: domain)?["AppleLanguages"] as? [String] == ["en"])
+    #expect(AppLanguage.stored(in: defaults, domain: domain) == .english)
+    // System Settings may store a regional variant.
+    defaults.setPersistentDomain(["AppleLanguages": ["zh-Hans-CN"], "other": 1], forName: domain)
+    #expect(AppLanguage.stored(in: defaults, domain: domain) == .simplifiedChinese)
+    AppLanguage.store(.system, in: defaults, domain: domain)
+    #expect(defaults.persistentDomain(forName: domain)?["AppleLanguages"] == nil)
+    #expect(defaults.persistentDomain(forName: domain)?["other"] as? Int == 1)
 }

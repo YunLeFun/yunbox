@@ -72,13 +72,13 @@ struct ChangeDetailView: View {
     }
 
     private var sizeSummary: String {
-        guard let change else { return "\(byteLabel(row.object.bytes)) · \(row.object.bytes.formatted()) 字节" }
-        let side = { (bytes: Int64?, absent: Bool) in absent ? "无" : bytes.map(byteLabel) ?? "未知" }
+        guard let change else { return String(localized: "\(byteLabel(row.object.bytes)) · \(row.object.bytes.formatted()) 字节") }
+        let side = { (bytes: Int64?, absent: Bool) in absent ? String(localized: "无") : bytes.map(byteLabel) ?? String(localized: "未知") }
         var text = "\(side(change.beforeBytes, change.status == "added" || change.status == "transient")) → \(side(change.afterBytes, change.status == "deleted" || change.status == "transient"))"
         if let before = change.beforeBytes, let after = change.afterBytes, before != after {
             text += "（\(after > before ? "+" : "−")\(byteLabel(abs(after - before)))）"
         }
-        if change.versions > 1 { text += " · 本次上传 \(change.versions) 个版本" }
+        if change.versions > 1 { text += String(localized: " · 本次上传 \(change.versions) 个版本") }
         return text
     }
 
@@ -96,22 +96,22 @@ struct ChangeDetailView: View {
         let modified = change?.status == "modified"
         let beforeOid = modified ? change?.beforeOid : nil
         do {
-            let after = try store.previewFile(oid: row.object.oid, name: ContentReader.fileName(for: path, tag: modified ? "推送后" : nil))
+            let after = try store.previewFile(oid: row.object.oid, name: ContentReader.fileName(for: path, tag: modified ? String(localized: "推送后") : nil))
             try await reader.export(oid: row.object.oid, to: after)
             var before: URL?
             var beforeNote: String?
             if let beforeOid {
-                let file = try store.previewFile(oid: beforeOid, name: ContentReader.fileName(for: path, tag: "推送前"))
+                let file = try store.previewFile(oid: beforeOid, name: ContentReader.fileName(for: path, tag: String(localized: "推送前")))
                 do {
                     try await reader.export(oid: beforeOid, to: file)
                     before = file
                 } catch is CancellationError {
                     return
                 } catch {
-                    beforeNote = "推送前的版本不在本地（LFS 旧版本可能尚未下载），只能显示推送后的版本。"
+                    beforeNote = String(localized: "推送前的版本不在本地（LFS 旧版本可能尚未下载），只能显示推送后的版本。")
                 }
             } else if modified {
-                beforeNote = "推送前的版本不在本地，只能显示推送后的版本。"
+                beforeNote = String(localized: "推送前的版本不在本地，只能显示推送后的版本。")
             }
             let body: LoadedPreview.Body
             switch ContentReader.kind(of: after, path: path) {
@@ -130,7 +130,7 @@ struct ChangeDetailView: View {
             preview = LoadedPreview(before: before, after: after, beforeNote: beforeNote, body: body)
         } catch is CancellationError {
         } catch {
-            failure = (error as? LocalizedError)?.errorDescription ?? "无法读取这个版本。"
+            failure = (error as? LocalizedError)?.errorDescription ?? String(localized: "无法读取这个版本。")
         }
     }
 }
@@ -171,6 +171,14 @@ enum ImageCompareMode: String, CaseIterable, Identifiable {
     case slider = "滑块"
     case toggle = "切换"
     var id: String { rawValue }
+    /// The raw value is stored in preferences; this is what the picker shows.
+    var title: String {
+        switch self {
+        case .sideBySide: String(localized: "并排")
+        case .slider: String(localized: "滑块")
+        case .toggle: String(localized: "切换")
+        }
+    }
 }
 
 /// Before and after side by side, overlaid with a draggable divider, or one at a time.
@@ -187,7 +195,7 @@ private struct ImageComparison: View {
             VStack(spacing: 8) {
                 HStack {
                     Picker("对比方式", selection: $mode) {
-                        ForEach(ImageCompareMode.allCases) { Text($0.rawValue).tag($0) }
+                        ForEach(ImageCompareMode.allCases) { Text($0.title).tag($0) }
                     }.pickerStyle(.segmented).labelsHidden().fixedSize()
                     if mode == .toggle {
                         Picker("版本", selection: $showingBefore) {
@@ -201,20 +209,20 @@ private struct ImageComparison: View {
                 switch mode {
                 case .sideBySide:
                     HStack(spacing: 8) {
-                        ImagePane(image: before, label: "推送前")
-                        ImagePane(image: after, label: "推送后")
+                        ImagePane(image: before, label: String(localized: "推送前"))
+                        ImagePane(image: after, label: String(localized: "推送后"))
                     }
                 case .slider:
                     slider(before: before)
                 case .toggle:
-                    ImagePane(image: showingBefore ? before : after, label: showingBefore ? "推送前" : "推送后")
+                    ImagePane(image: showingBefore ? before : after, label: showingBefore ? String(localized: "推送前") : String(localized: "推送后"))
                         .onTapGesture { showingBefore.toggle() }
                 }
             }
         } else {
             VStack(alignment: .leading, spacing: 6) {
                 if let beforeNote { Label(beforeNote, systemImage: "info.circle").font(.caption).foregroundStyle(.secondary) }
-                ImagePane(image: after, label: "推送后")
+                ImagePane(image: after, label: String(localized: "推送后"))
             }
         }
     }
@@ -231,8 +239,8 @@ private struct ImageComparison: View {
                 Rectangle().fill(.white).frame(width: 2).shadow(radius: 2).position(x: x, y: geometry.size.height / 2)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
-            .overlay(alignment: .topLeading) { Caption(text: "推送前 · \(pixels(before))").padding(6) }
-            .overlay(alignment: .topTrailing) { Caption(text: "推送后 · \(pixels(after))").padding(6) }
+            .overlay(alignment: .topLeading) { Caption(text: "\(String(localized: "推送前")) · \(pixels(before))").padding(6) }
+            .overlay(alignment: .topTrailing) { Caption(text: "\(String(localized: "推送后")) · \(pixels(after))").padding(6) }
             .contentShape(Rectangle())
             .gesture(DragGesture(minimumDistance: 0).onChanged { split = min(max($0.location.x / geometry.size.width, 0), 1) })
             .onHover { inside in if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() } }
@@ -274,6 +282,13 @@ enum TextDiffMode: String, CaseIterable, Identifiable {
     case unified = "统一"
     case split = "分栏"
     var id: String { rawValue }
+    /// The raw value is stored in preferences; this is what the picker shows.
+    var title: String {
+        switch self {
+        case .unified: String(localized: "统一")
+        case .split: String(localized: "分栏")
+        }
+    }
 }
 
 /// `git diff` of the two versions: one column coloured by line type, or before and after side by side.
@@ -292,7 +307,7 @@ private struct DiffView: View {
                 let split = SplitDiff(unified: text)
                 HStack {
                     Picker("差异视图", selection: $mode) {
-                        ForEach(TextDiffMode.allCases) { Text($0.rawValue).tag($0) }
+                        ForEach(TextDiffMode.allCases) { Text($0.title).tag($0) }
                     }.pickerStyle(.segmented).labelsHidden().fixedSize()
                     Spacer()
                     Text("+\(split.added)").foregroundStyle(.green)

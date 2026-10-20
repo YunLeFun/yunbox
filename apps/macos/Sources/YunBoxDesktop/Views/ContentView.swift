@@ -135,7 +135,7 @@ private struct StatusBanner: View {
         }
     }
 
-    private func banner(symbol: String, tint: Color, text: String, @ViewBuilder actions: () -> some View) -> some View {
+    private func banner(symbol: String, tint: Color, text: LocalizedStringKey, @ViewBuilder actions: () -> some View) -> some View {
         HStack(spacing: 10) {
             Image(systemName: symbol).foregroundStyle(tint)
             Text(text).font(.callout).lineLimit(2).textSelection(.enabled)

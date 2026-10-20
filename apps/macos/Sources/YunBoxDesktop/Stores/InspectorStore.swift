@@ -68,7 +68,7 @@ final class InspectorStore {
     @discardableResult func select(_ url: URL) -> Bool {
         var isDirectory: ObjCBool = false
         guard url.isFileURL, FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue else {
-            error = "请选择本机的 Git 仓库文件夹。"
+            error = String(localized: "请选择本机的 Git 仓库文件夹。")
             return false
         }
         var root = url.standardizedFileURL
@@ -167,7 +167,7 @@ final class InspectorStore {
             } catch {
                 guard requestID == id else { return }
                 self.error = (error as? InspectionFailure)?.localizedDescription
-                    ?? "检查程序未能运行。请在设置中确认 Node.js 路径，或重新安装应用。"
+                    ?? String(localized: "检查程序未能运行。请在设置中确认 Node.js 路径，或重新安装应用。")
             }
             if requestID == id { isInspecting = false; task = nil }
         }
@@ -196,7 +196,7 @@ final class InspectorStore {
             } catch is CancellationError {
             } catch {
                 guard cosRequestID == id else { return }
-                cosError = (error as? LocalizedError)?.errorDescription ?? "检查程序未能运行。请在设置中确认 Node.js 路径。"
+                cosError = (error as? LocalizedError)?.errorDescription ?? String(localized: "检查程序未能运行。请在设置中确认 Node.js 路径。")
             }
             if cosRequestID == id { isCheckingCos = false; cosTask = nil }
         }

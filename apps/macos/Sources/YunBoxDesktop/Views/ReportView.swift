@@ -70,13 +70,13 @@ struct ReportView: View {
 }
 
 private struct BudgetCard: View {
-    let title: String
+    let title: LocalizedStringKey
     let symbol: String
     let value: Int64
     let limit: Int64
     let exceeded: Bool
     let display: String
-    let footnote: String
+    let footnote: LocalizedStringKey
 
     var body: some View {
         GroupBox {

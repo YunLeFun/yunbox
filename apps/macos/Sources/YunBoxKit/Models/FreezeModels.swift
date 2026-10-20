@@ -10,12 +10,12 @@ public struct FreezeStatus: Decodable, Sendable, Equatable {
 
         public var label: String {
             switch self {
-            case .shared: "团队 .yunbox/config"
-            case .local: "本仓库"
-            case .worktree: "本 worktree"
-            case .global: "全局（本机所有仓库）"
-            case .system: "系统 Git 配置"
-            case .command: "命令行 -c"
+            case .shared: String(localized: "团队 .yunbox/config")
+            case .local: String(localized: "本仓库")
+            case .worktree: String(localized: "本 worktree")
+            case .global: String(localized: "全局（本机所有仓库）")
+            case .system: String(localized: "系统 Git 配置")
+            case .command: String(localized: "命令行 -c")
             }
         }
 
@@ -61,17 +61,17 @@ public struct FreezeStatus: Decodable, Sendable, Equatable {
 
         /// "至 今天 16:30 自动恢复" or "直到重新开启".
         public func label(now: Date = Date(), calendar: Calendar = .current) -> String {
-            guard let date = untilDate else { return "直到重新开启" }
+            guard let date = untilDate else { return String(localized: "直到重新开启") }
             let time = date.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
             let day: String
             if calendar.isDate(date, inSameDayAs: now) {
-                day = "今天"
+                day = String(localized: "今天")
             } else if let tomorrow = calendar.date(byAdding: .day, value: 1, to: now), calendar.isDate(date, inSameDayAs: tomorrow) {
-                day = "明天"
+                day = String(localized: "明天")
             } else {
-                day = "\(calendar.component(.month, from: date))月\(calendar.component(.day, from: date))日"
+                day = date.formatted(.dateTime.month(.abbreviated).day())
             }
-            return "至 \(day) \(time) 自动恢复"
+            return String(localized: "至 \(day) \(time) 自动恢复")
         }
     }
 
@@ -94,13 +94,20 @@ public struct FreezeStatus: Decodable, Sendable, Equatable {
 
         /// "18:00 后可以推送", "明天 00:00 后可以推送" or "接下来 7 天都不能推送".
         public var opensLabel: String {
-            guard let until else { return "接下来 7 天都不能推送" }
-            let day = until.daysAhead == 0 ? "" : until.daysAhead == 1 ? "明天 " : "\(Self.weekdayLabel(until.weekday)) "
-            return "\(day)\(until.time) 后可以推送"
+            guard let until else { return String(localized: "接下来 7 天都不能推送") }
+            switch until.daysAhead {
+            case 0: return String(localized: "\(until.time) 后可以推送")
+            case 1: return String(localized: "明天 \(until.time) 后可以推送")
+            default: return String(localized: "\(Self.weekdayLabel(until.weekday)) \(until.time) 后可以推送")
+            }
         }
 
         public static func weekdayLabel(_ weekday: String) -> String {
-            let names = ["sun": "周日", "mon": "周一", "tue": "周二", "wed": "周三", "thu": "周四", "fri": "周五", "sat": "周六"]
+            let names = [
+                "sun": String(localized: "周日"), "mon": String(localized: "周一"), "tue": String(localized: "周二"),
+                "wed": String(localized: "周三"), "thu": String(localized: "周四"), "fri": String(localized: "周五"),
+                "sat": String(localized: "周六"),
+            ]
             return names[weekday] ?? weekday
         }
     }
@@ -164,7 +171,7 @@ public struct FreezeStatus: Decodable, Sendable, Equatable {
     public static func decode(_ data: Data, exitCode: Int32) throws -> FreezeStatus {
         guard exitCode == 0 else {
             let text = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
-            throw InspectionFailure.cli(text.isEmpty ? "无法读取禁推时段。" : text.replacingOccurrences(of: "错误：", with: ""))
+            throw InspectionFailure.cli(text.isEmpty ? String(localized: "无法读取禁推时段。") : text.replacingOccurrences(of: "错误：", with: ""))
         }
         guard let status = try? JSONDecoder().decode(FreezeStatus.self, from: data), status.schemaVersion == 1 else {
             throw InspectionFailure.invalidReport
@@ -181,11 +188,11 @@ public struct FreezePauseOption: Sendable, Identifiable, Equatable {
     public var id: String { title }
 
     public static let all: [FreezePauseOption] = [
-        FreezePauseOption(title: "关闭 30 分钟", arguments: ["--for", "30m"]),
-        FreezePauseOption(title: "关闭 1 小时", arguments: ["--for", "1h"]),
-        FreezePauseOption(title: "关闭 2 小时", arguments: ["--for", "2h"]),
-        FreezePauseOption(title: "关闭到今天结束", arguments: ["--until", "24:00"]),
-        FreezePauseOption(title: "一直关闭，直到重新开启", arguments: []),
+        FreezePauseOption(title: String(localized: "关闭 30 分钟"), arguments: ["--for", "30m"]),
+        FreezePauseOption(title: String(localized: "关闭 1 小时"), arguments: ["--for", "1h"]),
+        FreezePauseOption(title: String(localized: "关闭 2 小时"), arguments: ["--for", "2h"]),
+        FreezePauseOption(title: String(localized: "关闭到今天结束"), arguments: ["--until", "24:00"]),
+        FreezePauseOption(title: String(localized: "一直关闭，直到重新开启"), arguments: []),
     ]
 }
 
@@ -197,11 +204,11 @@ public struct FreezePreset: Sendable, Identifiable, Equatable {
     public var id: String { rules }
 
     public static let all: [FreezePreset] = [
-        FreezePreset(title: "工作时间", rules: "Mo-Fr 09:00-18:00"),
-        FreezePreset(title: "工作时间（午休可推送）", rules: "Mo-Fr 09:00-12:00,13:30-18:00"),
-        FreezePreset(title: "工作日全天", rules: "Mo-Fr 00:00-24:00"),
-        FreezePreset(title: "周末", rules: "Sa,Su 00:00-24:00"),
-        FreezePreset(title: "周五晚到周末", rules: "Fr 18:00-24:00; Sa,Su 00:00-24:00"),
-        FreezePreset(title: "夜间", rules: "22:00-08:00"),
+        FreezePreset(title: String(localized: "工作时间"), rules: "Mo-Fr 09:00-18:00"),
+        FreezePreset(title: String(localized: "工作时间（午休可推送）"), rules: "Mo-Fr 09:00-12:00,13:30-18:00"),
+        FreezePreset(title: String(localized: "工作日全天"), rules: "Mo-Fr 00:00-24:00"),
+        FreezePreset(title: String(localized: "周末"), rules: "Sa,Su 00:00-24:00"),
+        FreezePreset(title: String(localized: "周五晚到周末"), rules: "Fr 18:00-24:00; Sa,Su 00:00-24:00"),
+        FreezePreset(title: String(localized: "夜间"), rules: "22:00-08:00"),
     ]
 }

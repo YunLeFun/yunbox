@@ -73,7 +73,7 @@ struct FreezePanel: View {
     @ViewBuilder private var globalRules: some View {
         let windows = freeze.machineWindows
         if windows.isEmpty {
-            InfoRow(symbol: "globe", tint: .gray, title: "没有全局规则", subtitle: "在右上角「＋」选择预设，对本机所有仓库生效")
+            InfoRow(symbol: "globe", tint: .gray, title: String(localized: "没有全局规则"), subtitle: String(localized: "在右上角「＋」选择预设，对本机所有仓库生效"))
         } else {
             ForEach(windows) { window in
                 InfoRow(symbol: "globe", tint: .accentColor, title: window.window,
@@ -84,7 +84,7 @@ struct FreezePanel: View {
 
     @ViewBuilder private var projects: some View {
         if freeze.projectPaths.isEmpty {
-            InfoRow(symbol: "folder", tint: .gray, title: "还没有项目", subtitle: "点「添加项目…」选择 Git 仓库")
+            InfoRow(symbol: "folder", tint: .gray, title: String(localized: "还没有项目"), subtitle: String(localized: "点「添加项目…」选择 Git 仓库"))
         } else {
             ScrollView {
                 VStack(spacing: 0) {
@@ -214,25 +214,25 @@ private struct CurrentStatus: View {
         .padding(.horizontal, 2)
     }
 
-    private var repository: String { freeze.inspector.repository?.lastPathComponent ?? "未选择仓库" }
+    private var repository: String { freeze.inspector.repository?.lastPathComponent ?? String(localized: "未选择仓库") }
 
     private var title: String {
-        guard let check = freeze.status?.check else { return freeze.error == nil ? "正在读取…" : "无法读取禁推时段" }
-        if check.isPaused { return "现在可以推送（禁推已关闭）" }
-        return check.isFrozen ? "禁推中" : "现在可以推送"
+        guard let check = freeze.status?.check else { return freeze.error == nil ? String(localized: "正在读取…") : String(localized: "无法读取禁推时段") }
+        if check.isPaused { return String(localized: "现在可以推送（禁推已关闭）") }
+        return check.isFrozen ? String(localized: "禁推中") : String(localized: "现在可以推送")
     }
 
     private var subtitle: String {
         guard let status = freeze.status else { return freeze.error ?? repository }
         let check = status.check
         if check.isFrozen, let window = check.window, let scope = check.scope {
-            return "\(repository) · \(check.opensLabel)\n\(window)（\(scope.shortLabel)）"
+            return String(localized: "\(repository) · \(check.opensLabel)\n\(window)（\(scope.shortLabel)）")
         }
         if check.isPaused, let window = check.window {
-            return "\(repository) · 本应禁推：\(window)"
+            return String(localized: "\(repository) · 本应禁推：\(window)")
         }
         if let next = nextFreeze(status) { return "\(repository) · \(next)" }
-        return "\(repository) · \(status.windows.isEmpty ? "没有设置禁推时段" : "未来 7 天没有禁推")"
+        return "\(repository) · \(status.windows.isEmpty ? String(localized: "没有设置禁推时段") : String(localized: "未来 7 天没有禁推"))"
     }
 
     /// "今天 18:00 开始禁推" from the first frozen stretch after now.
@@ -242,8 +242,8 @@ private struct CurrentStatus: View {
         let minute = (now.hour ?? 0) * 60 + (now.minute ?? 0)
         for (offset, day) in week.enumerated() {
             guard let span = day.spans.first(where: { offset > 0 || $0.startMinute > minute }) else { continue }
-            let label = offset == 0 ? "今天" : offset == 1 ? "明天" : day.label
-            return "\(label) \(span.start) 开始禁推"
+            let label = offset == 0 ? String(localized: "今天") : offset == 1 ? String(localized: "明天") : day.label
+            return String(localized: "\(label) \(span.start) 开始禁推")
         }
         return nil
     }
@@ -269,9 +269,9 @@ private struct WeekOverview: View {
         VStack(spacing: 5) {
             ForEach(Array(days.enumerated()), id: \.element.id) { offset, day in
                 HStack(spacing: 8) {
-                    Text(offset == 0 ? "今天" : day.label)
+                    Text(offset == 0 ? String(localized: "今天") : day.label)
                         .font(.system(size: 11, weight: offset == 0 ? .semibold : .regular))
-                        .frame(width: 28, alignment: .leading)
+                        .frame(width: 36, alignment: .leading)
                     DayTimeline(day: day, showsNow: offset == 0, height: 6)
                     Text(hours(day.frozenMinutes))
                         .font(.system(size: 10).monospacedDigit()).foregroundStyle(.secondary)
@@ -279,7 +279,7 @@ private struct WeekOverview: View {
                 }
             }
             HStack(spacing: 8) {
-                Color.clear.frame(width: 28, height: 1)
+                Color.clear.frame(width: 36, height: 1)
                 HourLabels()
                 Color.clear.frame(width: 54, height: 1)
             }
@@ -289,8 +289,8 @@ private struct WeekOverview: View {
 
     private func hours(_ minutes: Int) -> String {
         if minutes == 0 { return "—" }
-        if minutes % 60 == 0 { return "\(minutes / 60) 小时" }
-        return String(format: "%.1f 小时", Double(minutes) / 60)
+        if minutes % 60 == 0 { return String(localized: "\(minutes / 60) 小时") }
+        return String(localized: "\((Double(minutes) / 60).formatted(.number.precision(.fractionLength(1)))) 小时")
     }
 }
 
@@ -322,7 +322,9 @@ private struct DayTimeline: View {
         }
         .frame(height: height + 6)
         .accessibilityElement()
-        .accessibilityLabel(day.spans.isEmpty ? "\(day.label)没有禁推" : "\(day.label)禁推 " + day.spans.map { "\($0.start) 到 \($0.end)" }.joined(separator: "、"))
+        .accessibilityLabel(day.spans.isEmpty
+            ? String(localized: "\(day.label)没有禁推")
+            : String(localized: "\(day.label)禁推 \(day.spans.map { String(localized: "\($0.start) 到 \($0.end)") }.formatted(.list(type: .and)))"))
     }
 
     private var currentMinute: Int {
@@ -393,13 +395,13 @@ private struct ProjectRow<Presets: View>: View {
 
     private var subtitle: String {
         if let error = freeze.errors[path], status == nil { return error }
-        guard let status else { return "正在读取…" }
+        guard let status else { return String(localized: "正在读取…") }
         let rules = status.projectWindows.map(\.window).joined(separator: "；")
-        if status.check.isFrozen { return "禁推中 · \(status.check.opensLabel)" }
-        if let pause = status.check.pause { return "已关闭（\(pause.scope.shortLabel)）· \(pause.label())" }
-        if rules.isEmpty { return status.machineWindows.isEmpty ? "未设置规则" : "只有全局规则" }
+        if status.check.isFrozen { return String(localized: "禁推中 · \(status.check.opensLabel)") }
+        if let pause = status.check.pause { return String(localized: "已关闭（\(pause.scope.shortLabel)）· \(pause.label())") }
+        if rules.isEmpty { return status.machineWindows.isEmpty ? String(localized: "未设置规则") : String(localized: "只有全局规则") }
         guard status.isUnenforced else { return rules }
-        return "\(rules) · \(status.hook == .guard ? "包装层不检查时段" : "未安装包装层")"
+        return "\(rules) · \(status.hook == .guard ? String(localized: "包装层不检查时段") : String(localized: "未安装包装层"))"
     }
 
     @ViewBuilder private var details: some View {
@@ -408,7 +410,7 @@ private struct ProjectRow<Presets: View>: View {
                 let windows = status?.windows(in: scope) ?? []
                 HStack(alignment: .firstTextBaseline) {
                     Text(scope.shortLabel).font(.system(size: 11)).foregroundStyle(.secondary).frame(width: 40, alignment: .leading)
-                    Text(windows.isEmpty ? "未设置" : windows.map(\.window).joined(separator: "\n"))
+                    Text(windows.isEmpty ? String(localized: "未设置") : windows.map(\.window).joined(separator: "\n"))
                         .font(.system(size: 11).monospaced())
                         .foregroundStyle(windows.isEmpty ? .tertiary : .primary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -454,7 +456,7 @@ private struct PauseMenu: View {
     let scope: FreezeStatus.Scope
     let path: String
     var symbol: String?
-    var title: String?
+    var title: LocalizedStringKey?
 
     var body: some View {
         Menu {
@@ -501,7 +503,7 @@ private struct HoverRow<Content: View>: View {
 }
 
 private struct MenuRow: View {
-    let title: String
+    let title: LocalizedStringKey
     let symbol: String
     let action: () -> Void
 
@@ -511,7 +513,7 @@ private struct MenuRow: View {
 }
 
 private struct MenuRowLabel: View {
-    let title: String
+    let title: LocalizedStringKey
     let symbol: String
 
     var body: some View {
@@ -558,11 +560,11 @@ private struct IconCircle: View {
 }
 
 private struct SectionTitle<Accessory: View>: View {
-    let title: String
-    let detail: String?
+    let title: LocalizedStringKey
+    let detail: LocalizedStringKey?
     let accessory: Accessory
 
-    init(_ title: String, detail: String? = nil, @ViewBuilder accessory: () -> Accessory = { EmptyView() }) {
+    init(_ title: LocalizedStringKey, detail: LocalizedStringKey? = nil, @ViewBuilder accessory: () -> Accessory = { EmptyView() }) {
         self.title = title
         self.detail = detail
         self.accessory = accessory()
@@ -611,7 +613,7 @@ struct FreezeEditorView: View {
                         Text(check.isFrozen ? "禁推中 · \(check.opensLabel)" : "可以推送")
                             .foregroundStyle(check.isFrozen ? .red : .secondary)
                     } else {
-                        Text(freeze.errors[path] ?? "正在读取…").foregroundStyle(.secondary)
+                        Text(freeze.errors[path] ?? String(localized: "正在读取…")).foregroundStyle(.secondary)
                     }
                 }
             }
@@ -686,9 +688,9 @@ struct FreezeEditorView: View {
 
     private var scopeHint: String {
         switch scope {
-        case .shared: "写进这个项目的 .yunbox/config，提交后对整个团队生效；每份 clone 仍需安装 pre-push 包装层。"
-        case .global: "写进 ~/.gitconfig，对这台电脑上的所有仓库生效。"
-        default: "写进这个项目的 .git/config，只影响这份 clone。"
+        case .shared: String(localized: "写进这个项目的 .yunbox/config，提交后对整个团队生效；每份 clone 仍需安装 pre-push 包装层。")
+        case .global: String(localized: "写进 ~/.gitconfig，对这台电脑上的所有仓库生效。")
+        default: String(localized: "写进这个项目的 .git/config，只影响这份 clone。")
         }
     }
 
@@ -726,9 +728,9 @@ extension FreezeStatus.Scope {
     /// Short names for menus and pickers.
     var shortLabel: String {
         switch self {
-        case .local: "本仓库"
-        case .shared: "团队"
-        case .global: "全局"
+        case .local: String(localized: "本仓库")
+        case .shared: String(localized: "团队")
+        case .global: String(localized: "全局")
         default: label
         }
     }

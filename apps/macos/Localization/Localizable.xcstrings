@@ -1,0 +1,3272 @@
+{
+  "sourceLanguage" : "zh-Hans",
+  "strings" : {
+    " · 本次上传 %lld 个版本" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : " · %lld version in this push"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : " · %lld versions in this push"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%@ %@ 后可以推送" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pushing opens %1$@ at %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@ 后可以推送"
+          }
+        }
+      }
+    },
+    "%@ %@ 开始禁推" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Freeze starts %1$@ at %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ %2$@ 开始禁推"
+          }
+        }
+      }
+    },
+    "%@ · %@\n%@（%@）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$@\n%3$@ (%4$@)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@\n%3$@（%4$@）"
+          }
+        }
+      }
+    },
+    "%@ · %@ 字节" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$@ bytes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · %2$@ 字节"
+          }
+        }
+      }
+    },
+    "%@ · 本应禁推：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · Would be frozen: %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ · 本应禁推：%2$@"
+          }
+        }
+      }
+    },
+    "%@ — %@" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ — %2$@"
+          }
+        }
+      },
+      "shouldTranslate" : false
+    },
+    "%@ 到 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ to %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@ 到 %2$@"
+          }
+        }
+      }
+    },
+    "%@ 后可以推送" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pushing opens at %@"
+          }
+        }
+      }
+    },
+    "%@ 小时" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ h"
+          }
+        }
+      }
+    },
+    "%@　%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@  %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@　%2$@"
+          }
+        }
+      }
+    },
+    "%@。可以直接填写 bucket 名称和地域。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@. You can type the bucket name and region instead."
+          }
+        }
+      }
+    },
+    "%@没有禁推" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@: no freeze"
+          }
+        }
+      }
+    },
+    "%@禁推 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@: frozen %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@禁推 %2$@"
+          }
+        }
+      }
+    },
+    "%@预设" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ presets"
+          }
+        }
+      }
+    },
+    "%@（%@）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ (%2$@)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@（%2$@）"
+          }
+        }
+      }
+    },
+    "%lld" : {
+      "shouldTranslate" : false
+    },
+    "%lld / %lld 个对象 · 按大小降序" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld of %2$lld objects · largest first"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld / %2$lld 个对象 · 按大小降序"
+          }
+        }
+      }
+    },
+    "%lld / %lld 个对象 · 按大小降序 · 选中文件查看推送前后的变化" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$lld of %2$lld objects · largest first · select a file to compare it before and after the push"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld / %2$lld 个对象 · 按大小降序 · 选中文件查看推送前后的变化"
+          }
+        }
+      }
+    },
+    "%lld 个素材对象" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld asset object"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld asset objects"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld 字节" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld byte"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld bytes"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld 小时" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld h"
+          }
+        }
+      }
+    },
+    "+%lld" : {
+      "shouldTranslate" : false
+    },
+    "AI 接入说明" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI setup guide"
+          }
+        }
+      }
+    },
+    "Bucket" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bucket"
+          }
+        }
+      }
+    },
+    "COS 会按存储量和下载流量计费。新建的 bucket 一律私有读写。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "COS bills for storage and download traffic. New buckets are always private."
+          }
+        }
+      }
+    },
+    "COS 状态未知" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "COS status unknown"
+          }
+        }
+      }
+    },
+    "COS 直连" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Direct COS"
+          }
+        }
+      }
+    },
+    "COS 直连状态，点击查看检查结果和接入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Direct COS status. Click to see the checks and set it up."
+          }
+        }
+      }
+    },
+    "Git" : {
+      "shouldTranslate" : false
+    },
+    "Git pack" : {
+      "shouldTranslate" : false
+    },
+    "GitHub 仓库" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GitHub Repository"
+          }
+        }
+      }
+    },
+    "LFS" : {
+      "shouldTranslate" : false
+    },
+    "LFS 候选" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LFS candidates"
+          }
+        }
+      }
+    },
+    "LFS 候选总量" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "LFS candidates in total"
+          }
+        }
+      }
+    },
+    "LFS 尚未查询远端，实际上传量未知；远端已有对象可能跳过。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The LFS remote has not been queried, so the actual upload size is unknown; objects already on the remote may be skipped."
+          }
+        }
+      }
+    },
+    "Mo-Fr 09:00-18:00" : {
+      "shouldTranslate" : false
+    },
+    "Node.js 运行环境" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Node.js runtime"
+          }
+        }
+      }
+    },
+    "SecretId" : {
+      "shouldTranslate" : false
+    },
+    "SecretKey" : {
+      "shouldTranslate" : false
+    },
+    "YunBox" : {
+      "shouldTranslate" : false
+    },
+    "YunBox 服务端 · 正常" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YunBox server · OK"
+          }
+        }
+      }
+    },
+    "YunBox 服务端 · 需要处理" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YunBox server · Needs attention"
+          }
+        }
+      }
+    },
+    "ai.onboardingPrompt" : {
+      "comment" : "Pasted into an AI coding assistant; keep the commands and placeholders exactly.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Please connect this Git repository to YunBox (Git LFS assets go straight to my own Tencent Cloud COS, no server needed) and install the push check.\n\nRepository: %1$@\nCurrent state: %2$@\n%3$@\n\nWork through these steps in order, reading each JSON result before deciding the next step:\n1. In the repository, run `%4$@ doctor --json` to see where things stand; for options you are unsure about, see `%5$@ init --help`.\n2. If the report is missing COS keys (the failed check titled \"COS 密钥\"): stop and ask me to run `%6$@ login` in a terminal myself, or to save them in the YunBox app's Direct COS panel. Do not ask me for the SecretId / SecretKey, and never put keys in command-line arguments, files or the repository.\n3. Run `%7$@ buckets --json` to list the available buckets, and confirm with me which bucket and folder prefix to use (default yunbox/<owner>/<repo>); ask me before creating a new bucket.\n4. Run `%8$@ init --bucket <name-APPID> --region <region> --prefix <prefix> --yes` (add --create for a new bucket).\n5. Run `%9$@ doctor --json` again and make sure nothing fails; if something does, apply its fixes or tell me.\n6. Run `%10$@ hook install` so pre-push checks sizes and push freezes before uploading.\n7. Ask me whether I want push freeze windows; if so, use `%11$@ freeze set \"Mo-Fr 09:00-18:00\"` (add --shared to share it with the team), then confirm with `%12$@ freeze check --json`. See `%13$@ freeze --help` for the syntax.\n8. Show me the changes to .gitattributes and .yunbox/config and let me decide whether to commit them; do not git push, and do not change existing commits."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "请帮我把这个 Git 仓库接入云匣 YunBox（Git LFS 素材直传我自己的腾讯云 COS，不需要服务端），并安装推送检查。\n\n仓库：%1$@\n当前状态：%2$@\n%3$@\n\n按顺序做，每一步先读 JSON 结果再决定下一步：\n1. 在仓库目录运行 `%4$@ doctor --json` 查看现状；不清楚的选项看 `%5$@ init --help`。\n2. 如果报告缺少 COS 密钥（标题为「COS 密钥」的失败项）：停下来，请我自己在终端运行 `%6$@ login`，或在云匣客户端的「COS 直连」面板里保存。不要向我索要 SecretId / SecretKey，也不要把密钥写进命令行参数、文件或仓库。\n3. 运行 `%7$@ buckets --json` 列出可用的 bucket，和我确认用哪个 bucket 和目录前缀（默认 yunbox/<owner>/<repo>）；需要新建 bucket 时先问我。\n4. 运行 `%8$@ init --bucket <名称-APPID> --region <地域> --prefix <前缀> --yes`（新建 bucket 再加 --create）。\n5. 再运行 `%9$@ doctor --json`，确认没有失败项；有失败项时按其中的 fixes 处理或告诉我。\n6. 运行 `%10$@ hook install`，让 pre-push 在上传前检查体积和禁推时段。\n7. 问我是否需要禁推时段；需要时用 `%11$@ freeze set \"Mo-Fr 09:00-18:00\"`（团队共享加 --shared），再用 `%12$@ freeze check --json` 核对。写法见 `%13$@ freeze --help`。\n8. 把 .gitattributes、.yunbox/config 的改动给我看，由我决定是否提交；不要 git push，也不要改动已有提交。"
+          }
+        }
+      }
+    },
+    "bucket 名称（自动加上 -%@）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bucket name (-%@ is added)"
+          }
+        }
+      }
+    },
+    "bucket 名称，包含 -APPID" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bucket name, including -APPID"
+          }
+        }
+      }
+    },
+    "macOS 客户端" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS App"
+          }
+        }
+      }
+    },
+    "opening_hours 写法，每行一组规则，例如 Mo-Fr 09:00-12:00,14:00-18:00; We off。各行同时生效；同一行里后面的规则覆盖前面同一天的设置。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "opening_hours syntax, one set of rules per line, e.g. Mo-Fr 09:00-12:00,14:00-18:00; We off. All lines apply together; within a line, later rules replace earlier ones for the same day."
+          }
+        }
+      }
+    },
+    "·" : {
+      "shouldTranslate" : false
+    },
+    "—" : {
+      "shouldTranslate" : false
+    },
+    "−%lld" : {
+      "shouldTranslate" : false
+    },
+    "⌘%lld" : {
+      "shouldTranslate" : false
+    },
+    "一直关闭，直到重新开启" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off until switched back on"
+          }
+        }
+      }
+    },
+    "下面命令里的 YB 请替换为云匣客户端自带的 CLI：%@；终端里已经有 yunbox 命令时，也可以直接用 yunbox / git yunbox。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In the commands below, replace YB with the CLI bundled with the YunBox app: %@. If the yunbox command is available in the terminal, yunbox / git yunbox works too."
+          }
+        }
+      }
+    },
+    "不针对项目（只设置全局）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No project (global rules only)"
+          }
+        }
+      }
+    },
+    "两个版本的内容相同。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Both versions have the same content."
+          }
+        }
+      }
+    },
+    "临时" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transient"
+          }
+        }
+      }
+    },
+    "为客户端单独设置预算" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use separate budgets in this app"
+          }
+        }
+      }
+    },
+    "也可以在「系统设置 → 通用 → 语言与地区 → 应用程序」中为云匣单独设置。命令行输出的说明暂时只有中文。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You can also set this in System Settings → General → Language & Region → Applications. Messages from the command-line tool are in Chinese for now."
+          }
+        }
+      }
+    },
+    "云匣" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YunBox"
+          }
+        }
+      }
+    },
+    "云匣 YunBox" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YunBox"
+          }
+        }
+      }
+    },
+    "云匣使用说明" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YunBox Help"
+          }
+        }
+      }
+    },
+    "云匣：处于禁推时段" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YunBox: push freeze in effect"
+          }
+        }
+      }
+    },
+    "仅超限" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Over budget only"
+          }
+        }
+      }
+    },
+    "今天" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "today"
+          }
+        }
+      }
+    },
+    "从最近列表移除" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove from Recents"
+          }
+        }
+      }
+    },
+    "使用 YunBox 服务端（lfs.url）；改成直连 COS 需要 git yunbox init --force，先和我确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "uses the YunBox server (lfs.url); switching to direct COS needs git yunbox init --force, so check with me first"
+          }
+        }
+      }
+    },
+    "使用本机时区" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use This Mac's Time Zone"
+          }
+        }
+      }
+    },
+    "使用说明" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Help"
+          }
+        }
+      }
+    },
+    "例如：工作时间禁止推送，请在 18:00 后推送" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. No pushes during working hours, please push after 18:00"
+          }
+        }
+      }
+    },
+    "保存" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save"
+          }
+        }
+      }
+    },
+    "保存到" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save to"
+          }
+        }
+      }
+    },
+    "保存腾讯云密钥" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save Tencent Cloud Keys"
+          }
+        }
+      }
+    },
+    "修改" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Modified"
+          }
+        }
+      }
+    },
+    "全局" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Global"
+          }
+        }
+      }
+    },
+    "全局规则" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Global Rules"
+          }
+        }
+      }
+    },
+    "全局（本机所有仓库）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Global (every repository on this Mac)"
+          }
+        }
+      }
+    },
+    "全部" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All"
+          }
+        }
+      }
+    },
+    "关闭" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off"
+          }
+        }
+      }
+    },
+    "关闭 1 小时" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off for 1 hour"
+          }
+        }
+      }
+    },
+    "关闭 2 小时" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off for 2 hours"
+          }
+        }
+      }
+    },
+    "关闭 30 分钟" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off for 30 minutes"
+          }
+        }
+      }
+    },
+    "关闭到今天结束" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off until the end of today"
+          }
+        }
+      }
+    },
+    "关闭本机所有仓库的禁推时段" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switch off push freezes for every repository on this Mac"
+          }
+        }
+      }
+    },
+    "关闭本机所有仓库的禁推时段（规则保留）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switch off push freezes for every repository on this Mac (rules are kept)"
+          }
+        }
+      }
+    },
+    "关闭这个项目的禁推时段" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switch off push freezes for this project"
+          }
+        }
+      }
+    },
+    "写进 ~/.gitconfig，对这台电脑上的所有仓库生效。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Written to ~/.gitconfig; applies to every repository on this Mac."
+          }
+        }
+      }
+    },
+    "写进这个项目的 .git/config，只影响这份 clone。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Written to this project's .git/config; affects only this clone."
+          }
+        }
+      }
+    },
+    "写进这个项目的 .yunbox/config，提交后对整个团队生效；每份 clone 仍需安装 pre-push 包装层。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Written to this project's .yunbox/config; once committed it applies to the whole team. Each clone still needs the pre-push hook."
+          }
+        }
+      }
+    },
+    "分栏" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Split"
+          }
+        }
+      }
+    },
+    "切换" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toggle"
+          }
+        }
+      }
+    },
+    "切换主窗口和菜单栏图标到这个项目" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show this project in the main window and the menu bar icon"
+          }
+        }
+      }
+    },
+    "删除" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Deleted"
+          }
+        }
+      }
+    },
+    "刷新全部项目" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh All Projects"
+          }
+        }
+      }
+    },
+    "包装层不检查时段" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "hook skips freeze windows"
+          }
+        }
+      }
+    },
+    "包装层使用 --guard，不检查禁推时段" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The pre-push hook uses --guard and does not check push freezes"
+          }
+        }
+      }
+    },
+    "单个文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Single file"
+          }
+        }
+      }
+    },
+    "单文件预算 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Per-file budget %@"
+          }
+        }
+      }
+    },
+    "压缩后的预计上传量" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estimated upload after compression"
+          }
+        }
+      }
+    },
+    "原始大小" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Original Size"
+          }
+        }
+      }
+    },
+    "取消" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
+          }
+        }
+      }
+    },
+    "取消检查" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel Check"
+          }
+        }
+      }
+    },
+    "变更" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change"
+          }
+        }
+      }
+    },
+    "只有全局规则" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Global rules only"
+          }
+        }
+      }
+    },
+    "可以推送" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pushing allowed"
+          }
+        }
+      }
+    },
+    "可执行文件路径（留空自动查找）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Executable path (leave empty to find it automatically)"
+          }
+        }
+      }
+    },
+    "各自电脑的时区" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Each Mac's own time zone"
+          }
+        }
+      }
+    },
+    "周一" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Mon"
+          }
+        }
+      }
+    },
+    "周三" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Wed"
+          }
+        }
+      }
+    },
+    "周二" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tue"
+          }
+        }
+      }
+    },
+    "周五" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fri"
+          }
+        }
+      }
+    },
+    "周五晚到周末" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Friday evening and weekends"
+          }
+        }
+      }
+    },
+    "周六" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sat"
+          }
+        }
+      }
+    },
+    "周四" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Thu"
+          }
+        }
+      }
+    },
+    "周日" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sun"
+          }
+        }
+      }
+    },
+    "周末" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weekends"
+          }
+        }
+      }
+    },
+    "命令未能运行。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The command could not run."
+          }
+        }
+      }
+    },
+    "命令行 -c" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Command line -c"
+          }
+        }
+      }
+    },
+    "团队" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Team"
+          }
+        }
+      }
+    },
+    "团队 .yunbox/config" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Team .yunbox/config"
+          }
+        }
+      }
+    },
+    "图标显示当前仓库现在能否推送，点开可以查看和快捷设置禁推时段（yunbox freeze）。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The icon shows whether the current repository can push right now; click it to view and quickly set push freezes (yunbox freeze)."
+          }
+        }
+      }
+    },
+    "在 Finder 中显示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show in Finder"
+          }
+        }
+      }
+    },
+    "在右上角「＋」选择预设，对本机所有仓库生效" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pick a preset with + at the top right; it applies to every repository on this Mac"
+          }
+        }
+      }
+    },
+    "在菜单栏显示禁推状态" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show push freeze status in the menu bar"
+          }
+        }
+      }
+    },
+    "地域，例如 ap-guangzhou" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Region, e.g. ap-guangzhou"
+          }
+        }
+      }
+    },
+    "复制 JSON" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy JSON"
+          }
+        }
+      }
+    },
+    "复制 JSON 报告" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy JSON Report"
+          }
+        }
+      }
+    },
+    "复制一段提示词，粘贴给 Claude Code、Codex 等编程助手，由它按步骤接入；密钥仍由你自己保存" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy a prompt to paste into a coding assistant such as Claude Code or Codex, which then sets things up step by step; you still save the keys yourself"
+          }
+        }
+      }
+    },
+    "复制给 AI 的接入说明" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy Setup Prompt for AI"
+          }
+        }
+      }
+    },
+    "复制路径" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy Path"
+          }
+        }
+      }
+    },
+    "多个项目可以共用一个 bucket，各用一个前缀。对象保存在 <前缀>/<oid 前两位>/…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Several projects can share a bucket, each with its own prefix. Objects are stored under <prefix>/<first two characters of the oid>/…"
+          }
+        }
+      }
+    },
+    "夜间" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Overnight"
+          }
+        }
+      }
+    },
+    "如果终端里没有 yunbox 命令，可以先 npm install -g yunbox（需要 Node.js 22.18+）。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "If the yunbox command is not available in the terminal, run npm install -g yunbox first (needs Node.js 22.18+)."
+          }
+        }
+      }
+    },
+    "安装" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install"
+          }
+        }
+      }
+    },
+    "安装包装层" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Install Hook"
+          }
+        }
+      }
+    },
+    "完成" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done"
+          }
+        }
+      }
+    },
+    "定时关闭本机所有仓库的禁推时段" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switch off push freezes for every repository on this Mac for a while"
+          }
+        }
+      }
+    },
+    "密钥只保存在这台电脑上（钥匙串），仓库里只记录 bucket、地域和前缀。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keys stay on this Mac (in the keychain); the repository records only the bucket, region and prefix."
+          }
+        }
+      }
+    },
+    "对比方式" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comparison"
+          }
+        }
+      }
+    },
+    "对象 ID 无效。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invalid object ID."
+          }
+        }
+      }
+    },
+    "工作日全天" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All day on weekdays"
+          }
+        }
+      }
+    },
+    "工作时间" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Working hours"
+          }
+        }
+      }
+    },
+    "工作时间（午休可推送）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Working hours (pushes allowed at lunch)"
+          }
+        }
+      }
+    },
+    "差异视图" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diff View"
+          }
+        }
+      }
+    },
+    "差异过长，只显示前 %lld 行；可用「快速查看」打开完整文件。" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "The diff is too long; showing only the first line. Open the full file with Quick Look."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "The diff is too long; showing only the first %lld lines. Open the full files with Quick Look."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "已为 %@ 安装 pre-push 包装层，禁推时段现在会拦截推送（yunbox hook uninstall 可撤销）。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installed the pre-push hook for %@; push freezes now block pushes (undo with yunbox hook uninstall)."
+          }
+        }
+      }
+    },
+    "已关闭（%@）· %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off (%1$@) · %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "已关闭（%1$@）· %2$@"
+          }
+        }
+      }
+    },
+    "已复制" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copied"
+          }
+        }
+      }
+    },
+    "已复制 JSON" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "JSON Copied"
+          }
+        }
+      }
+    },
+    "已完成" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done"
+          }
+        }
+      }
+    },
+    "已提交内容 · 同内容去重，历史版本分别统计 · 文件原始大小不等于压缩上传量" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Committed content · identical content counted once, each historical version counted · original file size is not the compressed upload size"
+          }
+        }
+      }
+    },
+    "已直连 COS（%@），检查全部通过；只需确认推送检查和禁推时段" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "connected directly to COS (%@) and every check passes; only the push check and push freezes need confirming"
+          }
+        }
+      }
+    },
+    "已直连 COS（%@），需要处理：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "connected directly to COS (%1$@); needs attention: %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "已直连 COS（%1$@），需要处理：%2$@"
+          }
+        }
+      }
+    },
+    "并排" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Side by Side"
+          }
+        }
+      }
+    },
+    "应用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apply"
+          }
+        }
+      }
+    },
+    "应用内缺少检查组件，请使用构建脚本重新安装 YunBox。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The app is missing its inspection component. Reinstall YunBox with the build script."
+          }
+        }
+      }
+    },
+    "应用内置 YunBox 检查组件，使用本机 Node.js 运行。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The app bundles the YunBox inspection component and runs it with this Mac's Node.js."
+          }
+        }
+      }
+    },
+    "开发版本" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "development build"
+          }
+        }
+      }
+    },
+    "当前" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current"
+          }
+        }
+      }
+    },
+    "当前版本 %@。更新包经过签名校验，安装时会重新打开应用。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version %@. Updates are verified by their signature, and the app reopens to install them."
+          }
+        }
+      }
+    },
+    "当前版本 %@。这份构建没有配置更新源，不会自动更新。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version %@. This build has no update feed and does not update itself."
+          }
+        }
+      }
+    },
+    "当前版本 %@，上次检查于 %@。更新包经过签名校验，安装时会重新打开应用。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version %1$@, last checked %2$@. Updates are verified by their signature, and the app reopens to install them."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "当前版本 %1$@，上次检查于 %2$@。更新包经过签名校验，安装时会重新打开应用。"
+          }
+        }
+      }
+    },
+    "当前：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current: %@"
+          }
+        }
+      }
+    },
+    "快速关闭" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quick off"
+          }
+        }
+      }
+    },
+    "快速开始" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quick Start"
+          }
+        }
+      }
+    },
+    "快速查看" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quick Look"
+          }
+        }
+      }
+    },
+    "恢复" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resume"
+          }
+        }
+      }
+    },
+    "恢复本机所有仓库的禁推时段" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resume push freezes for every repository on this Mac"
+          }
+        }
+      }
+    },
+    "恢复自动查找" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find Automatically"
+          }
+        }
+      }
+    },
+    "打开云匣" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open YunBox"
+          }
+        }
+      }
+    },
+    "打开仓库…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Repository…"
+          }
+        }
+      }
+    },
+    "打开设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Settings"
+          }
+        }
+      }
+    },
+    "找不到这个仓库，可能已移动或删除。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This repository cannot be found; it may have been moved or deleted."
+          }
+        }
+      }
+    },
+    "报告超过 64 MiB，请在终端用 --base 缩小检查范围。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The report is larger than 64 MiB. Narrow the range with --base in the terminal."
+          }
+        }
+      }
+    },
+    "拖动分隔线对比" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drag the divider to compare"
+          }
+        }
+      }
+    },
+    "拦截时显示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shown When a Push Is Blocked"
+          }
+        }
+      }
+    },
+    "接下来 7 天都不能推送" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No pushes for the next 7 days"
+          }
+        }
+      }
+    },
+    "接入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect"
+          }
+        }
+      }
+    },
+    "接入说明" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Setup guide"
+          }
+        }
+      }
+    },
+    "接入：把素材直传到 COS" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect: Upload Assets Straight to COS"
+          }
+        }
+      }
+    },
+    "推送体积检查" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push Size Check"
+          }
+        }
+      }
+    },
+    "推送前" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Before"
+          }
+        }
+      }
+    },
+    "推送前的版本不在本地（LFS 旧版本可能尚未下载），只能显示推送后的版本。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The version before the push is not on this Mac (older LFS versions may not be downloaded), so only the pushed version is shown."
+          }
+        }
+      }
+    },
+    "推送前的版本不在本地，只能显示推送后的版本。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The version before the push is not on this Mac, so only the pushed version is shown."
+          }
+        }
+      }
+    },
+    "推送后" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "After"
+          }
+        }
+      }
+    },
+    "推送时段" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push Freeze"
+          }
+        }
+      }
+    },
+    "推送检查" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push Check"
+          }
+        }
+      }
+    },
+    "插入预设" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Insert Preset"
+          }
+        }
+      }
+    },
+    "搜索路径或对象 ID" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search paths or object IDs"
+          }
+        }
+      }
+    },
+    "支持字节或 k / m / g，均按 1024 进制。更改将在下次检查生效。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bytes, or k / m / g in units of 1024. Changes apply from the next check."
+          }
+        }
+      }
+    },
+    "文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File"
+          }
+        }
+      }
+    },
+    "文件明细" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Files"
+          }
+        }
+      }
+    },
+    "文件类型" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File Type"
+          }
+        }
+      }
+    },
+    "新增" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Added"
+          }
+        }
+      }
+    },
+    "新建并接入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create and Connect"
+          }
+        }
+      }
+    },
+    "新建私有 bucket %@？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create the private bucket %@?"
+          }
+        }
+      }
+    },
+    "新建私有 bucket…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Private Bucket…"
+          }
+        }
+      }
+    },
+    "无" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "none"
+          }
+        }
+      }
+    },
+    "无法生成差异。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not create the diff."
+          }
+        }
+      }
+    },
+    "无法读取检查报告。请重新构建 YunBox 客户端，确认 CLI 接口版本兼容。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not read the inspection report. Rebuild the YunBox app so its CLI interface version matches."
+          }
+        }
+      }
+    },
+    "无法读取禁推时段" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not read push freezes"
+          }
+        }
+      }
+    },
+    "无法读取禁推时段。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not read push freezes."
+          }
+        }
+      }
+    },
+    "无法读取这个版本。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not read this version."
+          }
+        }
+      }
+    },
+    "时区" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Time Zone"
+          }
+        }
+      }
+    },
+    "时段写法" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Window syntax"
+          }
+        }
+      }
+    },
+    "明天" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "tomorrow"
+          }
+        }
+      }
+    },
+    "明天 %@ 后可以推送" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pushing opens tomorrow at %@"
+          }
+        }
+      }
+    },
+    "暂时关闭" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Switch Off"
+          }
+        }
+      }
+    },
+    "更新日志" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Changelog"
+          }
+        }
+      }
+    },
+    "最近的仓库" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recent Repositories"
+          }
+        }
+      }
+    },
+    "未安装包装层" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no pre-push hook"
+          }
+        }
+      }
+    },
+    "未完成（退出码 %d）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not finished (exit code %d)"
+          }
+        }
+      }
+    },
+    "未找到可用的 Node.js。请选择已安装的 node 可执行文件。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No usable Node.js found. Choose an installed node executable."
+          }
+        }
+      }
+    },
+    "未接入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "not connected"
+          }
+        }
+      }
+    },
+    "未接入 COS" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not connected to COS"
+          }
+        }
+      }
+    },
+    "未接入；另外需要处理：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "not connected; also needs attention: %@"
+          }
+        }
+      }
+    },
+    "未来 7 天" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next 7 Days"
+          }
+        }
+      }
+    },
+    "未来 7 天没有禁推" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No freeze in the next 7 days"
+          }
+        }
+      }
+    },
+    "未知" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "unknown"
+          }
+        }
+      }
+    },
+    "未设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not set"
+          }
+        }
+      }
+    },
+    "未设置规则" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No rules"
+          }
+        }
+      }
+    },
+    "未选择仓库" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No repository selected"
+          }
+        }
+      }
+    },
+    "本 worktree" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This worktree"
+          }
+        }
+      }
+    },
+    "本仓库" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This repository"
+          }
+        }
+      }
+    },
+    "本机所有仓库" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Every repository on this Mac"
+          }
+        }
+      }
+    },
+    "本次范围没有新增文件内容对象" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No new file content in this range"
+          }
+        }
+      }
+    },
+    "查看时段写法和常见场景" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syntax and common cases"
+          }
+        }
+      }
+    },
+    "查看更新日志" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View Changelog"
+          }
+        }
+      }
+    },
+    "检查" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inspect"
+          }
+        }
+      }
+    },
+    "检查于 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checked %@"
+          }
+        }
+      }
+    },
+    "检查失败，请确认所选目录是已有提交的 Git 仓库。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The check failed. Make sure the folder is a Git repository with at least one commit."
+          }
+        }
+      }
+    },
+    "检查当前仓库" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inspect Current Repository"
+          }
+        }
+      }
+    },
+    "检查推送体积" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Inspect Push Size"
+          }
+        }
+      }
+    },
+    "检查更新…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check for Updates…"
+          }
+        }
+      }
+    },
+    "检查未完成" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check Not Finished"
+          }
+        }
+      }
+    },
+    "检查程序未能运行。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The inspection could not run."
+          }
+        }
+      }
+    },
+    "检查程序未能运行。请在设置中确认 Node.js 路径。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The inspection could not run. Check the Node.js path in Settings."
+          }
+        }
+      }
+    },
+    "检查程序未能运行。请在设置中确认 Node.js 路径，或重新安装应用。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The inspection could not run. Check the Node.js path in Settings, or reinstall the app."
+          }
+        }
+      }
+    },
+    "检查超过 120 秒，已停止。可先 fetch 补齐历史，或在终端用 --base 缩小范围。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The check took longer than 120 seconds and was stopped. Fetch the missing history first, or narrow the range with --base in the terminal."
+          }
+        }
+      }
+    },
+    "检查预算" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Budgets"
+          }
+        }
+      }
+    },
+    "正在分析已提交的历史…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Analyzing committed history…"
+          }
+        }
+      }
+    },
+    "正在检查 COS…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking COS…"
+          }
+        }
+      }
+    },
+    "正在读取 bucket…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading buckets…"
+          }
+        }
+      }
+    },
+    "正在读取…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loading…"
+          }
+        }
+      }
+    },
+    "正在重新检查…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking again…"
+          }
+        }
+      }
+    },
+    "正在重新检查，先显示上次的结果。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking again; showing the previous result meanwhile."
+          }
+        }
+      }
+    },
+    "每个项目单独设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set per project"
+          }
+        }
+      }
+    },
+    "没有全局规则" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No global rules"
+          }
+        }
+      }
+    },
+    "没有匹配的文件" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No matching files"
+          }
+        }
+      }
+    },
+    "没有安装 pre-push 包装层，推送不会被拦截" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The pre-push hook is not installed, so pushes are not blocked"
+          }
+        }
+      }
+    },
+    "没有找到 Node.js。请在设置中选择 Node.js 可执行文件，然后重试。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Node.js was not found. Choose the Node.js executable in Settings, then try again."
+          }
+        }
+      }
+    },
+    "没有设置禁推时段" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No push freeze set"
+          }
+        }
+      }
+    },
+    "添加" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add"
+          }
+        }
+      }
+    },
+    "添加项目…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Project…"
+          }
+        }
+      }
+    },
+    "清除%@规则" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear Rules (%@)"
+          }
+        }
+      }
+    },
+    "清除最近列表" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear Recents"
+          }
+        }
+      }
+    },
+    "滑块" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slider"
+          }
+        }
+      }
+    },
+    "点「添加项目…」选择 Git 仓库" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Click Add Project… to choose a Git repository"
+          }
+        }
+      }
+    },
+    "版本" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version"
+          }
+        }
+      }
+    },
+    "现在" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Now"
+          }
+        }
+      }
+    },
+    "现在可以推送" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You can push now"
+          }
+        }
+      }
+    },
+    "现在可以推送（禁推已关闭）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You can push now (freeze switched off)"
+          }
+        }
+      }
+    },
+    "用 AI 编程助手接入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set Up with an AI Coding Assistant"
+          }
+        }
+      }
+    },
+    "用「快速查看」打开推送前后两个版本，左右方向键切换" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open both versions in Quick Look; switch with the left and right arrow keys"
+          }
+        }
+      }
+    },
+    "用「快速查看」打开推送的版本" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open the pushed version in Quick Look"
+          }
+        }
+      }
+    },
+    "用管理员分配给你的子账号密钥（yunbox policy 可以生成它需要的最小权限策略）。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use the sub-account keys your administrator gave you (yunbox policy prints the minimal policy they need)."
+          }
+        }
+      }
+    },
+    "界面语言" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Interface Language"
+          }
+        }
+      }
+    },
+    "目录前缀" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Folder prefix"
+          }
+        }
+      }
+    },
+    "直到重新开启" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Until switched back on"
+          }
+        }
+      }
+    },
+    "直连 COS · 正常" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Direct COS · OK"
+          }
+        }
+      }
+    },
+    "直连 COS · 需要处理" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Direct COS · Needs attention"
+          }
+        }
+      }
+    },
+    "禁推中" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push freeze in effect"
+          }
+        }
+      }
+    },
+    "禁推中 · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Frozen · %@"
+          }
+        }
+      }
+    },
+    "禁推时段" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push Freeze"
+          }
+        }
+      }
+    },
+    "立即检查" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check Now"
+          }
+        }
+      }
+    },
+    "立即重新打开" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reopen Now"
+          }
+        }
+      }
+    },
+    "类型" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type"
+          }
+        }
+      }
+    },
+    "系统 Git 配置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "System Git config"
+          }
+        }
+      }
+    },
+    "统一" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unified"
+          }
+        }
+      }
+    },
+    "编辑…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit…"
+          }
+        }
+      }
+    },
+    "编辑禁推时段…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit Push Freeze…"
+          }
+        }
+      }
+    },
+    "自动下载并安装更新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatically download and install updates"
+          }
+        }
+      }
+    },
+    "自动检查更新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatically check for updates"
+          }
+        }
+      }
+    },
+    "至 %@ %@ 自动恢复" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back on %1$@ at %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "至 %1$@ %2$@ 自动恢复"
+          }
+        }
+      }
+    },
+    "菜单栏" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Menu Bar"
+          }
+        }
+      }
+    },
+    "规则" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rules"
+          }
+        }
+      }
+    },
+    "设为当前" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Make Current"
+          }
+        }
+      }
+    },
+    "设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings"
+          }
+        }
+      }
+    },
+    "设置…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings…"
+          }
+        }
+      }
+    },
+    "语言" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Language"
+          }
+        }
+      }
+    },
+    "说明" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Message"
+          }
+        }
+      }
+    },
+    "请选择本机的 Git 仓库文件夹。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a Git repository folder on this Mac."
+          }
+        }
+      }
+    },
+    "超过预算" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Over budget"
+          }
+        }
+      }
+    },
+    "超限" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Over"
+          }
+        }
+      }
+    },
+    "跟随系统" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "System Default"
+          }
+        }
+      }
+    },
+    "路径未知 · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unknown path · %@"
+          }
+        }
+      }
+    },
+    "软件更新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Software Update"
+          }
+        }
+      }
+    },
+    "运行 yunbox hook install，让 pre-push 拦截禁推时段" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Run yunbox hook install so pre-push enforces push freezes"
+          }
+        }
+      }
+    },
+    "还原" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Revert"
+          }
+        }
+      }
+    },
+    "还没有检查，请先运行 doctor" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "not checked yet; run doctor first"
+          }
+        }
+      }
+    },
+    "还没有项目" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No projects yet"
+          }
+        }
+      }
+    },
+    "这个仓库使用 YunBox 服务端（lfs.url）。要改成直连 COS，请在终端运行 git yunbox init --force。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This repository uses the YunBox server (lfs.url). To switch to direct COS, run git yunbox init --force in the terminal."
+          }
+        }
+      }
+    },
+    "这个版本不在本地：LFS 旧版本可能尚未下载，或仓库是部分克隆。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This version is not on this Mac: older LFS versions may not be downloaded, or the repository is a partial clone."
+          }
+        }
+      }
+    },
+    "这是上次检查的结果，仓库可能已有新的提交。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is the previous result; the repository may have new commits."
+          }
+        }
+      }
+    },
+    "这种文件没有内嵌预览，可以用「快速查看」打开。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No inline preview for this kind of file. Open it with Quick Look."
+          }
+        }
+      }
+    },
+    "退出云匣" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quit YunBox"
+          }
+        }
+      }
+    },
+    "选择 Git 仓库，查看 Git 与 LFS 用量、超限文件和完整报告。\n也可以把仓库文件夹拖到窗口中。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a Git repository to see Git and LFS usage, files over budget and the full report.\nYou can also drag a repository folder into the window."
+          }
+        }
+      }
+    },
+    "选择 Node.js…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose Node.js…"
+          }
+        }
+      }
+    },
+    "选择仓库" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose Repository"
+          }
+        }
+      }
+    },
+    "选择仓库…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose Repository…"
+          }
+        }
+      }
+    },
+    "选择要设置禁推时段的 Git 仓库" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a Git repository to set push freezes for"
+          }
+        }
+      }
+    },
+    "遵循仓库和全局的 YunBox Git 配置；未配置时使用 900 KiB / 100 MiB / 10 MiB。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Follows the repository's and global YunBox Git config; without it, 900 KiB / 100 MiB / 10 MiB."
+          }
+        }
+      }
+    },
+    "重新打开云匣后生效。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Takes effect after YunBox reopens."
+          }
+        }
+      }
+    },
+    "重新检查" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check Again"
+          }
+        }
+      }
+    },
+    "重新检查未完成，显示的是上次的结果：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The new check did not finish; showing the previous result: %@"
+          }
+        }
+      }
+    },
+    "重试" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry"
+          }
+        }
+      }
+    },
+    "项目" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Projects"
+          }
+        }
+      }
+    },
+    "预算" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Budget"
+          }
+        }
+      }
+    },
+    "预算 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Budget %@"
+          }
+        }
+      }
+    },
+    "预算内" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Within budget"
+          }
+        }
+      }
+    },
+    "预算设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Budget Settings"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

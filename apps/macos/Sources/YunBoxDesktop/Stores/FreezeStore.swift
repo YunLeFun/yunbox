@@ -69,7 +69,7 @@ final class FreezeStore {
         do {
             client = try inspector.client()
         } catch {
-            for path in paths { errors[path] = (error as? LocalizedError)?.errorDescription ?? "检查程序未能运行。" }
+            for path in paths { errors[path] = (error as? LocalizedError)?.errorDescription ?? String(localized: "检查程序未能运行。") }
             return
         }
         isLoading = true
@@ -80,7 +80,7 @@ final class FreezeStore {
                 for path in chunk {
                     group.addTask {
                         guard FileManager.default.fileExists(atPath: path) else {
-                            return (path, .failure(InspectionFailure.cli("找不到这个仓库，可能已移动或删除。")))
+                            return (path, .failure(InspectionFailure.cli(String(localized: "找不到这个仓库，可能已移动或删除。"))))
                         }
                         do {
                             return (path, .success(try await client.freezeStatus(directory: URL(fileURLWithPath: path))))
@@ -99,7 +99,7 @@ final class FreezeStore {
                     statuses[path] = status
                     errors[path] = nil
                 case .failure(let error):
-                    errors[path] = (error as? LocalizedError)?.errorDescription ?? "无法读取禁推时段。"
+                    errors[path] = (error as? LocalizedError)?.errorDescription ?? String(localized: "无法读取禁推时段。")
                 }
             }
         }
@@ -125,7 +125,7 @@ final class FreezeStore {
         }
         guard applied, scope != .global, statuses[path]?.hook == FreezeStatus.Hook.none else { return applied }
         if await run(path: path, scope: .local, { client, directory in try await client.installHook(repository: directory) }) {
-            feedback = "已为 \(URL(fileURLWithPath: path).lastPathComponent) 安装 pre-push 包装层，禁推时段现在会拦截推送（yunbox hook uninstall 可撤销）。"
+            feedback = String(localized: "已为 \(URL(fileURLWithPath: path).lastPathComponent) 安装 pre-push 包装层，禁推时段现在会拦截推送（yunbox hook uninstall 可撤销）。")
         }
         return applied
     }
@@ -137,8 +137,8 @@ final class FreezeStore {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.prompt = "添加"
-        panel.message = "选择要设置禁推时段的 Git 仓库"
+        panel.prompt = String(localized: "添加")
+        panel.message = String(localized: "选择要设置禁推时段的 Git 仓库")
         guard panel.runModal() == .OK, let url = panel.url, inspector.select(url) else { return }
         Task { await refresh(paths: [currentPath]) }
     }
@@ -174,7 +174,7 @@ final class FreezeStore {
             succeeded = output.succeeded
             if !succeeded { feedback = output.text.replacingOccurrences(of: "错误：", with: "").trimmingCharacters(in: .whitespacesAndNewlines) }
         } catch {
-            feedback = (error as? LocalizedError)?.errorDescription ?? "命令未能运行。"
+            feedback = (error as? LocalizedError)?.errorDescription ?? String(localized: "命令未能运行。")
         }
         // Global windows show up in every repository.
         if scope == .global { await refresh(all: true) } else { await refresh(paths: [path]) }

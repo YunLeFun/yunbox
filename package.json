@@ -21,7 +21,7 @@
     "icons:check": "node script/sync-app-icon.mjs --check",
     "icons:sync": "node script/sync-app-icon.mjs",
     "lint": "eslint --cache .",
-    "release": "bumpp packages/cli/package.json",
+    "release": "node script/changelog.mjs check --unreleased && bumpp",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && pnpm --filter @yunbox/docs typecheck"

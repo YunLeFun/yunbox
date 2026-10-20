@@ -59,7 +59,7 @@ export default defineConfig({
       { text: '指南', link: '/guide/', activeMatch: '/guide/' },
       { text: '推送检查', link: '/inspect' },
       { text: '下载', link: '/#download' },
-      { text: '更新记录', link: `${REPOSITORY}/releases` },
+      { text: '更新日志', link: '/changelog' },
     ],
     sidebar: [
       {
@@ -77,6 +77,7 @@ export default defineConfig({
         items: [
           { text: '推送体积检查', link: '/inspect' },
           { text: '服务端模式部署', link: '/deploy' },
+          { text: '更新日志', link: '/changelog' },
         ],
       },
     ],

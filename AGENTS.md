@@ -24,6 +24,11 @@
 
 见 [docs/goal-g2.md](./docs/goal-g2.md)。G1 的代码部分已完成，见 [docs/goal.md](./docs/goal.md)；G1 中需要真实云资源的部分是 G2 的阶段 0。两个目标的范围都取代下面 M1 一节的限制；M1 一节的代码约定（ESM、`catalog:`、tsdown、JSDoc、日志脱敏等）继续有效。
 
+## 日常约定
+
+- 用户能感知的改动（新功能、行为变化、修复），在 [`docs/changelog.md`](./docs/changelog.md) 和 [`docs/en/changelog.md`](./docs/en/changelog.md) 的「未发布 / Unreleased」下各写一条，按「新增 / 变更 / 修复」（Added / Changed / Fixed）分组，写给用户看，不写实现细节。两份要列出同样的版本，`pnpm test` 会检查；`pnpm release` 会把它们标上版本号。
+- 改了 macOS 客户端的界面文字，运行 `./script/sync_strings.sh` 并在 `apps/macos/Localization/Localizable.xcstrings` 补上英文；传给 `String` 的文字写成 `String(localized: "…")`。
+
 ## 已完成：M1 协议验证版（2026-10-15）
 
 只做 `docs/plan.md` 第 6 节 M1 的范围，第 7 节「第一版暂缓」中的内容一律不做。

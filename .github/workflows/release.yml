@@ -38,6 +38,13 @@ jobs:
           version=$(node -p "require('./packages/cli/package.json').version")
           test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME does not match packages/cli version $version"; exit 1; }
 
+      # The GitHub release and the app's update prompt quote this version's notes.
+      - name: The changelog must describe this version
+        run: |
+          version=$(node -p "require('./packages/cli/package.json').version")
+          node script/changelog.mjs notes "$version" zh >/dev/null
+          node script/changelog.mjs notes "$version" en >/dev/null
+
       - name: Install git-lfs
         run: |
           sudo apt-get update
@@ -65,12 +72,16 @@ jobs:
 
   # The release itself is created here, after npm publishing succeeded, so a
   # tag whose checks fail never gets a downloadable app. The app is ad-hoc
-  # signed, not notarized; the site tells users how to open it.
+  # signed, not notarized; the site tells users how to open it. Installed
+  # clients update themselves through Sparkle from the appcast.xml attached
+  # here; it and the zip are signed with the SPARKLE_ED_PRIVATE_KEY secret,
+  # whose public half is SUPublicEDKey in script/build_and_run.sh.
   macos-app:
     name: Attach the macOS client to the GitHub release
     needs: publish
     runs-on: macos-latest
     timeout-minutes: 30
+    environment: sparkle
     permissions:
       contents: write # create the release and upload the zip
     steps:
@@ -91,12 +102,28 @@ jobs:
           ./script/build_and_run.sh --build
           lipo -archs dist/YunBox.app/Contents/MacOS/YunBox
 
-      # The docs site links to releases/latest/download/YunBox-macOS.zip.
-      - name: Upload to the GitHub release
+      # A draft until both files are attached: releases/latest must never point
+      # at a release without appcast.xml, or every client's check fails.
+      - name: Create the draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          ditto -c -k --keepParent dist/YunBox.app dist/YunBox-macOS.zip
+          node script/changelog.mjs github "${GITHUB_REF_NAME#v}" > "$RUNNER_TEMP/release-notes.md"
           gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
-            || gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes --title "$GITHUB_REF_NAME"
-          gh release upload "$GITHUB_REF_NAME" dist/YunBox-macOS.zip --clobber
+            || gh release create "$GITHUB_REF_NAME" --draft --verify-tag --notes-file "$RUNNER_TEMP/release-notes.md" --title "$GITHUB_REF_NAME"
+
+      - name: Sign the update and generate the appcast
+        env:
+          SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+        run: |
+          test -n "$SPARKLE_ED_PRIVATE_KEY" || { echo "::error::SPARKLE_ED_PRIVATE_KEY is not set; see apps/macos/README.md"; exit 1; }
+          ./script/sparkle_appcast.sh dist/YunBox.app "$GITHUB_REF_NAME" dist/sparkle
+
+      # The docs site links to releases/latest/download/YunBox-macOS.zip and
+      # the app reads releases/latest/download/appcast.xml.
+      - name: Upload to the GitHub release and publish it
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$GITHUB_REF_NAME" dist/sparkle/YunBox-macOS.zip dist/sparkle/appcast.xml --clobber
+          gh release edit "$GITHUB_REF_NAME" --draft=false --latest

@@ -12,6 +12,8 @@
 ```bash
 xattr -dr com.apple.quarantine /Applications/YunBox.app
 ```
+
+只有第一次需要这样做：之后的版本由客户端自动更新，不会再提示。
 :::
 
 也可以从源码构建，需要 Xcode 或包含 Swift 6 的开发工具：
@@ -20,6 +22,16 @@ xattr -dr com.apple.quarantine /Applications/YunBox.app
 pnpm install
 ./script/build_and_run.sh --install   # 安装到 ~/Applications/YunBox.app 并打开
 ```
+
+## 自动更新
+
+客户端内置自动更新（[Sparkle](https://sparkle-project.org)）：每天在后台检查一次，有新版本时显示更新说明，点「安装更新」后自动下载、替换并重新打开。也可以从「云匣 YunBox → 检查更新…」随时检查，或在「设置 → 软件更新」里关闭自动检查、改为自动下载并安装。
+
+更新包和更新说明都经过签名，客户端只安装签名与内置公钥一致的版本。0.1.4 及更早的版本还没有这个功能，需要[手动下载](/#download)一次。每个版本改了什么见[更新日志](../changelog)，「帮助」菜单和「设置 → 软件更新」里也能打开。
+
+## 界面语言
+
+客户端有简体中文和英文界面，默认跟随系统。在「设置 → 语言」里可以单独选择，重新打开后生效；也可以在「系统设置 → 通用 → 语言与地区 → 应用程序」里设置，两处是同一个设置。更新提示里的说明也按界面语言显示。命令行输出的说明（例如 `yunbox doctor` 的检查项）目前只有中文，官网文档除更新日志外也只有中文。
 
 ## 能做什么
 

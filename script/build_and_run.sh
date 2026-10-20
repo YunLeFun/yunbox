@@ -18,10 +18,28 @@ read -r -a SWIFT_ARGS <<< "${YUNBOX_SWIFT_BUILD_ARGS:-}"
 swift build --package-path apps/macos ${SWIFT_ARGS[@]+"${SWIFT_ARGS[@]}"}
 BUILD_DIR="$(swift build --package-path apps/macos ${SWIFT_ARGS[@]+"${SWIFT_ARGS[@]}"} --show-bin-path)"
 APP_VERSION="$(node -p 'require("./packages/cli/package.json").version')"
+# Sparkle checks this feed and only installs archives signed with the private
+# half of SUPublicEDKey (kept in the maintainer's keychain and the release
+# workflow's SPARKLE_ED_PRIVATE_KEY secret). Releases attach appcast.xml.
+SPARKLE_FEED_URL="https://github.com/YunLeFun/yunbox/releases/latest/download/appcast.xml"
+SPARKLE_PUBLIC_KEY="25QU3ICmhEYXH+kznYXnMC/AJQGtm+IYmbExHwDB3DY="
 rm -rf "$APP_BUNDLE"
-mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources/cli"
+mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources/cli" "$APP_BUNDLE/Contents/Frameworks"
 cp "$BUILD_DIR/YunBox" "$APP_BUNDLE/Contents/MacOS/YunBox"
+# The build directory's rpaths do not exist on users' Macs; the binary finds
+# Sparkle through @executable_path/../Frameworks (Package.swift).
+otool -l "$APP_BUNDLE/Contents/MacOS/YunBox" | awk '/cmd LC_RPATH/ { getline; getline; print $2 }' | while read -r RPATH; do
+  case "$RPATH" in "$ROOT_DIR"/*) install_name_tool -delete_rpath "$RPATH" "$APP_BUNDLE/Contents/MacOS/YunBox" 2>&1 | { grep -v 'invalidate the code signature' || true; } >&2 ;; esac
+done
+# ditto keeps the framework's symlinks and the signatures on its helpers.
+ditto "$BUILD_DIR/Sparkle.framework" "$APP_BUNDLE/Contents/Frameworks/Sparkle.framework"
 cp -R packages/cli/dist/. "$APP_BUNDLE/Contents/Resources/cli/"
+# Interface strings: Simplified Chinese is the source language written in the
+# code, English comes from the catalog (script/sync_strings.sh keeps it current).
+xcrun xcstringstool compile apps/macos/Localization/Localizable.xcstrings --output-directory "$APP_BUNDLE/Contents/Resources"
+mkdir -p "$APP_BUNDLE/Contents/Resources/zh-Hans.lproj" "$APP_BUNDLE/Contents/Resources/en.lproj"
+printf '"CFBundleDisplayName" = "云匣 YunBox";\n' > "$APP_BUNDLE/Contents/Resources/zh-Hans.lproj/InfoPlist.strings"
+printf '"CFBundleDisplayName" = "YunBox";\n' > "$APP_BUNDLE/Contents/Resources/en.lproj/InfoPlist.strings"
 node -e 'require("node:fs").writeFileSync(process.argv[1], JSON.stringify({node: process.execPath}))' "$APP_BUNDLE/Contents/Resources/runtime.json"
 swift script/create_app_icon.swift assets/brand/yunbox-app-icon.svg "$ROOT_DIR/dist/AppIcon.iconset"
 iconutil -c icns "$ROOT_DIR/dist/AppIcon.iconset" -o "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
@@ -54,14 +72,19 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<PLIST
   <key>CFBundleDisplayName</key><string>云匣 YunBox</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$APP_VERSION</string>
-  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleVersion</key><string>$APP_VERSION</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   $ICON_NAME_KEY
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSHighResolutionCapable</key><true/>
-  <key>CFBundleDevelopmentRegion</key><string>zh_CN</string>
-  <key>CFBundleLocalizations</key><array><string>zh_CN</string><string>en</string></array>
+  <key>CFBundleDevelopmentRegion</key><string>zh-Hans</string>
+  <key>CFBundleLocalizations</key><array><string>zh-Hans</string><string>en</string></array>
+  <key>SUFeedURL</key><string>$SPARKLE_FEED_URL</string>
+  <key>SUPublicEDKey</key><string>$SPARKLE_PUBLIC_KEY</string>
+  <key>SUEnableAutomaticChecks</key><true/>
+  <key>SUVerifyUpdateBeforeExtraction</key><true/>
+  <key>SURequireSignedFeed</key><true/>
   <key>CFBundleDocumentTypes</key><array><dict>
     <key>CFBundleTypeName</key><string>Git repository</string>
     <key>CFBundleTypeRole</key><string>Viewer</string>
@@ -70,8 +93,12 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<PLIST
   </dict></array>
 </dict></plist>
 PLIST
+# Ad-hoc signed, like the Sparkle.framework SwiftPM ships. Every build has a
+# different ad-hoc identity, so Sparkle trusts an update through its EdDSA
+# signature and only requires the new app's own signature to be intact, which
+# --deep checks here.
 codesign --force --sign - "$APP_BUNDLE"
-codesign --verify --strict "$APP_BUNDLE"
+codesign --verify --deep --strict "$APP_BUNDLE"
 
 if [ "$MODE" = --install ]; then
   DESTINATION="$HOME/Applications/YunBox.app"
