@@ -51,11 +51,35 @@ Codex 的 Run 按钮也调用此脚本。`--logs` / `--telemetry` 打开应用�
 
 应用图标源自 `assets/brand`，是 [YunLeFun/icons](https://github.com/YunLeFun/icons) 中 `assets/apps/yunbox/v1` 的固定副本，以 `manifest.json` 的 SHA-256 校验。Xcode 26+ 下，脚本用 `actool` 把分层的 `YunBox.icon` 编译进 `Assets.car` 并写入 `CFBundleIconName`，macOS 26 据此显示默认、深色、Clear 与着色外观；同时由 `yunbox-app-icon.svg` 渲染 `AppIcon.icns` 作为旧系统兜底。更新图标时先改中心仓库，再运行 `pnpm icons:sync --source /path/to/icons`；`pnpm icons:check` 只校验本地副本。
 
-当前是 ad-hoc 签名构建，尚未完成 Developer ID 签名和公证。发布版本时，`Release` 工作流用 `YUNBOX_SWIFT_BUILD_ARGS="-c release --arch arm64 --arch x86_64"` 构建通用二进制，打包成 `YunBox-macOS.zip`，连同签名的 `appcast.xml` 附在 GitHub release 上（先建草稿，两个文件都上传后才发布），官网的下载按钮指向 zip，客户端从 appcast 自动更新；第一次打开需要在「系统设置 → 隐私与安全性」里放行。`Info.plist` 的版本号（`CFBundleShortVersionString` 和 Sparkle 比较用的 `CFBundleVersion`）取自 `packages/cli/package.json`。`dist/`、Swift 构建缓存及本机运行路径均不提交。
+本地构建默认是 ad-hoc 签名。发布版本时，`Release` 工作流用 `YUNBOX_SWIFT_BUILD_ARGS="-c release --arch arm64 --arch x86_64"` 构建通用二进制，用 Developer ID 签名并公证（见下面「签名和公证」），打包成 `YunBox-macOS.zip`，连同签名的 `appcast.xml` 附在 GitHub release 上（先建草稿，两个文件都上传后才发布），官网的下载按钮指向 zip，客户端从 appcast 自动更新。`Info.plist` 的版本号（`CFBundleShortVersionString` 和 Sparkle 比较用的 `CFBundleVersion`）取自 `packages/cli/package.json`。`dist/`、Swift 构建缓存及本机运行路径均不提交。
+
+### 签名和公证
+
+设置了 `YUNBOX_CODESIGN_IDENTITY`（「Developer ID Application」证书的名称）时，`build_and_run.sh` 按 Sparkle 文档的顺序由内到外重新签名：`Installer.xpc`、`Downloader.xpc`（按 Sparkle 文档保留它的 entitlements；这个服务只给沙盒应用用，SwiftPM 版本里目前是空的）、`Autoupdate`、`Updater.app`、`Sparkle.framework`，最后是应用本身，全部打开 Hardened Runtime 并带安全时间戳。应用不需要额外的 entitlements。然后 `script/notarize.sh` 提交公证，等待结果，把公证票据钉进应用（staple），用 `spctl` 确认 Gatekeeper 放行。公证必须在 `sparkle_appcast.sh` 之前：Sparkle 签名的 zip 里要装已经 staple 的应用。
+
+在本机签名并公证一次：
+
+```bash
+xcrun notarytool store-credentials yunbox-notary --apple-id <Apple ID> --team-id QT792GAY4C   # 只需一次，密码是 App 专用密码，存进钥匙串
+YUNBOX_CODESIGN_IDENTITY="Developer ID Application: Lan Yang (QT792GAY4C)" ./script/build_and_run.sh --build
+./script/notarize.sh dist/YunBox.app
+```
+
+发布工作流需要在仓库的 `sparkle` environment 里配置这些 secret，缺任何一个都会让发布失败，不会退回 ad-hoc 签名：
+
+| secret | 内容 |
+|---|---|
+| `DEVELOPER_ID_P12_BASE64` | 「Developer ID Application」证书连同私钥导出的 `.p12`，base64 编码 |
+| `DEVELOPER_ID_P12_PASSWORD` | 导出 `.p12` 时设的密码 |
+| `APPLE_API_KEY_ID` | App Store Connect 团队 API 密钥的密钥 ID |
+| `APPLE_API_ISSUER_ID` | 同一页面上的 Issuer ID |
+| `APPLE_API_KEY` | 下载的 `AuthKey_<密钥 ID>.p8` 文件内容 |
+
+证书在「钥匙串访问 → 我的证书」里选中「Developer ID Application」，右键导出为 `.p12`，然后 `base64 -i developer-id.p12 | gh secret set DEVELOPER_ID_P12_BASE64 --env sparkle`。API 密钥在 App Store Connect 的「用户和访问 → 集成 → 团队密钥」里创建，角色选「Developer」；`.p8` 只能下载一次，用 `gh secret set APPLE_API_KEY --env sparkle < AuthKey_<密钥 ID>.p8` 保存。导出的 `.p12` 和 `.p8` 用完从磁盘上删掉。工作流把证书导入一个临时钥匙串，任务结束时删除。
 
 ### 自动更新的签名
 
-ad-hoc 签名每次构建都不同，Sparkle 只靠 EdDSA 判断更新是否可信：`Info.plist` 里有 `SUPublicEDKey`、`SUVerifyUpdateBeforeExtraction`（解压前验签）和 `SURequireSignedFeed`（appcast 和更新说明也要签名）。发布时 `script/sparkle_appcast.sh` 打包 `YunBox-macOS.zip`，用 `generate_appcast` 生成并签名 `appcast.xml`（内嵌 release 说明），再用应用里的公钥核对 zip 的签名。
+本地的 ad-hoc 签名每次构建都不同，发布版的 Developer ID 签名也和 0.1.4 及以前的 ad-hoc 版本不同，Sparkle 只靠 EdDSA 判断更新是否可信：`Info.plist` 里有 `SUPublicEDKey`、`SUVerifyUpdateBeforeExtraction`（解压前验签）和 `SURequireSignedFeed`（appcast 和更新说明也要签名）。发布时 `script/sparkle_appcast.sh` 打包 `YunBox-macOS.zip`，用 `generate_appcast` 生成并签名 `appcast.xml`（内嵌 release 说明），再用应用里的公钥核对 zip 的签名。
 
 私钥保存在维护者的登录钥匙串（account `fun.yunle.yunbox`）和仓库 `sparkle` environment 的 secret `SPARKLE_ED_PRIVATE_KEY` 里，**不能丢**：丢失后已安装的客户端无法再自动更新。第一次配置或换一台机器时：
 

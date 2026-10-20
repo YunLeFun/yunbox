@@ -93,11 +93,28 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<PLIST
   </dict></array>
 </dict></plist>
 PLIST
-# Ad-hoc signed, like the Sparkle.framework SwiftPM ships. Every build has a
-# different ad-hoc identity, so Sparkle trusts an update through its EdDSA
-# signature and only requires the new app's own signature to be intact, which
-# --deep checks here.
-codesign --force --sign - "$APP_BUNDLE"
+# Releases set YUNBOX_CODESIGN_IDENTITY to the "Developer ID Application"
+# certificate, so the app can be notarized (script/notarize.sh): every Mach-O
+# is re-signed inside out with the hardened runtime and a secure timestamp,
+# Sparkle's helpers first, as Sparkle's documentation describes. The app needs
+# no entitlements. Without it the app is ad-hoc signed for local builds, like
+# the Sparkle.framework SwiftPM ships. Either way Sparkle trusts an update
+# through its EdDSA signature and only requires the new app's own signature
+# to be intact, which --deep checks here.
+if [ -n "${YUNBOX_CODESIGN_IDENTITY:-}" ]; then
+  SPARKLE_DIR="$APP_BUNDLE/Contents/Frameworks/Sparkle.framework/Versions/B"
+  sign() { codesign --force --timestamp --options runtime --sign "$YUNBOX_CODESIGN_IDENTITY" "$@"; }
+  sign "$SPARKLE_DIR/XPCServices/Installer.xpc"
+  # As Sparkle's documentation says; only sandboxed apps use this service, and
+  # the SwiftPM build of it carries no entitlements today.
+  sign --preserve-metadata=entitlements "$SPARKLE_DIR/XPCServices/Downloader.xpc"
+  sign "$SPARKLE_DIR/Autoupdate"
+  sign "$SPARKLE_DIR/Updater.app"
+  sign "$APP_BUNDLE/Contents/Frameworks/Sparkle.framework"
+  sign "$APP_BUNDLE"
+else
+  codesign --force --sign - "$APP_BUNDLE"
+fi
 codesign --verify --deep --strict "$APP_BUNDLE"
 
 if [ "$MODE" = --install ]; then

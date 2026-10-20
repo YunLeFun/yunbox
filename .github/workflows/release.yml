@@ -2,7 +2,7 @@ name: Release
 
 # Publishes the `yunbox` CLI to npm when a v* tag is pushed ("pnpm release"
 # bumps packages/cli/package.json, commits, tags and pushes), then creates the
-# GitHub release with the macOS client attached. Uses npm
+# GitHub release with the notarized macOS client attached. Uses npm
 # trusted publishing (OIDC): no token is stored anywhere. npmjs.com trusts
 # this repository, this workflow file (release.yml) and the `npm`
 # environment; provenance is attached automatically.
@@ -71,11 +71,15 @@ jobs:
           npm publish "$RUNNER_TEMP"/yunbox-*.tgz --access public
 
   # The release itself is created here, after npm publishing succeeded, so a
-  # tag whose checks fail never gets a downloadable app. The app is ad-hoc
-  # signed, not notarized; the site tells users how to open it. Installed
-  # clients update themselves through Sparkle from the appcast.xml attached
-  # here; it and the zip are signed with the SPARKLE_ED_PRIVATE_KEY secret,
-  # whose public half is SUPublicEDKey in script/build_and_run.sh.
+  # tag whose checks fail never gets a downloadable app. The app is signed
+  # with the Developer ID certificate (DEVELOPER_ID_P12_BASE64 and
+  # DEVELOPER_ID_P12_PASSWORD) and notarized with an App Store Connect API key
+  # (APPLE_API_KEY_ID, APPLE_API_ISSUER_ID, APPLE_API_KEY), so Gatekeeper opens
+  # it without asking. Installed clients update themselves through Sparkle
+  # from the appcast.xml attached here; it and the zip are signed with the
+  # SPARKLE_ED_PRIVATE_KEY secret, whose public half is SUPublicEDKey in
+  # script/build_and_run.sh. All secrets live in the `sparkle` environment;
+  # see apps/macos/README.md.
   macos-app:
     name: Attach the macOS client to the GitHub release
     needs: publish
@@ -95,12 +99,49 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
+      # A keychain of its own, deleted when the job ends, holds the certificate.
+      - name: Import the Developer ID certificate
+        env:
+          DEVELOPER_ID_P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          DEVELOPER_ID_P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          test -n "$DEVELOPER_ID_P12_BASE64" && test -n "$DEVELOPER_ID_P12_PASSWORD" \
+            || { echo "::error::DEVELOPER_ID_P12_BASE64 and DEVELOPER_ID_P12_PASSWORD must be set; see apps/macos/README.md"; exit 1; }
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password="$(openssl rand -hex 24)"
+          (umask 077 && printf '%s' "$DEVELOPER_ID_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/developer-id.p12")
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/developer-id.p12" -k "$keychain" -P "$DEVELOPER_ID_P12_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/developer-id.p12"
+          security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$keychain" >/dev/null
+          # Keep the existing search list behind the new keychain.
+          existing=()
+          while IFS= read -r line; do existing+=("$(echo "$line" | sed 's/^ *"//; s/"$//')"); done < <(security list-keychains -d user)
+          security list-keychains -d user -s "$keychain" "${existing[@]}"
+          identity="$(security find-identity -v -p codesigning "$keychain" | sed -n 's/.*"\(Developer ID Application: .*\)"/\1/p' | head -n 1)"
+          test -n "$identity" || { echo "::error::the certificate is not a Developer ID Application certificate"; exit 1; }
+          echo "YUNBOX_CODESIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+          echo "SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+
       - name: Build a universal YunBox.app
         env:
           YUNBOX_SWIFT_BUILD_ARGS: -c release --arch arm64 --arch x86_64
         run: |
           ./script/build_and_run.sh --build
           lipo -archs dist/YunBox.app/Contents/MacOS/YunBox
+
+      # Before the appcast: the zip Sparkle signs must hold the stapled app.
+      - name: Notarize the app
+        env:
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+        run: |
+          test -n "$APPLE_API_KEY_ID" && test -n "$APPLE_API_ISSUER_ID" && test -n "$APPLE_API_KEY" \
+            || { echo "::error::APPLE_API_KEY_ID, APPLE_API_ISSUER_ID and APPLE_API_KEY must be set; see apps/macos/README.md"; exit 1; }
+          ./script/notarize.sh dist/YunBox.app
 
       # A draft until both files are attached: releases/latest must never point
       # at a release without appcast.xml, or every client's check fails.
@@ -127,3 +168,8 @@ jobs:
         run: |
           gh release upload "$GITHUB_REF_NAME" dist/sparkle/YunBox-macOS.zip dist/sparkle/appcast.xml --clobber
           gh release edit "$GITHUB_REF_NAME" --draft=false --latest
+
+      - name: Delete the signing keychain
+        if: always()
+        run: |
+          if [ -n "${SIGNING_KEYCHAIN:-}" ]; then security delete-keychain "$SIGNING_KEYCHAIN" || true; fi

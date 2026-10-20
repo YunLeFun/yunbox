@@ -360,6 +360,20 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **更新日志两份**：`docs/changelog.md` 和 `docs/en/changelog.md`，Keep a Changelog 的格式，顶部是「未发布」。`pnpm release` 先检查两份都写了未发布的改动，bumpp 改版本号时把它们标上版本号和日期，和版本号同一个提交（只提交这几个文件）。发布工作流用对应版本的两段说明生成 GitHub release 说明，并以 `<description xml:lang>` 写进 appcast，Sparkle 按应用语言显示；appcast 改动后用 `sign_update` 重新签名。没有从提交记录自动生成，是因为提交信息是给开发者看的英文，更新提示要的是给用户看的中英文说明。
 - **还没做**：命令行输出、官网文档（除更新日志）仍只有中文；客户端显示的 `doctor` 检查项等来自命令行的文字在英文界面里也是中文。
 
+### macOS 客户端 Developer ID 签名和公证（2026-10-20）
+
+- **改为签名和公证**：推翻上面「暂不做 Developer ID 签名和公证」的决定，因为宣传视频会把新用户引到下载页，第一次打开就要去「隐私与安全性」放行，体验太差。仍然不上 Mac App Store（沙盒限制不变）。证书用维护者本机已有的「Developer ID Application: Lan Yang (QT792GAY4C)」，Gatekeeper 和「关于」里显示的开发者是这个名字；以后换成以云乐坊名义注册的账号时，只要替换证书和 API 密钥。
+- **签名顺序**：按 Sparkle 文档由内到外重新签名 `Installer.xpc`、`Downloader.xpc`（按 Sparkle 文档加 `--preserve-metadata=entitlements`；这个服务只给沙盒应用用，Sparkle 2.10 的 SwiftPM 版本里没有 entitlements）、`Autoupdate`、`Updater.app`、`Sparkle.framework`，最后是应用，全部 `--options runtime --timestamp`。没有用 `codesign --deep` 签名：它会给每个组件套同样的参数，Sparkle 文档也不建议。应用本身不需要 entitlements：不用 AppleScript，调用 Node.js、git 是普通的子进程，Hardened Runtime 不限制。
+- **凭据**：CI 用 App Store Connect 团队 API 密钥（Developer 角色）公证，不用 Apple ID 加 App 专用密码，因为 API 密钥可以单独吊销，也不绑定个人账号的两步验证；本地用 `notarytool store-credentials` 存进钥匙串的 profile。证书 `.p12` 和 API 密钥放在 GitHub `sparkle` environment，工作流把证书导入临时钥匙串，任务结束时删除。任何一个 secret 缺失都直接失败，不退回 ad-hoc 签名，避免发出未公证、官网却说已公证的版本。
+- **顺序**：先公证并 staple，再生成 appcast。staple 会改动应用包，Sparkle 的 EdDSA 签名必须覆盖 staple 之后的 zip。`notarytool submit --wait` 在被拒时也返回 0，所以脚本读 JSON 里的 `status`，被拒时打印 Apple 的日志。
+- **从 ad-hoc 迁移**：0.1.5 是第一个 Developer ID 版本，签名身份和已安装的 ad-hoc 版本不同，Sparkle 只要求 EdDSA 签名有效、新应用自身签名完整，所以能直接更新过去，不需要用户重新下载。
+- **风险**：证书私钥和 API 密钥泄露后，别人可以用这个名字签名并公证恶意软件；泄露时要在 Apple Developer 后台吊销证书、在 App Store Connect 吊销密钥。证书 5 年过期，过期前要续期并更新 secret（已签名的版本因为带时间戳仍然可以打开）。`.p12` 要和 Sparkle 私钥一样备份在维护者钥匙串以外的安全位置。
+
+### 公开宣传，中英双语（2026-10-20）
+
+- **决定**：宣传视频和官网改为公开，面向中文和英文开发者，不再只限云乐坊内部。G2 里「生产可用」的完成标准和「不做 SaaS、计费」的范围不变：公开的是自托管的开源工具，用户用自己的 COS。
+- **影响**：官网要补英文首页和指南（单独的任务）；对外不说「生产可用」，等 life 试点满 2 周有结论；公开演示不能用 life 试点的 bucket（见上面 EdgeOne 回源的风险），要用单独的演示 bucket。目前只支持腾讯云 COS，英文页面要写清楚。
+
 ### 后续风险
 
 - CloudBase 云托管绑定运行角色后是否以 `TENCENTCLOUD_*` 环境变量注入临时密钥**未核实**（云函数是这样做的）。如果不是，需要在服务端增加从平台元数据接口获取密钥的代码，或者临时改用只挂最小权限策略的子账号长期密钥。
