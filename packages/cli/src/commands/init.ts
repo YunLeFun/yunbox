@@ -1,6 +1,6 @@
 import type { CliContext } from '../context.ts'
 import type { ServiceUrl } from '../service-url.ts'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parseArgs } from 'node:util'
 import { CliError, print, USAGE_EXIT_CODE } from '../context.ts'
@@ -151,14 +151,26 @@ export async function installLfsAndAttributes(context: CliContext, repo: CliCont
     return
   }
   const attributesPath = join(root, '.gitattributes')
+  let existed = true
   const existingAttributes = await readFile(attributesPath, 'utf8').catch((error: NodeJS.ErrnoException) => {
-    if (error.code === 'ENOENT')
-      return ''
-    throw error
+    if (error.code !== 'ENOENT')
+      throw error
+    existed = false
+    return ''
   })
-  const merge = mergeGitAttributes(existingAttributes, categories)
-  if (merge.content !== existingAttributes)
-    await writeFile(attributesPath, merge.content)
+  let merge = mergeGitAttributes(existingAttributes, categories)
+  let captured = new Map<string, string[]>()
+  if (merge.content !== existingAttributes) {
+    captured = await committedOutsideLfs(repo, attributesPath, merge.content, [...merge.added.values()].flat())
+    if (captured.size > 0)
+      merge = mergeGitAttributes(existingAttributes, categories, { exclude: new Set(captured.keys()) })
+    if (merge.content !== existingAttributes)
+      await writeFile(attributesPath, merge.content)
+    else if (existed)
+      await writeFile(attributesPath, existingAttributes)
+    else
+      await rm(attributesPath, { force: true })
+  }
   const addedCount = [...merge.added.values()].reduce((sum, patterns) => sum + patterns.length, 0)
   printStep(context, {
     status: 'pass',
@@ -167,6 +179,18 @@ export async function installLfsAndAttributes(context: CliContext, repo: CliCont
       ? '已包含全部素材规则，未修改'
       : `新增 ${addedCount} 条规则（${categories.filter(category => merge.added.has(category.id)).map(category => `${category.label} ${merge.added.get(category.id)!.length}`).join('、')}）`,
   })
+  if (captured.size > 0) {
+    const patterns = [...captured.keys()]
+    printStep(context, {
+      status: 'warn',
+      title: '.gitattributes',
+      detail: `这些类型已有文件作为普通文件提交过，没有为它们加 LFS 规则，否则这些文件会显示为已修改：${[...captured].map(([pattern, files]) => `${pattern}（${files.length === 1 ? files[0] : `${files[0]} 等 ${files.length} 个`}）`).join('、')}`,
+      fixes: [
+        `git lfs track ${patterns.map(shellQuote).join(' ')}   # 确实要从下一次提交起改用 LFS 时（历史不变）`,
+        `git add .gitattributes && git add --renormalize -- ${patterns.map(shellQuote).join(' ')}`,
+      ],
+    })
+  }
   if (merge.keptNonLfs.length > 0) {
     printStep(context, {
       status: 'warn',
@@ -175,6 +199,53 @@ export async function installLfsAndAttributes(context: CliContext, repo: CliCont
       fixes: ['确实需要用 LFS 管理时，手动把对应规则改成 filter=lfs diff=lfs merge=lfs -text'],
     })
   }
+}
+
+/**
+ * Tracked files that `merged` would put under the LFS filter although they
+ * were committed as ordinary files, grouped by the added pattern that
+ * catches them. Git itself decides what matches (case folding, nested
+ * `.gitattributes`), so this briefly writes `merged` and asks `git check-attr`.
+ * The caller rewrites the file afterwards.
+ */
+async function committedOutsideLfs(repo: CliContext, attributesPath: string, merged: string, patterns: string[]): Promise<Map<string, string[]>> {
+  const captured = new Map<string, string[]>()
+  const extensions = new Set(patterns.map(pattern => pattern.slice('*.'.length)))
+  const listed = await runGit(repo, ['ls-files', '-z'])
+  if (listed.code !== 0)
+    return captured
+  const candidates = listed.stdout.split('\0').filter(path => extensions.has(extensionOf(path)))
+  if (candidates.length === 0)
+    return captured
+  const before = await filterAttributes(repo, candidates)
+  await writeFile(attributesPath, merged)
+  const after = await filterAttributes(repo, candidates)
+  for (const path of candidates) {
+    if (before.get(path) === 'lfs' || after.get(path) !== 'lfs')
+      continue
+    const pattern = `*.${extensionOf(path)}`
+    captured.set(pattern, [...captured.get(pattern) ?? [], path])
+  }
+  return captured
+}
+
+function extensionOf(path: string): string {
+  const name = path.slice(path.lastIndexOf('/') + 1)
+  const dot = name.lastIndexOf('.')
+  return dot <= 0 ? '' : name.slice(dot + 1).toLowerCase()
+}
+
+/** The `filter` attribute of each path, as `git check-attr` sees it now. */
+async function filterAttributes(repo: CliContext, paths: string[]): Promise<Map<string, string>> {
+  // runGitChecked would trim the output, and paths may start or end with spaces.
+  const result = await runGit(repo, ['check-attr', '-z', '--stdin', 'filter'], { input: `${paths.join('\0')}\0` })
+  if (result.code !== 0)
+    throw new CliError(`git check-attr 失败：${firstLine(result.stderr)}`)
+  const fields = result.stdout.split('\0')
+  const values = new Map<string, string>()
+  for (let index = 0; index + 2 < fields.length; index += 3)
+    values.set(fields[index]!, fields[index + 2]!)
+  return values
 }
 
 function parseCategories(types: string[] | undefined): ReturnType<typeof selectCategories> {

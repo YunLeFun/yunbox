@@ -15,6 +15,10 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 - The macOS app's COS panel copies a setup prompt for AI coding assistants.
 - A new guide, “Migrating from GitHub LFS” (in Chinese), shows how to move every past version of your assets from GitHub LFS or another LFS service to your own COS bucket, check the result, switch collaborators over and roll back.
 
+### Fixed
+
+- `git yunbox init` no longer adds LFS rules for file types that already have files committed outside LFS, so those files no longer show up as modified or break new clones. It lists them and shows the commands to move them to LFS.
+
 ## 0.1.4 - 2026-10-19
 
 ### Added

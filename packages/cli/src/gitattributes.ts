@@ -65,8 +65,9 @@ export interface GitAttributesMerge {
  * A pattern that already has any rule is never added again, whatever its
  * attributes, so running this twice is a no-op and hand-written rules win.
  * Existing lines are kept byte for byte, including their line endings.
+ * Patterns in `options.exclude` are left out as if they already had a rule.
  */
-export function mergeGitAttributes(existing: string, categories: readonly AssetCategory[]): GitAttributesMerge {
+export function mergeGitAttributes(existing: string, categories: readonly AssetCategory[], options: { exclude?: ReadonlySet<string> } = {}): GitAttributesMerge {
   const rules = parseRules(existing)
   const added = new Map<string, string[]>()
   const keptNonLfs: string[] = []
@@ -74,6 +75,8 @@ export function mergeGitAttributes(existing: string, categories: readonly AssetC
     const missing: string[] = []
     for (const extension of category.extensions) {
       const pattern = `*.${extension}`
+      if (options.exclude?.has(pattern))
+        continue
       const attributes = rules.get(pattern)
       if (attributes === undefined)
         missing.push(pattern)

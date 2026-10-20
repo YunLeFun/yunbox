@@ -49,20 +49,20 @@ git yunbox init --bucket <名称-APPID> --region <地域> --prefix <前缀>   # 
 
 ### 检查 .gitattributes
 
-`git yunbox init` 会把云匣的素材规则（贴图、设计源文件、模型、音频、视频、字体、压缩包）合并进已有的 `.gitattributes`，原有规则保持不变。先看一下：
+`git yunbox init` 会把云匣的素材规则（贴图、设计源文件、模型、音频、视频、字体、压缩包）合并进已有的 `.gitattributes`，原有规则保持不变。某个类型如果已经有文件作为普通文件提交过（例如以前没有用 LFS 管理的 `.zip`），不会给它加规则，并提示：
 
-```bash
-git status
-git diff .gitattributes
+```text
+! .gitattributes：这些类型已有文件作为普通文件提交过，没有为它们加 LFS 规则，否则这些文件会显示为已修改：*.zip（build/pack.zip）
 ```
 
-如果除了 `.gitattributes` 还有别的文件显示为已修改，说明新规则匹配到了之前作为普通文件提交的文件（例如以前没有用 LFS 管理的 `.zip`）。把这样的规则提交上去，这些文件在历史里仍是普通文件，`git lfs fsck` 会报错。迁移只换存储位置、不改规则时，直接丢掉新增的规则：
+这样迁移只换存储位置，不会顺带改变哪些文件走 LFS。确实想让这些文件从下一次提交起改用 LFS（历史里的旧版本不变），按提示运行：
 
 ```bash
-git checkout -- .gitattributes
+git lfs track '*.zip'
+git add .gitattributes && git add --renormalize -- '*.zip'
 ```
 
-只想追加部分素材类型，可以重新运行 `git yunbox init --types model,audio` 之类，只加这几类。要把历史里的普通文件也改成 LFS，需要 `git lfs migrate import` 改写历史，不在本文范围内。
+连历史一起改成 LFS 需要 `git lfs migrate import` 改写历史，不在本文范围内。只想加部分类型，用 `git yunbox init --types model,audio` 之类；一条也不想加，提交前 `git checkout -- .gitattributes` 即可。
 
 ### 旧服务写在 .lfsconfig 里的情况
 

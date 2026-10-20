@@ -61,6 +61,13 @@ describe('mergeGitAttributes', () => {
     expect(merged.added.get('audio')).not.toContain('*.wav')
   })
 
+  it('leaves out excluded patterns', () => {
+    const merged = mergeGitAttributes('', selectCategories(['archive']), { exclude: new Set(['*.zip']) })
+    expect(merged.added.get('archive')).toEqual(['*.7z', '*.rar'])
+    expect(merged.content).not.toContain('*.zip')
+    expect(mergeGitAttributes('', selectCategories(['archive']), { exclude: new Set(['*.zip', '*.7z', '*.rar']) }).content).toBe('')
+  })
+
   it('rejects unknown categories', () => {
     expect(() => selectCategories(['texture', 'nope'])).toThrow('nope')
   })

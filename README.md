@@ -249,7 +249,7 @@ git yunbox init --url http://127.0.0.1:8080/demo/assets
 它会依次完成：
 
 1. 检查 git（2.30+）和 git-lfs（3.2+）的版本，执行 `git lfs install`。
-2. 按素材类型生成或合并 `.gitattributes`：贴图和图片、设计源文件（PSD 等）、模型和动画、音频、视频、字体、压缩包。已经有规则的扩展名不会重复添加，也不会改动已有规则；`--types texture,model` 可以只跟踪部分类型。
+2. 按素材类型生成或合并 `.gitattributes`：贴图和图片、设计源文件（PSD 等）、模型和动画、音频、视频、字体、压缩包。已经有规则的扩展名不会重复添加，也不会改动已有规则；已经有文件作为普通文件提交过的扩展名不加规则（会列出这些文件）；`--types texture,model` 可以只跟踪部分类型。
 3. 把 `lfs.url` 写进 `.lfsconfig`。`.lfsconfig` 只包含服务地址，命令会拒绝带用户名、密码或 token 的地址；除 `127.0.0.1`、`localhost` 以外的地址必须是 https。
 4. 在本仓库设置 `lfs.locksverify=false`：Locks API 尚未实现，这是目前唯一允许关闭的检查。试点期间同一个素材同一时间只能由一个人编辑；进入多人编辑二进制素材的试点前必须补齐 Locks API。
 5. 提示输入 token（输入不显示），用 `git credential approve` 存进 Git 凭据管理器（macOS 的 `osxkeychain`、Git for Windows 的 `manager` 等）。没有配置凭据管理器时会给出配置命令。也可以从标准输入传入，例如 `pbpaste | git yunbox init --token-stdin`。token 不接受命令行参数，以免留在 shell 历史里。
