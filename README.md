@@ -6,7 +6,7 @@
 
 代码仍托管在 GitHub 等平台，LFS 大文件存到你自己的腾讯云 COS。每个协作者在自己电脑上用 `yunbox login` 保存自己的子账号密钥，git-lfs 通过 YunBox 的传输代理直接上传、下载 COS，**中间没有服务端**。需要集中签发 token 时，也可以改用[服务端模式](#服务端模式)。
 
-- 官网和使用文档：[docs/](./docs/)（VitePress，下载、功能演示和指南）
+- 官网和使用文档：[yunbox.yunle.fun](https://yunbox.yunle.fun/)（下载、功能演示和指南；[文档源码](./docs/)）
 - 方案与里程碑：[docs/plan.md](./docs/plan.md)
 - 部署到 CloudBase 云托管：[docs/deploy.md](./docs/deploy.md)
 
@@ -106,7 +106,9 @@ pnpm docs:dev      # 本地预览官网
 pnpm docs:build    # 输出到 docs/.vitepress/dist
 ```
 
-`Docs` 工作流在 main 上的 `docs/` 有改动、以及每次 `Release` 结束后构建并发布到 GitHub Pages（需要在仓库设置里把 Pages 的来源设为 GitHub Actions）。下载区在构建时查询最新 release 是否带 macOS 安装包，没有时改为提示从源码构建；`Release` 工作流在 npm 发布成功后创建 GitHub release，并附上通用二进制的 `YunBox-macOS.zip`（ad-hoc 签名，未公证）。
+官网通过 Cloudflare Pages 项目 `yunbox` 连接本仓库，`main` 更新后自动部署到 [yunbox.yunle.fun](https://yunbox.yunle.fun/)。构建从仓库根目录执行 `pnpm install --frozen-lockfile && pnpm docs:build`，输出目录为 `docs/.vitepress/dist`；环境变量设为 `PNPM_VERSION=11.28.5`、`SKIP_DEPENDENCY_INSTALL=1`、`SITE_BASE=/`，Node.js 版本读取 `.node-version`。
+
+`Docs` 工作流在 main 上的 `docs/` 有改动、以及每次 `Release` 结束后构建并发布到 [GitHub Pages 默认地址](https://yunlefun.github.io/yunbox/)（需要在仓库设置里把 Pages 的来源设为 GitHub Actions）。两处部署各自使用对应的网站路径，GitHub Pages 不绑定自定义域名。下载区在构建时查询最新 release 是否带 macOS 安装包，没有时改为提示从源码构建；`Release` 工作流在 npm 发布成功后创建 GitHub release，并附上通用二进制的 `YunBox-macOS.zip`（ad-hoc 签名，未公证）。
 
 命令行的测试位于 `packages/cli/test/`：用真实的 `git` 和 `git-lfs` 在临时目录里检查 `init` 生成的配置和幂等性，并对本仓库的服务端（本地存储加 token）检查 `doctor` 在通过、缺少凭据、只读 token、无效 token 等情况下的输出和退出码。测试使用独立的 HOME 和 `credential.helper store`，不会碰到本机的钥匙串。
 
