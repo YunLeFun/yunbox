@@ -22,6 +22,29 @@ import Testing
     #expect(AIOnboarding.shellQuote("/Applications/Yun Box.app") == "'/Applications/Yun Box.app'")
 }
 
+@Test func onboardingPromptFollowsTheStorageProvider() throws {
+    let r2 = try DoctorReport.decode(Data(#"{"schemaVersion":1,"status":"ok","mode":"cos","provider":"s3","location":{"bucket":"game","region":"auto","prefix":"yunbox","endpoint":"https://0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com"},"steps":[]}"#.utf8), exitCode: 0)
+    // A connected repository uses its own provider whatever the panel shows.
+    let connected = AIOnboarding.prompt(repository: URL(fileURLWithPath: "/tmp/r"), report: r2, provider: .cos, node: nil, cli: nil)
+    #expect(connected.contains("当前状态：已直连 Cloudflare R2（game（0123456789abcdef0123456789abcdef.r2.cloudflarestorage.com）/yunbox/），检查全部通过"))
+    #expect(connected.contains("`yunbox login --provider s3`"))
+    #expect(connected.contains("`git yunbox init --preset r2 --account-id"))
+    #expect(connected.contains("每个项目一个 bucket"))
+    #expect(connected.contains("不要向我索要 Access Key ID / Secret Access Key"))
+    #expect(!connected.contains("yunbox buckets"))
+    // Not set up yet: the provider chosen in the panel.
+    let none = try DoctorReport.decode(Data(#"{"schemaVersion":1,"status":"failed","mode":"none","steps":[{"status":"fail","title":"YunBox","detail":"没有接入"}]}"#.utf8), exitCode: 1)
+    #expect(AIOnboarding.prompt(repository: URL(fileURLWithPath: "/tmp/r"), report: none, provider: .s3, node: nil, cli: nil).contains("--preset r2"))
+    let cos = AIOnboarding.prompt(repository: URL(fileURLWithPath: "/tmp/r"), report: none, provider: .cos, node: nil, cli: nil)
+    #expect(cos.contains("`yunbox buckets --json`"))
+    #expect(cos.contains("「存储」面板"))
+    // An older CLI's report has no provider: COS.
+    let old = try DoctorReport.decode(Data(#"{"schemaVersion":1,"status":"ok","mode":"cos","location":{"bucket":"a-1250000000","region":"ap-guangzhou","prefix":"p"},"steps":[]}"#.utf8), exitCode: 0)
+    let oldPrompt = AIOnboarding.prompt(repository: URL(fileURLWithPath: "/tmp/r"), report: old, provider: .s3, node: nil, cli: nil)
+    #expect(oldPrompt.contains("已直连 腾讯云 COS（a-1250000000（ap-guangzhou）/p/）"))
+    #expect(oldPrompt.contains("`yunbox buckets --json`"))
+}
+
 @Test func docsLinksPointAtTheWebsite() {
     #expect(DocsPage.freeze.url(english: false).absoluteString == "https://yunlefun.github.io/yunbox/guide/freeze")
     #expect(DocsPage.quickStart.url(english: false).absoluteString == "https://yunlefun.github.io/yunbox/guide/")

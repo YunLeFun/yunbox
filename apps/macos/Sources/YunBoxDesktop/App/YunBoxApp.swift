@@ -23,7 +23,7 @@ struct YunBoxApp: App {
             ContentView(store: store, types: types)
                 .frame(minWidth: 880, minHeight: 600)
                 .onOpenURL { store.select($0) }
-                .task { if store.repository != nil { store.inspect(); store.checkCos() } }
+                .task { if store.repository != nil { store.inspect(); store.checkStorage() } }
         }
         .defaultSize(width: 1120, height: 760)
         .commands {
@@ -43,7 +43,7 @@ struct YunBoxApp: App {
                 }
             }
             CommandGroup(replacing: .help) {
-                ForEach([DocsPage.quickStart, .macOS, .freeze, .inspect, .ai]) { page in
+                ForEach([DocsPage.quickStart, .macOS, .r2, .freeze, .inspect, .ai]) { page in
                     Link(page == .quickStart ? String(localized: "云匣使用说明") : page.title, destination: page.url)
                 }
                 Link(DocsPage.changelog.title, destination: DocsPage.changelog.url)

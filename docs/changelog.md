@@ -20,6 +20,7 @@
 - 官网提供英文版：首页、全部使用指南和推送检查说明都可以切换到英文，macOS 客户端的英文界面会打开英文文档。
 - pre-push 拦下推送（禁推时段、超出预算、在确认框里取消）时，在本机记下是哪个仓库、什么时间、什么原因；macOS 客户端侧边栏新增「最近被拦截」，列出这些仓库，点一下即可打开检查。
 - 支持 Cloudflare R2、AWS S3、MinIO 等 S3 兼容存储：`git yunbox init --preset r2`（或 `aws`、`minio`、`--endpoint`）接入，`yunbox login --provider s3` 保存密钥，推送、clone、`doctor` 和推送检查都和 COS 一样可用。R2 的 token 只能限定到 bucket，建议每个项目一个 bucket，详见新的「接入 R2 和 S3 兼容存储」指南。
+- macOS 客户端的 COS 面板改为「存储」面板，也支持 R2、AWS S3、MinIO 等 S3 兼容存储：标题栏显示仓库直连的存储（例如「直连 R2 · 正常」），可以在窗口里选择提供方一键接入、保存 S3 密钥，复制给 AI 的接入说明也按存储生成。
 - 文档新增「从 GitHub LFS 迁移」指南：把 GitHub LFS 或其他 LFS 服务里的全部历史素材搬到自己的 COS，包含验证、协作者切换和回滚方法。
 
 ### 变更

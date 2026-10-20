@@ -14,7 +14,7 @@ import SymbolIcon from './SymbolIcon.vue'
 const t = useCopy({
   zh: {
     macTitle: '云匣 for macOS',
-    macLead: '选择仓库就能看推送体积、超限文件和 COS 直连状态，也能在窗口里保存密钥、一键接入 bucket。',
+    macLead: '选择仓库就能看推送体积、超限文件和存储直连状态（腾讯云 COS 或 R2 等 S3 兼容存储），也能在窗口里保存密钥、一键接入 bucket。',
     download: '下载 YunBox-macOS.zip',
     universal: 'Apple 芯片和 Intel 通用',
     separator: '，',
@@ -33,7 +33,7 @@ const t = useCopy({
   },
   en: {
     macTitle: 'YunBox for macOS',
-    macLead: 'Pick a repository to see its push size, files over budget and COS connection status. You can also save your key and connect a bucket right from the window.',
+    macLead: 'Pick a repository to see its push size, files over budget and storage status (Tencent Cloud COS, or S3-compatible storage such as R2). You can also save your keys and connect a bucket right from the window.',
     download: 'Download YunBox-macOS.zip',
     universal: 'Universal (Apple silicon and Intel)',
     separator: ' · ',

@@ -20,6 +20,7 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 - The website is now available in English: the homepage, every guide and the push check reference, with a language switcher. The macOS app opens the English docs when its interface is in English.
 - When pre-push blocks a push (a push freeze, an exceeded budget, or Cancel in the confirmation), YunBox notes on this Mac which repository it was, when and why. The macOS app's sidebar has a new Recently Blocked section that lists them; click one to open and check it.
 - S3-compatible storage such as Cloudflare R2, AWS S3 and MinIO: connect a repository with `git yunbox init --preset r2` (or `aws`, `minio`, `--endpoint`) and save keys with `yunbox login --provider s3`; pushing, cloning, `doctor` and the push check work as they do with COS. R2 tokens can be limited to buckets but not to prefixes, so use one bucket per project; see the new guide on R2 and S3-compatible storage.
+- The macOS app's COS panel is now a Storage panel that also handles S3-compatible storage such as R2, AWS S3 and MinIO: the header shows which storage the repository uses (for example "Direct R2 · OK"), and you can pick a provider and connect in one click, save S3 keys, and copy an AI setup prompt written for that storage.
 - A new guide, “Migrating from GitHub LFS”, shows how to move every past version of your assets from GitHub LFS or another LFS service to your own COS bucket, check the result, switch collaborators over and roll back.
 
 ### Changed

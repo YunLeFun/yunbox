@@ -43,10 +43,15 @@ public struct InspectionClient: Sendable {
         return try await text(arguments: arguments, directory: repository, timeout: 120)
     }
 
-    /// `yunbox login`; the SecretKey only travels on stdin, never in arguments.
-    public func login(secretId: String, secretKey: String, directory: URL) async throws -> CommandOutput {
+    /// `git yunbox init` for S3-compatible storage (R2, AWS S3, MinIO …) in an existing bucket.
+    public func setUpS3(repository: URL, setup: S3Setup) async throws -> CommandOutput {
+        try await text(arguments: [cli.path, "init"] + setup.initArguments, directory: repository, timeout: 120)
+    }
+
+    /// `yunbox login [--provider s3]`; the SecretKey / Secret Access Key only travels on stdin, never in arguments.
+    public func login(provider: StorageProvider = .cos, secretId: String, secretKey: String, directory: URL) async throws -> CommandOutput {
         try await text(
-            arguments: [cli.path, "login", "--secret-id", secretId, "--secret-key-stdin"],
+            arguments: [cli.path, "login"] + provider.loginArguments + ["--secret-id", secretId, "--secret-key-stdin"],
             directory: directory, timeout: 60, input: Data(secretKey.utf8)
         )
     }
