@@ -6,6 +6,8 @@ import YunBoxKit
 final class InspectorStore {
     var repository: URL?
     var recents: RecentRepositories
+    /// Repositories whose push the pre-push hook stopped lately, from the CLI's record; newest first.
+    private(set) var blockedPushes: [BlockedPush] = []
     var result: InspectionResult? {
         didSet { changeIndex = result?.report.changeIndex() ?? [:] }
     }
@@ -52,9 +54,30 @@ final class InspectorStore {
             repository = URL(fileURLWithPath: first)
         }
         if let repository { showCachedResult(for: repository.path) }
+        refreshBlockedPushes()
         NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.removePreviews() }
         }
+        // A push is usually blocked in a terminal or an editor; reread the record when coming back.
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshBlockedPushes() }
+        }
+    }
+
+    func refreshBlockedPushes() {
+        let dismissed = (UserDefaults.standard.dictionary(forKey: "dismissedBlockedPushes") as? [String: Date]) ?? [:]
+        let latest = BlockedPushes.recent(BlockedPushes.load(), now: Date(), dismissed: dismissed)
+        if latest != blockedPushes { blockedPushes = latest }
+    }
+
+    /// Hide a blocked repository until its next blocked push.
+    func dismissBlockedPush(_ path: String) {
+        var dismissed = (UserDefaults.standard.dictionary(forKey: "dismissedBlockedPushes") as? [String: Date]) ?? [:]
+        dismissed[path] = Date()
+        // Forget hides older than any entry could still be shown.
+        dismissed = dismissed.filter { Date().timeIntervalSince($0.value) <= BlockedPushes.maxAge }
+        UserDefaults.standard.set(dismissed, forKey: "dismissedBlockedPushes")
+        blockedPushes.removeAll { $0.path == path }
     }
 
     var recentPaths: [String] { recents.paths }

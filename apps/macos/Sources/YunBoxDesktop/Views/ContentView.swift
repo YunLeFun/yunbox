@@ -8,9 +8,20 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            List(selection: Binding(get: { store.repository?.path }, set: { path in
+            List(selection: Binding(get: { store.repository?.path }, set: { tag in
+                // Blocked rows carry a prefixed tag, so only the recent-list row shows the selection.
+                let path = tag.map { $0.hasPrefix(blockedTagPrefix) ? String($0.dropFirst(blockedTagPrefix.count)) : $0 }
                 if let path, path != store.repository?.path { store.select(URL(fileURLWithPath: path)) }
             })) {
+                if !store.blockedPushes.isEmpty {
+                    Section("最近被拦截") {
+                        ForEach(store.blockedPushes) { blocked in
+                            BlockedPushRow(blocked: blocked)
+                                .tag(blockedTagPrefix + blocked.path)
+                                .contextMenu { Button("从列表隐藏") { store.dismissBlockedPush(blocked.path) } }
+                        }
+                    }
+                }
                 Section("最近的仓库") {
                     ForEach(Array(store.recentPaths.enumerated()), id: \.element) { index, path in
                         Label {
@@ -150,6 +161,45 @@ private struct StatusBanner: View {
         .padding(.horizontal, 24).padding(.vertical, 8)
         .background(.bar)
         .overlay(alignment: .bottom) { Divider() }
+    }
+}
+
+private let blockedTagPrefix = "blocked:"
+
+/// One repository in “最近被拦截”: why and when its last push was stopped; the CLI's summary on hover.
+private struct BlockedPushRow: View {
+    let blocked: BlockedPush
+
+    var body: some View {
+        let url = URL(fileURLWithPath: blocked.path)
+        Label {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(url.lastPathComponent).lineLimit(1)
+                Text("\(blocked.reason.title) · \(blocked.blockedAt.formatted(.relative(presentation: .named)))")
+                    .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+        } icon: {
+            Image(systemName: blocked.reason.symbol).foregroundStyle(blocked.reason == .freeze ? Color.orange : Color.red)
+        }
+        .help(blocked.summary.isEmpty ? blocked.path : "\(blocked.path)\n\(blocked.summary)")
+    }
+}
+
+extension BlockedPush.Reason {
+    var title: String {
+        switch self {
+        case .freeze: String(localized: "禁推时段")
+        case .exceeded: String(localized: "超出限额")
+        case .cancelled: String(localized: "已取消推送")
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .freeze: "clock.badge.xmark"
+        case .exceeded: "exclamationmark.triangle"
+        case .cancelled: "xmark.circle"
+        }
     }
 }
 
