@@ -140,6 +140,27 @@ ${originalExecutable ? `${shellQuote(backup)} "$@" <"$input"` : ':'}
   return 0
 }
 
+/**
+ * What the repository's YunBox pre-push wrapper runs: `inspect` (the bundled
+ * CLI, which also enforces freeze windows), `guard` (a custom program), or
+ * `none` when no wrapper is installed. Never throws.
+ */
+export async function installedHook(context: CliContext, root: string): Promise<'inspect' | 'guard' | 'none'> {
+  try {
+    const repo = { ...context, cwd: root }
+    if (await readGitConfig(repo, 'core.hooksPath') !== undefined)
+      return 'none'
+    const hook = resolve(root, await runGitChecked(repo, ['rev-parse', '--git-path', 'hooks/pre-push']))
+    const state = JSON.parse(await readFile(`${hook}.yunbox.json`, 'utf8')) as HookState
+    if (await readFile(hook, 'utf8') !== state.wrapper)
+      return 'none'
+    return state.wrapper.includes(' inspect --push --stdin ') ? 'inspect' : 'guard'
+  }
+  catch {
+    return 'none'
+  }
+}
+
 async function regularFile(path: string): Promise<Stats | undefined> {
   try {
     const stat = await lstat(path)

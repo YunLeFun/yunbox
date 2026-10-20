@@ -39,6 +39,8 @@ git yunbox clone <仓库地址>    # clone 历史 + 登记传输代理 + 下载�
 | `yunbox buckets` | 列出本机密钥能看到的 bucket |
 | `yunbox status` | 当前仓库 LFS 对象的数量和总大小 |
 | `yunbox inspect --push` | 推送前检查 Git 和 LFS 的体积，逐个文件列出大小变化；`--confirm` 超限时弹窗确认 |
+| `yunbox hook install` | 安装 pre-push 包装层：检查通过后才执行原有钩子（包括 git-lfs 上传） |
+| `yunbox freeze set "Mo-Fr 09:00-18:00"` | 设置禁推时段（opening_hours 写法，可按星期、时区），时段内 pre-push 直接中断推送；`--shared` 写进 `.yunbox/config` 对团队生效 |
 
 `git yunbox --help` 会被 Git 改写成 `git help yunbox`，查看帮助请用 `git yunbox help` 或 `yunbox --help`。
 

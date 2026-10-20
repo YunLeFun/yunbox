@@ -2,6 +2,7 @@ import type { CliContext } from '../context.ts'
 import { Buffer } from 'node:buffer'
 import { parseArgs } from 'node:util'
 import { confirmPush } from '../confirm.ts'
+import { checkFreeze, formatFreezeBlock, readFreezeConfig } from '../freeze.ts'
 import { inspectGit, InspectionError, resolveInspectionRange } from '../inspect-git.ts'
 import { formatInspection, inspectPush } from '../inspect.ts'
 
@@ -14,7 +15,8 @@ export const inspectHelp = `用法：yunbox inspect --push [选项]
   --push              检查待推送的已提交内容
   --base <ref>        指定已存在的基准引用
   --head <ref>        指定待推送引用（默认 HEAD）
-  --stdin             从 stdin 读取 Git pre-push 的引用更新，支持多个分支和删除
+  --stdin             从 stdin 读取 Git pre-push 的引用更新，支持多个分支和删除；
+                      处在禁推时段（yunbox freeze）时直接中断，退出码 1
   --remote <name/url>  新分支或旧 tip 缺失时，查询远端 Git refs 以改进 pack 估算
   --git-limit <size>  Git pack 限额（默认 900k）
   --lfs-limit <size>  LFS 候选总量限额（默认 100m）
@@ -62,6 +64,23 @@ export async function runInspect(context: CliContext, args: string[]): Promise<n
       throw new InspectionError('--top 必须是 1–100 的整数')
     const root = await inspectGit(context, ['rev-parse', '--show-toplevel'])
     const repo = { ...context, cwd: root.output.toString('utf8').replace(/\r?\n$/, '') }
+    // --stdin means Git is pushing right now: a freeze window blocks before any size check.
+    if (values.stdin) {
+      let freeze
+      try {
+        freeze = checkFreeze(await readFreezeConfig(repo, repo.cwd), new Date())
+      }
+      catch (error) {
+        throw new InspectionError(error instanceof TypeError ? error.message : '无法读取禁推时段配置')
+      }
+      if (freeze.status === 'frozen') {
+        if (json)
+          context.stdout.write(`${JSON.stringify({ schemaVersion: 1, status: 'frozen', freeze })}\n`)
+        else
+          context.stderr.write(formatFreezeBlock(freeze))
+        return 1
+      }
+    }
     const limits = {
       gitBytes: await readLimit(repo, values['git-limit'], 'yunbox.inspectGitBytes', 900 * 1024),
       lfsBytes: await readLimit(repo, values['lfs-limit'], 'yunbox.inspectLfsBytes', 100 * 1024 * 1024),

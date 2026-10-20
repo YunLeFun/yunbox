@@ -11,6 +11,7 @@ import { resolveCredentials } from '../cos/credentials.ts'
 import { describeLocation, LEGACY_LOCATION_FILE, LOCATION_FILE, locationFiles, readLocation } from '../cos/location.ts'
 import { defaultSecretStores } from '../cos/secret-store.ts'
 import { fillCredential, findCredentialHelper, rejectCommand, suggestedHelperCommands } from '../credentials.ts'
+import { readFreezeConfig } from '../freeze.ts'
 import {
   compareVersions,
   detectGitLfsVersion,
@@ -27,6 +28,7 @@ import { gitInstallHints, gitLfsInstallHints } from '../install-hints.ts'
 import { probeBatch } from '../probe.ts'
 import { printStep } from '../report.ts'
 import { isSecureServiceUrl, parseServiceUrl, ServiceUrlError } from '../service-url.ts'
+import { installedHook } from './hook.ts'
 import { AGENT_NAME } from './lfs-agent.ts'
 
 export const doctorHelp = `用法：yunbox doctor [选项]
@@ -129,6 +131,8 @@ async function diagnose(context: CliContext, report: (step: StepReport) => void,
       : { status: 'pass', title: 'LFS 过滤器', detail: '已启用' })
   }
 
+  await diagnoseFreeze(repo, root, report)
+
   let location: CosLocation | undefined
   try {
     location = await readLocation(repo, root)
@@ -221,6 +225,27 @@ async function diagnose(context: CliContext, report: (step: StepReport) => void,
     return
   }
   reportPermission(service, 'write', write, report)
+}
+
+/** Report freeze windows only when some are configured: whether the pre-push wrapper will enforce them. */
+async function diagnoseFreeze(repo: CliContext, root: string, report: (step: StepReport) => void): Promise<void> {
+  let windows: number
+  try {
+    windows = (await readFreezeConfig(repo, root)).windows.length
+  }
+  catch (error) {
+    report({ status: 'fail', title: '禁推时段', detail: `${(error as Error).message}；pre-push 检查会因此失败`, fixes: ['yunbox freeze list   # 找到无效的值后用 yunbox freeze set 重新设置'] })
+    return
+  }
+  if (windows === 0)
+    return
+  const hook = await installedHook(repo, root)
+  if (hook === 'inspect')
+    report({ status: 'pass', title: '禁推时段', detail: `${windows} 个时段，由 pre-push 包装层拦截（yunbox freeze list 查看）` })
+  else if (hook === 'guard')
+    report({ status: 'warn', title: '禁推时段', detail: `设置了 ${windows} 个时段，但包装层使用 --guard，不检查禁推时段`, fixes: ['yunbox hook install   # 改用内置检查；或让 guard 先运行 yunbox freeze check'] })
+  else
+    report({ status: 'warn', title: '禁推时段', detail: `设置了 ${windows} 个时段，但没有安装 pre-push 包装层，推送不会被拦截`, fixes: ['yunbox hook install'] })
 }
 
 async function checkCredential(context: CliContext, service: ServiceUrl, report: (step: StepReport) => void): Promise<StoredCredential | undefined> {

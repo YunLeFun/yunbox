@@ -318,6 +318,15 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **兼容**：新版本先读 `.yunbox/config`，没有时读旧的 `.yunboxconfig`；两个文件同时存在时必须指向同一位置，否则报错并点名两个文件，不会静默选一个，这样团队升级期间可以两份并存。`init` 只写 `.yunbox/config`，写入新位置时删除旧文件；加入已接入的仓库时不改动任何已提交的文件。`doctor` 发现旧文件时给出 `git mv .yunboxconfig .yunbox/config`（只有旧文件）或 `git rm .yunboxconfig`（两份并存）的提示，只是警告，不算失败。
 - **升级顺序**：0.1.x 只认 `.yunboxconfig`，所以已接入的仓库要等协作者都升级到新版本后再迁移，或者迁移期间两份并存。
 
+### 禁推时段（2026-10-20）
+
+- **拦截点放在 `inspect --stdin`**：只有 pre-push 包装层传 `--stdin`，所以禁推时段只拦真实推送，手动 `inspect --push` 和 macOS 客户端不受影响；已安装的包装层升级 CLI 后自动生效，不用重装。`--guard` 模式不经过 `inspect`，`doctor` 会提示。
+- **时段格式采用 OpenStreetMap `opening_hours` 的子集**（`Mo-Fr 09:00-18:00; We off`）：它是每周固定时段最通用的写法。没选 cron（GitLab Deploy freeze、Argo CD sync window 的做法），因为 cron 表示时间点，一个时段要拆成开始、结束两条；也没选 iCalendar RRULE，对每周时段过重。同一个值里 `;` 规则按 `opening_hours` 的语义后者覆盖前者，不同的值、不同位置则同时生效。节假日 `PH` 需要日历，暂不支持；「工作日」不认调休。
+- **配置用多值 Git 配置 `yunbox.pushFreeze`**，三个位置同时生效：本仓库 `.git/config`、团队共享的 `.yunbox/config`、全局 `~/.gitconfig`。说明和时区（`pushFreezeMessage`、`pushFreezeTimeZone`）按位置分别设置。
+- **硬拦截**：时段内 `--confirm` 不能放行；配置无效时检查失败（退出码 2），同样阻止推送，不会因为写错而悄悄放行。
+- **给 AI 的接口只做 CLI**：命令都不交互、有 `--json`，任何编程助手都能直接调用；不做 MCP，避免多维护一个常驻进程。
+- **风险**：`git push --no-verify` 和没装包装层的 clone 都会绕过，这只是协作约定，不是服务端强制；需要强制时只能放到托管平台（如分支保护）或以后的服务端。
+
 ### 后续风险
 
 - CloudBase 云托管绑定运行角色后是否以 `TENCENTCLOUD_*` 环境变量注入临时密钥**未核实**（云函数是这样做的）。如果不是，需要在服务端增加从平台元数据接口获取密钥的代码，或者临时改用只挂最小权限策略的子账号长期密钥。

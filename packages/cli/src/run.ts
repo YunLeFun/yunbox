@@ -3,6 +3,7 @@ import packageJson from '../package.json' with { type: 'json' }
 import { runBuckets } from './commands/buckets.ts'
 import { runClone } from './commands/clone.ts'
 import { runDoctor } from './commands/doctor.ts'
+import { runFreeze } from './commands/freeze.ts'
 import { runHook } from './commands/hook.ts'
 import { runInit } from './commands/init.ts'
 import { runInspect } from './commands/inspect.ts'
@@ -33,6 +34,7 @@ export const mainHelp = `云匣 YunBox 命令行（版本 ${CLI_VERSION}）
   status   列出当前仓库 LFS 对象的数量和总大小
   inspect  推送前分别检查 Git/LFS 大小、超限文件和 JSON 明细
   hook     安装/撤销检查通过后才执行原钩子的 pre-push 包装层
+  freeze   设置禁推时段（如工作时间 Mo-Fr 09:00-18:00），时段内 pre-push 直接中断推送
   help     显示帮助；help <命令> 显示该命令的帮助
 
 两种写法完全一样。注意 git yunbox --help 会被 Git 当成 git help yunbox，
@@ -53,6 +55,7 @@ const COMMANDS: Record<string, (context: CliContext, args: string[]) => Promise<
   'status': runStatus,
   'inspect': runInspect,
   'hook': runHook,
+  'freeze': runFreeze,
 }
 
 /**
