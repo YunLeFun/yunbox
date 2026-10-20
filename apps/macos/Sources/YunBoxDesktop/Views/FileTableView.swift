@@ -40,8 +40,12 @@ struct FileTableView: View {
             TableColumn("类型") { row in Text(row.kind.rawValue).foregroundStyle(.secondary) }.width(45)
             TableColumn("原始大小") { row in Text(byteLabel(row.object.bytes)).monospacedDigit().help("\(row.object.bytes) 字节") }.width(90)
             TableColumn("预算") { row in
-                Text(row.object.exceedsFileLimit ? "超限" : "—").foregroundStyle(row.object.exceedsFileLimit ? .orange : .secondary)
-            }.width(50)
+                if row.object.onRemote == true {
+                    Text("已在 COS").foregroundStyle(.secondary).help("COS 里已有这个对象，推送时跳过")
+                } else {
+                    Text(row.object.exceedsFileLimit ? "超限" : "—").foregroundStyle(row.object.exceedsFileLimit ? .orange : .secondary)
+                }
+            }.width(60)
         }
         .overlay {
             if store.visibleRows.isEmpty {

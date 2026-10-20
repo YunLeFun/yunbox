@@ -77,6 +77,8 @@ export class FakeCosServer {
    * region, APPID and bucket of resources are not checked.
    */
   policy: FakeCamPolicy | undefined
+  /** Wait this long before answering each request, to let clients time out. */
+  responseDelayMs = 0
 
   readonly #extraKeys: CosCredentials[] = []
 
@@ -119,6 +121,8 @@ export class FakeCosServer {
     const key = decodeURIComponent(url.pathname.slice(1))
     const method = request.method ?? 'GET'
     const presigned = url.searchParams.has('q-signature')
+    if (this.responseDelayMs > 0)
+      await new Promise(resolve => setTimeout(resolve, this.responseDelayMs))
     const finish = (status: number, headers: Record<string, string> = {}, body?: Buffer): void => {
       this.requests.push({ method, key, status, presigned })
       response.writeHead(status, headers)

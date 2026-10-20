@@ -247,6 +247,8 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 
 - 检查能力放在 YunBox CLI：Git thin-pack、普通文件和 LFS 候选分别统计，文件原始大小按对象去重并覆盖历史；`--json` 提供版本化接口。Workstation 仅负责 GitHub 范围和交互确认，Craft Hub 界面后续接入。
 - 不查询 LFS 服务，`uploadBytes=null` 明确实际上传量未知。新分支 LFS 候选可能包含远端已有素材；用户可调整本地预算，后续可增加 Batch 存在性检查。
+- **直连 COS 时查询已有对象（2026-10-20）**：直连模式（`.git/config` 登记了 `yunbox` 传输代理、仓库有 `.yunbox/config`）且本机解析到密钥时，`inspect` 对每个 LFS 候选做一次 HEAD，和传输代理上传前的检查相同，所以 `yunbox policy` 的最小权限就够，不需要列出 bucket。已存在且大小一致的不计入上传量，`remoteChecked=true`、`uploadBytes` 为确定值，LFS 预算、单文件预算和 `changes` 的上传大小都只算需要上传的对象；大小不一致的算作需要上传。并发 8、总时限 5 秒（`YUNBOX_INSPECT_REMOTE_TIMEOUT_MS` 可调，`0` 关闭），全有或全无：任一请求失败或超时就作废整次查询，回到 `uploadBytes=null` 并加一条提示，不阻止推送、不把失败当成已存在。提示只含 HTTP 状态或连接错误，不含密钥和签名地址。服务端模式仍不查询 Batch API。
+- 限制：读取 macOS 钥匙串的密钥不在 5 秒时限内；钥匙串被锁时会先弹出解锁框，这和随后 git-lfs 上传时一样。
 - 多个独立 Git 钩子不会在首个失败后自动停止。新增可安装、可撤销的仓库包装层，检查通过后才执行保存的原钩子；不覆盖自定义 hooksPath。其他独立上传钩子仍需各自串联。
 - 限制：统计已提交内容，不扫描未提交构建目录；超出 pack 估算上限只返回下界。首次扫描大型历史可能较慢，Git 子进程有 60 秒超时、分析输出 64 MiB 上限，失败时明确阻止推送。
 - 验证使用隔离 HOME 的本地 Git / git-lfs；没有访问云存储或改变 G2 的生产验收状态。使用和 JSON 字段见 [inspect.md](./inspect.md)。

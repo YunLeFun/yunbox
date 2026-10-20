@@ -35,12 +35,23 @@ struct ReportView: View {
                 BudgetCard(title: "Git pack", symbol: "arrow.up.doc", value: report.git.packBytes, limit: report.limits.gitBytes,
                            exceeded: report.git.exceedsLimit, display: report.git.packComplete ? byteLabel(report.git.packBytes) : "> \(byteLabel(report.git.packCapBytes))",
                            footnote: "压缩后的预计上传量")
-                BudgetCard(title: "LFS 候选", symbol: "shippingbox", value: report.lfs.candidateBytes, limit: report.limits.lfsBytes,
-                           exceeded: report.lfs.exceedsLimit, display: byteLabel(report.lfs.candidateBytes),
-                           footnote: "\(report.lfs.candidateCount) 个素材对象")
+                if let upload = report.lfs.uploadBytes {
+                    BudgetCard(title: "LFS 需上传", symbol: "shippingbox", value: upload, limit: report.limits.lfsBytes,
+                               exceeded: report.lfs.exceedsLimit, display: byteLabel(upload),
+                               footnote: "\(report.lfs.candidateCount - report.lfs.remoteCount) 个素材对象，\(report.lfs.remoteCount) 个已在 COS")
+                } else {
+                    BudgetCard(title: "LFS 候选", symbol: "shippingbox", value: report.lfs.candidateBytes, limit: report.limits.lfsBytes,
+                               exceeded: report.lfs.exceedsLimit, display: byteLabel(report.lfs.candidateBytes),
+                               footnote: "\(report.lfs.candidateCount) 个素材对象")
+                }
             }
-            Text("LFS 尚未查询远端，实际上传量未知；远端已有对象可能跳过。")
-                .font(.caption).foregroundStyle(.secondary)
+            if report.lfs.remoteChecked {
+                Text("已查询 COS：已有的 LFS 对象推送时跳过，不计入上传量。")
+                    .font(.caption).foregroundStyle(.secondary)
+            } else {
+                Text("LFS 尚未查询远端，实际上传量未知；远端已有对象可能跳过。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             HStack {
                 Picker("文件类型", selection: $store.kind) {
                     Text("全部").tag("全部")

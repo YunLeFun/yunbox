@@ -32,9 +32,13 @@ public struct InspectionReport: Decodable, Sendable {
         public let candidateBytes: Int64
         public let candidateCount: Int
         public let remoteChecked: Bool
+        /// Bytes still missing in COS; `nil` unless `remoteChecked`, never a guessed zero.
         public let uploadBytes: Int64?
         public let exceedsLimit: Bool
         public let files: [ContentObject]
+
+        /// Candidates COS already has, when `remoteChecked`.
+        public var remoteCount: Int { files.filter { $0.onRemote == true }.count }
     }
 
     /// One path's net change across the pushed commits.
@@ -67,7 +71,11 @@ public struct InspectionReport: Decodable, Sendable {
         public let oid: String
         public let bytes: Int64
         public let paths: [String]
+        /// Over the per-file budget and uploaded: an LFS object already in COS never is.
         public let exceedsFileLimit: Bool
+        /// LFS objects only, when `lfs.remoteChecked`: COS already has it, so the push skips it.
+        /// `nil` for Git objects, unchecked reports and older CLIs.
+        public let onRemote: Bool?
     }
 
     /// The change a content object belongs to: the path it is the pushed version of, else any of its paths.
