@@ -26,10 +26,10 @@ const STYLE = `
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 body { font: 12px/1.45 -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; color: var(--fg); padding: 2px 2px 0; -webkit-user-select: text;
   display: flex; flex-direction: column; }
-/* Budgets, summary and column titles stay put; only the file list scrolls. Both tables
+/* Budgets, summary, column titles and notes stay put; only the file list scrolls. Both tables
    reserve the same scrollbar gutter so their columns line up. */
 .columns, .list { scrollbar-gutter: stable; }
-.meters, .caption, .columns { flex: none; }
+.meters, .caption, .columns, .notes { flex: none; }
 .columns { overflow-y: hidden; }
 .list { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 8px; }
 .meters { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
@@ -74,7 +74,7 @@ a.path { color: inherit; text-decoration: none; cursor: default; }
 a.path::after { content: ""; position: absolute; inset: 0; }
 a.path:focus-visible { outline: none; }
 tr.preview:has(a.path:focus-visible) td { background: color-mix(in srgb, var(--accent) 14%, transparent); }
-.notes { margin: 10px 2px 0; padding-left: 16px; color: var(--muted); font-size: 11px; }
+.notes { margin: 8px 2px 0; padding-left: 16px; color: var(--muted); font-size: 11px; }
 `
 
 /**
@@ -415,8 +415,8 @@ export function renderConfirmationHtml(report: PushInspection): string {
 <section class="meters">${meters.join('')}</section>
 <div class="caption"><strong>变更文件</strong><span>${changes.length} 个文件${counts.map(([status, count]) => ` · <i class="badge ${status}">${CHANGE_LABELS[status]}</i> ${count}`).join('')}</span><span class="spacer"></span><span>${previewable ? '点击文件预览 · ' : ''}按本次上传大小排序</span></div>
 <div class="columns"><table>${COLUMNS}<thead><tr><th>状态</th><th>文件</th><th class="num">大小变化</th><th class="num">本次上传</th></tr></thead></table></div>
-<div class="list"><table>${COLUMNS}<tbody>${rows || '<tr><td colspan="4" class="empty">没有新的文件内容</td></tr>'}</tbody></table>
-<ul class="notes">${notes.map(note => `<li>${escapeHtml(note)}</li>`).join('')}</ul></div>
+<div class="list"><table>${COLUMNS}<tbody>${rows || '<tr><td colspan="4" class="empty">没有新的文件内容</td></tr>'}</tbody></table></div>
+<ul class="notes">${notes.map(note => `<li>${escapeHtml(note)}</li>`).join('')}</ul>
 </body></html>
 `
 }

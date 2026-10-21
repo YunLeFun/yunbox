@@ -102,12 +102,14 @@ describe('renderConfirmationHtml', () => {
     expect(html).not.toContain('8.00 KiB')
   })
 
-  it('keeps the budgets and column titles out of the scrolling list', () => {
+  it('keeps the budgets, column titles and notes out of the scrolling list', () => {
     const html = renderConfirmationHtml(report('docs/guide.md'))
     const list = html.indexOf('<div class="list">')
+    const listEnd = html.indexOf('</div>', html.indexOf('</table>', list))
     expect(list).toBeGreaterThan(html.indexOf('<thead>'))
     expect(list).toBeGreaterThan(html.indexOf('class="meters"'))
-    expect(html.slice(list)).toContain('docs/</span>')
+    expect(html.slice(list, listEnd)).toContain('docs/</span>')
+    expect(html.indexOf('<ul class="notes">')).toBeGreaterThan(listEnd)
   })
 
   it('links rows with a pushed version to their preview, and only those', () => {
