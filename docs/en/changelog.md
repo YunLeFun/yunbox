@@ -28,6 +28,7 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 - The website and documentation are now available at [yunbox.yunle.fun](https://yunbox.yunle.fun/).
 - Budgets in the macOS app are now edited as a number and a unit, with common values and Restore Default. After changing them you can check the current repository again right away, and when the app follows Git config it shows the budgets the last check actually used.
 - In repositories connected directly to COS, the push check first asks COS which LFS assets are already there and budgets only what actually needs uploading, so a new branch is no longer flagged for assets the remote already has. If the lookup fails or times out, it counts every asset as before and never blocks the push.
+- The buttons at the top of the push confirmation dialog show the icon of the app they open (Finder, your editor, YunBox, your default browser), so they are easier to tell apart at a glance.
 
 ### Fixed
 

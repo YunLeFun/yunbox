@@ -5,7 +5,11 @@
  * packages/cli/src/confirm.ts embedded. Nothing here is clickable; the sample
  * push adds an intro video that is larger than the single-file budget.
  */
+import { withBase } from 'vitepress'
 import { computed } from 'vue'
+import finderIcon from '../assets/app-icons/finder.png'
+import safariIcon from '../assets/app-icons/safari.png'
+import vscodeIcon from '../assets/app-icons/vscode.png'
 import { useCopy } from '../i18n'
 
 type Status = 'added' | 'modified' | 'deleted'
@@ -58,7 +62,7 @@ const t = useCopy({
     largest: '最大单文件',
     largestNote: '原始大小',
     reason: (count: number, limit: string) => `${count} 个文件版本超过单文件限额 ${limit}`,
-    links: ['在 Finder 中显示', '在 Cursor 中打开', '在 YunBox 中查看完整信息', '打开远端仓库'],
+    links: ['在 Finder 中显示', '在 Visual Studio Code 中打开', '在 YunBox 中查看完整信息', '打开远端仓库'],
     title: '推送到 github.com/owner/game-assets 超过限额',
     local: '本地仓库 game-assets（main）',
     over: '超限',
@@ -82,7 +86,7 @@ const t = useCopy({
     largest: 'Largest file',
     largestNote: 'Original size',
     reason: (count: number, limit: string) => `${count} file versions are over the per-file limit of ${limit}`,
-    links: ['Show in Finder', 'Open in Cursor', 'View Details in YunBox', 'Open Remote Repository'],
+    links: ['Show in Finder', 'Open in Visual Studio Code', 'View Details in YunBox', 'Open Remote Repository'],
     title: 'Push to github.com/owner/game-assets is over the limit',
     local: 'Local repository game-assets (main)',
     over: 'Over',
@@ -98,6 +102,9 @@ const t = useCopy({
     cancel: 'Cancel',
   },
 })
+
+/** Icons of the apps the link buttons open, in the order of `links`; the browser is Safari here. */
+const LINK_ICONS = [finderIcon, vscodeIcon, withBase('/yunbox-app-icon.svg'), safariIcon]
 
 const meters = computed(() => [
   { label: 'Git pack', value: GIT_PACK, limit: LIMITS.git, note: t.value.gitNote },
@@ -160,6 +167,12 @@ function percent(ratio: number): string {
         {{ t.local }}<br>{{ reason }}
       </p>
 
+      <div class="links">
+        <span v-for="(link, index) in t.links" :key="link" class="button button-small">
+          <img :src="LINK_ICONS[index]" alt="" width="14" height="14">{{ link }}
+        </span>
+      </div>
+
       <div class="report">
         <div class="meters">
           <div v-for="meter in meters" :key="meter.label" class="meter" :class="{ over: meter.over }">
@@ -215,10 +228,6 @@ function percent(ratio: number): string {
         <p class="note">
           {{ t.note }}
         </p>
-      </div>
-
-      <div class="links">
-        <span v-for="link in t.links" :key="link" class="button button-small">{{ link }}</span>
       </div>
 
       <div class="actions">
@@ -539,6 +548,9 @@ i {
 }
 
 .button-small {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   padding: 1px 8px;
   border-radius: 5px;
   font-size: 11px;

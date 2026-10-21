@@ -217,27 +217,37 @@ function run(argv) {
   const actions = []
   if (links.root) {
     const folder = $.NSURL.fileURLWithPath(links.root)
-    actions.push(['在 Finder 中显示', () => workspace.activateFileViewerSelectingURLs($([folder]))])
+    actions.push(['在 Finder 中显示', () => workspace.activateFileViewerSelectingURLs($([folder])), installed('com.apple.finder')])
     const editor = ['com.todesktop.230313mzl4w4u92', 'com.microsoft.VSCode', 'dev.zed.Zed', 'com.sublimetext.4'].map(installed).find(Boolean)
     if (editor)
-      actions.push([\`在 \${ObjC.unwrap(editor.URLByDeletingPathExtension.lastPathComponent)} 中打开\`, () => openWith(folder, editor)])
+      actions.push([\`在 \${ObjC.unwrap(editor.URLByDeletingPathExtension.lastPathComponent)} 中打开\`, () => openWith(folder, editor), editor])
     const client = installed('fun.yunle.yunbox.desktop')
     if (client)
-      actions.push(['在 YunBox 中查看完整信息', () => openWith(folder, client)])
+      actions.push(['在 YunBox 中查看完整信息', () => openWith(folder, client), client])
   }
-  if (links.web)
-    actions.push(['打开远端仓库', () => workspace.openURL($.NSURL.URLWithString(links.web))])
+  if (links.web) {
+    const page = $.NSURL.URLWithString(links.web)
+    const browser = workspace.URLForApplicationToOpenURL(page)
+    actions.push(['打开远端仓库', () => workspace.openURL(page), browser.isNil() ? undefined : browser])
+  }
   if (actions.length) {
     ObjC.registerSubclass({ name: 'YunBoxLinks', methods: { 'perform:': { types: ['void', ['id']], implementation: function (sender) { actions[sender.tag][1]() } } } })
     const target = $.YunBoxLinks.alloc.init
     const row = $.NSStackView.alloc.initWithFrame($.NSMakeRect(0, height + 8, 760, 24))
     row.spacing = 6
     row.alignment = $.NSLayoutAttributeCenterY
-    actions.forEach(([label], index) => {
+    actions.forEach(([label, , application], index) => {
       const button = $.NSButton.buttonWithTitleTargetAction(label, target, 'perform:')
       button.controlSize = $.NSControlSizeSmall
       button.font = $.NSFont.systemFontOfSize($.NSFont.smallSystemFontSize)
       button.tag = index
+      // The icon of the app the button opens: Finder, the editor, YunBox, the default browser.
+      if (application) {
+        const icon = workspace.iconForFile(application.path)
+        icon.size = $.NSMakeSize(14, 14)
+        button.image = icon
+        button.imagePosition = $.NSImageLeading
+      }
       row.addArrangedSubview(button)
     })
     row.addArrangedSubview($.NSView.alloc.init)
