@@ -81,7 +81,8 @@ tr.preview:has(a.path:focus-visible) td { background: color-mix(in srgb, var(--a
  * JXA run through `osascript`: a native alert with the HTML report embedded, so it needs
  * no app bundle. argv: title, reasons, web view height, optional snapshot path (debug aid:
  * capture the window to a PNG, then cancel), JSON `{ root, web, preview }` for the link
- * buttons and row previews. stdin: the HTML. Prints `continue` or `cancel`. The link
+ * buttons and row previews. stdin: the HTML. Prints `continue` or `cancel`, then on the next line the note typed
+ * under the report (may be empty). The link
  * buttons open Finder, an editor, the remote's web page or the YunBox client without
  * closing the alert.
  *
@@ -140,9 +141,26 @@ function run(argv) {
     button.target = chooser
     button.action = 'choose:'
   }
-  const web = $.WKWebView.alloc.initWithFrameConfiguration($.NSMakeRect(0, 0, 760, height), $.WKWebViewConfiguration.alloc.init)
+  // An optional note under the report, answered by either button: typing it is the only extra step.
+  const note = $.NSTextField.alloc.initWithFrame($.NSMakeRect(0, 0, 760, 24))
+  note.placeholderString = '原因（可选）：为什么取消或继续推送，会转告发起推送的人或 AI'
+  note.bezelStyle = $.NSTextFieldRoundedBezel
+  note.setAccessibilityLabel('推送原因')
+  note.cell.usesSingleLineMode = true
+  note.cell.scrollable = true
+  // An accessory app has no menu bar; without an Edit menu, ⌘V / ⌘C / ⌘A do nothing in the field or the report.
+  const menu = $.NSMenu.alloc.init
+  const edit = $.NSMenu.alloc.initWithTitle('编辑')
+  ;[['撤销', 'undo:', 'z'], ['重做', 'redo:', 'Z'], ['剪切', 'cut:', 'x'], ['拷贝', 'copy:', 'c'], ['粘贴', 'paste:', 'v'], ['全选', 'selectAll:', 'a']]
+    .forEach(([title, action, key]) => edit.addItemWithTitleActionKeyEquivalent(title, action, key))
+  menu.addItemWithTitleActionKeyEquivalent('编辑', $.nil, '').submenu = edit
+  app.mainMenu = menu
+  const web = $.WKWebView.alloc.initWithFrameConfiguration($.NSMakeRect(0, 32, 760, height), $.WKWebViewConfiguration.alloc.init)
   web.setValueForKey(false, 'drawsBackground')
   web.loadHTMLStringBaseURL(html, $.nil)
+  const accessory = $.NSView.alloc.initWithFrame($.NSMakeRect(0, 0, 760, height + 32))
+  accessory.addSubview(note)
+  accessory.addSubview(web)
   let previewer
   if (preview) {
     ObjC.import('Quartz')
@@ -233,7 +251,7 @@ function run(argv) {
   if (actions.length) {
     ObjC.registerSubclass({ name: 'YunBoxLinks', methods: { 'perform:': { types: ['void', ['id']], implementation: function (sender) { actions[sender.tag][1]() } } } })
     const target = $.YunBoxLinks.alloc.init
-    const row = $.NSStackView.alloc.initWithFrame($.NSMakeRect(0, height + 8, 760, 24))
+    const row = $.NSStackView.alloc.initWithFrame($.NSMakeRect(0, height + 40, 760, 24))
     row.spacing = 6
     row.alignment = $.NSLayoutAttributeCenterY
     actions.forEach(([label, , application], index) => {
@@ -251,14 +269,11 @@ function run(argv) {
       row.addArrangedSubview(button)
     })
     row.addArrangedSubview($.NSView.alloc.init)
-    const box = $.NSView.alloc.initWithFrame($.NSMakeRect(0, 0, 760, height + 36))
-    box.addSubview(web)
-    box.addSubview(row)
-    alert.accessoryView = box
+    accessory.addSubview(row)
   }
-  else {
-    alert.accessoryView = web
-  }
+  // From the bottom: the note, the report, then the link buttons.
+  accessory.setFrameSize($.NSMakeSize(760, height + (actions.length ? 68 : 32)))
+  alert.accessoryView = accessory
   if (argv[3]) {
     ObjC.registerSubclass({ name: 'YunBoxSnapshot', methods: { 'capture:': { types: ['void', ['id']], implementation: function () {
       const image = $.CGWindowListCreateImage($.CGRectNull, $.kCGWindowListOptionIncludingWindow, alert.window.windowNumber, $.kCGWindowImageBoundsIgnoreFraming)
@@ -276,13 +291,15 @@ function run(argv) {
   app.finishLaunching
   app.activateIgnoringOtherApps(true)
   alert.window.makeKeyAndOrderFront($.nil)
+  // Focus the note, so a reason can be typed straight away; Return still means 取消.
+  alert.window.makeFirstResponder(note)
   app.run
   if (preview) {
     if ($.QLPreviewPanel.sharedPreviewPanelExists)
       $.QLPreviewPanel.sharedPreviewPanel.orderOut($.nil)
     $.NSFileManager.defaultManager.removeItemAtPathError(preview.dir, null)
   }
-  return answer === 1 ? 'continue' : 'cancel'
+  return [answer === 1 ? 'continue' : 'cancel', ObjC.unwrap(note.stringValue)].join('\\n')
 }
 `
 
@@ -470,27 +487,60 @@ export function renderConfirmationHtml(report: PushInspection): string {
  * controlling terminal. Blocks (returns false) when nobody can be asked.
  */
 export async function confirmPush(context: CliContext, report: PushInspection, options: { remote?: string, updates?: string, head?: string } = {}): Promise<boolean> {
-  return await askPush(context, report, options) === 'continue'
+  return (await askPush(context, report, options))?.answer === 'continue'
+}
+
+/** An answer to the confirmation, with the reason given beside it, if any. */
+export interface PushAnswer {
+  answer: 'continue' | 'cancel'
+  /** Why, as typed in the dialog or after `y` / `n`: one line, never empty. */
+  note?: string
+}
+
+/** Longest note kept, in characters. */
+const NOTE_LIMIT = 500
+
+/**
+ * A typed note made safe to print: control characters (terminal escapes) and bidi
+ * overrides become spaces, then it is one line, cut to {@link NOTE_LIMIT} characters
+ * without splitting one. `undefined` when blank.
+ */
+export function cleanNote(text: string): string | undefined {
+  const note = text.replace(/[\p{Cc}\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/gu, ' ').replace(/\s+/g, ' ').trim()
+  if (!note)
+    return undefined
+  const characters = Array.from(note)
+  return characters.length > NOTE_LIMIT ? `${characters.slice(0, NOTE_LIMIT - 1).join('')}…` : note
+}
+
+/**
+ * Read a terminal answer: `y` / `yes` continues, anything else cancels. A reason may
+ * follow the answer (`n 先压缩图片`); a line that starts with neither is a reason to cancel.
+ */
+export function parseTerminalAnswer(line: string): PushAnswer {
+  const match = /^\s*(y(?:es)?|no?)(?:\s(.*))?$/i.exec(line)
+  const answer = match?.[1]?.[0]?.toLowerCase() === 'y' ? 'continue' : 'cancel'
+  const note = cleanNote(match ? match[2] ?? '' : line)
+  return note ? { answer, note } : { answer }
 }
 
 /**
  * Like {@link confirmPush}, but tells a “cancel” answer apart from nobody being
  * asked (`undefined`, after explaining why on stderr).
  */
-export async function askPush(context: CliContext, report: PushInspection, options: { remote?: string, updates?: string, head?: string } = {}): Promise<'continue' | 'cancel' | undefined> {
+export async function askPush(context: CliContext, report: PushInspection, options: { remote?: string, updates?: string, head?: string } = {}): Promise<PushAnswer | undefined> {
   const ui = confirmUi(context.env)
   const push = await describePush(context, options)
   const { source, target } = push
-  const answered = (answer: boolean): 'continue' | 'cancel' => answer ? 'continue' : 'cancel'
   if (ui === 'dialog' || (ui === 'auto' && process.platform === 'darwin' && !context.env.SSH_CONNECTION)) {
     const answer = await askDialog(context, report, push)
     if (answer !== undefined)
-      return answered(answer)
+      return answer
   }
   if (ui !== 'none') {
-    const answer = await askTerminal(`\n${source}${target ? ` 推送到 ${target}` : ''}：超过限额，仍要继续推送吗？[y/N] `)
+    const answer = await askTerminal(`\n${source}${target ? ` 推送到 ${target}` : ''}：超过限额，仍要继续推送吗？[y/N]（可在后面写原因，如 n 先压缩图片）`)
     if (answer !== undefined)
-      return answered(answer)
+      return answer
   }
   context.stderr.write('无法请求确认：没有可用的对话框或交互式终端。可提高限额（yunbox inspect --help）后重试。\n')
   return undefined
@@ -532,7 +582,7 @@ function listedChanges(report: PushInspection): { changes: InspectionChange[], s
   return { changes, shown: changes.slice(0, DIALOG_ROWS) }
 }
 
-async function askDialog(context: CliContext, report: PushInspection, push: PushEnds): Promise<boolean | undefined> {
+async function askDialog(context: CliContext, report: PushInspection, push: PushEnds): Promise<PushAnswer | undefined> {
   const { shown } = listedChanges(report)
   const height = Math.min(560, Math.max(300, 210 + shown.length * 29))
   const title = push.target ? `推送到 ${push.target} 超过限额` : '推送超过限额'
@@ -566,7 +616,7 @@ async function lfsObjects(context: CliContext): Promise<string | undefined> {
   }
 }
 
-function runDialog(args: string[], env: NodeJS.ProcessEnv, cwd: string, html: string): Promise<boolean | undefined> {
+function runDialog(args: string[], env: NodeJS.ProcessEnv, cwd: string, html: string): Promise<PushAnswer | undefined> {
   return new Promise((resolve) => {
     const child = spawn('osascript', args, { cwd, env, stdio: ['pipe', 'pipe', 'ignore'] })
     const chunks: Buffer[] = []
@@ -574,16 +624,27 @@ function runDialog(args: string[], env: NodeJS.ProcessEnv, cwd: string, html: st
     child.stdin.on('error', () => {})
     child.on('error', () => resolve(undefined))
     child.on('close', (code) => {
-      const answer = Buffer.concat(chunks).toString('utf8').trim()
-      // Anything but a clear answer (no window server, scripting disabled) falls back to the terminal.
-      resolve(code === 0 && (answer === 'continue' || answer === 'cancel') ? answer === 'continue' : undefined)
+      resolve(code === 0 ? parseDialogOutput(Buffer.concat(chunks).toString('utf8')) : undefined)
     })
     child.stdin.end(html)
   })
 }
 
+/**
+ * Read the dialog's output: `continue` or `cancel`, then the note. Anything else (no
+ * window server, scripting disabled) is `undefined`, which falls back to the terminal.
+ */
+export function parseDialogOutput(output: string): PushAnswer | undefined {
+  const [first, ...rest] = output.trimStart().split('\n')
+  const answer = first?.trim()
+  if (answer !== 'continue' && answer !== 'cancel')
+    return undefined
+  const note = cleanNote(rest.join(' '))
+  return note ? { answer, note } : { answer }
+}
+
 /** Ask on the controlling terminal: hook stdin carries ref updates, not the user's keyboard. */
-async function askTerminal(question: string): Promise<boolean | undefined> {
+async function askTerminal(question: string): Promise<PushAnswer | undefined> {
   if (process.platform === 'win32')
     return undefined
   let tty
@@ -603,7 +664,7 @@ async function askTerminal(question: string): Promise<boolean | undefined> {
         break
       answer += buffer.subarray(0, bytesRead).toString('utf8')
     }
-    return /^\s*y(?:es)?\s*$/i.test(answer.split('\n')[0]!)
+    return parseTerminalAnswer(answer.split('\n')[0]!)
   }
   catch {
     return undefined

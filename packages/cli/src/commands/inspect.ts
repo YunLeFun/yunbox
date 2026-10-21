@@ -1,3 +1,4 @@
+import type { PushAnswer } from '../confirm.ts'
 import type { CliContext } from '../context.ts'
 import { Buffer } from 'node:buffer'
 import { parseArgs } from 'node:util'
@@ -26,6 +27,7 @@ export const inspectHelp = `用法：yunbox inspect --push [选项]
   --top <number>      文本排行条数（默认 10）；JSON 始终包含全部明细
   --json              输出 schemaVersion=1 的 JSON，包括错误
   --confirm           超限时询问是否继续（macOS 原生对话框，否则终端）；确认后退出码为 0
+                      可附一句原因（对话框底部，或终端里写在 y / n 后面），会写进输出
   -h, --help          显示帮助
 
 size 支持字节及 k/m/g、KiB/MiB/GiB（1024 进制）。退出码：0 未超限，1 超限，2 检查失败。
@@ -99,14 +101,16 @@ export async function runInspect(context: CliContext, args: string[]): Promise<n
     context.stdout.write(values.json ? `${JSON.stringify(report)}\n` : formatInspection(report, top))
     if (report.status === 'ok')
       return 0
-    const answer = values.confirm ? await askPush(repo, report, { remote: values.remote, updates, head: values.head }) : undefined
+    const reply = values.confirm ? await askPush(repo, report, { remote: values.remote, updates, head: values.head }) : undefined
     if (values.confirm)
-      context.stderr.write(answer === 'continue' ? '已确认，继续推送。\n' : '已取消推送。\n')
-    if (answer === 'continue')
+      context.stderr.write(formatReply(reply))
+    if (reply?.answer === 'continue')
       return 0
     // Only a real push (from the hook) is remembered; manual checks block nothing.
-    if (values.stdin)
-      await recordBlockedPush(context.env, { root: repo.cwd, at: new Date().toISOString(), reason: answer === 'cancel' ? 'cancelled' : 'exceeded', summary: exceededReasons(report).join('；') })
+    if (values.stdin) {
+      const summary = [reply?.note && `原因：${reply.note}`, ...exceededReasons(report)].filter(Boolean).join('；')
+      await recordBlockedPush(context.env, { root: repo.cwd, at: new Date().toISOString(), reason: reply ? 'cancelled' : 'exceeded', summary })
+    }
     return 1
   }
   catch (error) {
@@ -118,6 +122,19 @@ export async function runInspect(context: CliContext, args: string[]): Promise<n
       context.stderr.write(`推送检查失败：${message}\n`)
     return 2
   }
+}
+
+/**
+ * What the confirmation decided, for whoever ran the push. That is often a coding
+ * assistant reading the hook's stderr, so a cancel says plainly not to work around it.
+ */
+function formatReply(reply: PushAnswer | undefined): string {
+  if (reply?.answer === 'continue')
+    return reply.note ? `已确认，继续推送。原因：${reply.note}\n` : '已确认，继续推送。\n'
+  if (!reply)
+    return '已取消推送。\n'
+  return `${reply.note ? `已取消推送，原因：${reply.note}` : '已取消推送。'}\n`
+    + `这是人工确认的结果：${reply.note ? '请按原因处理，' : ''}不要提高限额或用 --no-verify 绕过检查后重新推送。\n`
 }
 
 async function readLimit(context: CliContext, supplied: string | undefined, key: string, fallback: number): Promise<number> {

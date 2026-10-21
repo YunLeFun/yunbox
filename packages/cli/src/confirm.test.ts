@@ -1,7 +1,7 @@
 import type { InspectionChange, PushInspection } from './inspect.ts'
 import { Buffer } from 'node:buffer'
 import { describe, expect, it } from 'vitest'
-import { describeRemote, describeSource, previewVersions, remoteWebUrl, renderConfirmationHtml } from './confirm.ts'
+import { cleanNote, describeRemote, describeSource, parseDialogOutput, parseTerminalAnswer, previewVersions, remoteWebUrl, renderConfirmationHtml } from './confirm.ts'
 
 function change(path: string, overrides: Partial<InspectionChange> = {}): InspectionChange {
   return { path, status: 'added', storage: 'git', beforeBytes: null, afterBytes: 2048, beforeOid: null, afterOid: 'a'.repeat(40), versions: 1, pushBytes: 2048, exceedsFileLimit: true, ...overrides }
@@ -152,5 +152,39 @@ describe('previewVersions', () => {
       expect(Buffer.byteLength(name)).toBeLessThanOrEqual(255)
       expect(name.endsWith('.png')).toBe(true)
     }
+  })
+})
+
+describe('confirmation answers', () => {
+  it('reads the dialog button and the note under it', () => {
+    expect(parseDialogOutput('cancel\n先压缩图片\n')).toEqual({ answer: 'cancel', note: '先压缩图片' })
+    expect(parseDialogOutput('continue\n\n')).toEqual({ answer: 'continue' })
+    expect(parseDialogOutput('cancel\n')).toEqual({ answer: 'cancel' })
+    expect(parseDialogOutput('')).toBeUndefined()
+    expect(parseDialogOutput('execution error: Not authorized\n')).toBeUndefined()
+  })
+
+  it('reads a reason after the terminal answer', () => {
+    expect(parseTerminalAnswer('y')).toEqual({ answer: 'continue' })
+    expect(parseTerminalAnswer('Yes 美术已确认')).toEqual({ answer: 'continue', note: '美术已确认' })
+    expect(parseTerminalAnswer('')).toEqual({ answer: 'cancel' })
+    expect(parseTerminalAnswer('n 先压缩图片')).toEqual({ answer: 'cancel', note: '先压缩图片' })
+    expect(parseTerminalAnswer('yolo')).toEqual({ answer: 'cancel', note: 'yolo' })
+    expect(parseTerminalAnswer('先别推')).toEqual({ answer: 'cancel', note: '先别推' })
+  })
+
+  it('keeps notes on one line and short', () => {
+    expect(cleanNote('  a\n\tb  ')).toBe('a b')
+    expect(cleanNote(' \n ')).toBeUndefined()
+    expect(cleanNote('长'.repeat(600))).toHaveLength(500)
+    // Counted in characters: an emoji is never cut in half.
+    expect(Array.from(cleanNote('😀'.repeat(600))!)).toHaveLength(500)
+    expect(cleanNote('😀'.repeat(600))!.endsWith('😀…')).toBe(true)
+  })
+
+  it('drops terminal escapes and bidi overrides from notes', () => {
+    expect(cleanNote('\u001B[2J\u001B]0;title\u0007先压缩')).toBe('[2J ]0;title 先压缩')
+    expect(cleanNote('a\u202Eb\u0000c')).toBe('a b c')
+    expect(cleanNote('👩‍🎨 美术已确认')).toBe('👩‍🎨 美术已确认')
   })
 })

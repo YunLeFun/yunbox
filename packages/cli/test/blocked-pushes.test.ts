@@ -1,7 +1,7 @@
 import type { BlockedPush } from '../src/blocked-pushes.ts'
 import type { Sandbox } from './helpers.ts'
 import { randomBytes } from 'node:crypto'
-import { readFile, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -89,6 +89,36 @@ describe('blocked push record', () => {
     await runYunBox(sandbox, repo, ['freeze', 'set', '24/7', '--shared'])
     expect((await runYunBox(sandbox, repo, ['inspect', '--push', '--stdin'], updates)).code).toBe(1)
     expect(await readBlockedPushes(sandbox.env)).toEqual([{ root, at: expect.any(String), reason: 'freeze', summary: '禁推时段 24/7（团队 .yunbox/config）' }])
+  })
+
+  it.skipIf(process.platform === 'win32')('passes the reason typed in the dialog to the pusher and the record', async () => {
+    const { sandbox, repo } = await fixture()
+    await writeFile(join(repo, 'big.bin'), randomBytes(8192))
+    await git(sandbox, repo, 'add', '-A')
+    await git(sandbox, repo, 'commit', '-qm', 'test(inspect): add a large file')
+    const tip = await git(sandbox, repo, 'rev-parse', 'HEAD')
+    const updates = `refs/heads/main ${tip} refs/heads/main ${'0'.repeat(40)}\n`
+    // A stand-in for osascript that answers like the dialog: the button, then the note.
+    const bin = join(sandbox.root, 'bin')
+    await mkdir(bin)
+    await writeFile(join(bin, 'osascript'), '#!/bin/sh\ncat >/dev/null\nprintf \'%s\\n%s\\n\' "$ANSWER" "$NOTE"\n', { mode: 0o755 })
+    Object.assign(sandbox.env, { YUNBOX_CONFIRM_UI: 'dialog', PATH: `${bin}:${sandbox.env.PATH}`, ANSWER: 'cancel', NOTE: '先压缩  图片' })
+    const hook = ['inspect', '--push', '--stdin', '--file-limit', '4k', '--confirm']
+    const cancelled = await runYunBox(sandbox, repo, hook, updates)
+    expect(cancelled.code).toBe(1)
+    expect(cancelled.stderr).toContain('已取消推送，原因：先压缩 图片\n')
+    expect(cancelled.stderr).toContain('不要提高限额或用 --no-verify 绕过检查')
+    expect((await readBlockedPushes(sandbox.env))[0]).toMatchObject({ reason: 'cancelled', summary: '原因：先压缩 图片；1 个文件版本超过单文件限额 4.00 KiB' })
+
+    Object.assign(sandbox.env, { ANSWER: 'continue', NOTE: '美术已确认' })
+    const continued = await runYunBox(sandbox, repo, hook, updates)
+    expect(continued.code).toBe(0)
+    expect(continued.stderr).toContain('已确认，继续推送。原因：美术已确认\n')
+
+    // No note: the cancel still says not to work around it.
+    Object.assign(sandbox.env, { ANSWER: 'cancel', NOTE: '' })
+    const plain = await runYunBox(sandbox, repo, hook, updates)
+    expect(plain.stderr).toContain('已取消推送。\n这是人工确认的结果：不要提高限额')
   })
 
   it('never changes the push result when the record cannot be written', async () => {
