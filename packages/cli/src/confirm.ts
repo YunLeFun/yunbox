@@ -109,11 +109,40 @@ function run(argv) {
   alert.addButtonWithTitle('取消')
   alert.addButtonWithTitle('继续推送').hasDestructiveAction = true
   const height = Number(argv[2])
+  const links = JSON.parse(argv[4] || '{}')
+  const preview = links.preview
+  // The alert runs without a modal session: in one, AppKit drops every click on the Quick Look
+  // panel (it never works when modal), so its close button did nothing. The buttons answer instead.
+  // The index of the chosen button: 0 取消, 1 继续推送.
+  let answer
+  const finish = (value) => {
+    answer = value
+    app.stop($.nil)
+    // stop takes effect after the next event; post one so run returns now.
+    app.postEventAtStart($.NSEvent.otherEventWithTypeLocationModifierFlagsTimestampWindowNumberContextSubtypeData1Data2($.NSEventTypeApplicationDefined, $.NSZeroPoint, 0, 0, 0, $.nil, 0, 0, 0), true)
+  }
+  ObjC.registerSubclass({ name: 'YunBoxAnswer', methods: { 'choose:': { types: ['void', ['id']], implementation: (sender) => {
+    // Esc (取消's key equivalent) closes an open preview first instead of cancelling the push.
+    // The button acts on key up, so check for either key event.
+    const type = app.currentEvent.type
+    const keyed = type === $.NSEventTypeKeyDown || type === $.NSEventTypeKeyUp
+    if (preview && keyed && $.QLPreviewPanel.sharedPreviewPanelExists && $.QLPreviewPanel.sharedPreviewPanel.isVisible) {
+      $.QLPreviewPanel.sharedPreviewPanel.orderOut($.nil)
+      return
+    }
+    // JXA hands NSInteger back as a string.
+    finish(Number(sender.tag))
+  } } } })
+  const chooser = $.YunBoxAnswer.alloc.init
+  for (let index = 0; index < alert.buttons.count; index++) {
+    const button = alert.buttons.objectAtIndex(index)
+    button.tag = index
+    button.target = chooser
+    button.action = 'choose:'
+  }
   const web = $.WKWebView.alloc.initWithFrameConfiguration($.NSMakeRect(0, 0, 760, height), $.WKWebViewConfiguration.alloc.init)
   web.setValueForKey(false, 'drawsBackground')
   web.loadHTMLStringBaseURL(html, $.nil)
-  const links = JSON.parse(argv[4] || '{}')
-  const preview = links.preview
   let previewer
   if (preview) {
     ObjC.import('Quartz')
@@ -169,8 +198,6 @@ function run(argv) {
             panel.reloadData
             // Start on the last item: the diff of a text file, else the pushed version; the left arrow steps back.
             panel.currentPreviewItemIndex = items.length - 1
-            // The alert is modal; without this the panel would not take the arrow keys or Esc.
-            panel.worksWhenModal = true
             panel.makeKeyAndOrderFront($.nil)
           }
           else {
@@ -226,19 +253,26 @@ function run(argv) {
     ObjC.registerSubclass({ name: 'YunBoxSnapshot', methods: { 'capture:': { types: ['void', ['id']], implementation: function () {
       const image = $.CGWindowListCreateImage($.CGRectNull, $.kCGWindowListOptionIncludingWindow, alert.window.windowNumber, $.kCGWindowImageBoundsIgnoreFraming)
       $.NSBitmapImageRep.alloc.initWithCGImage(image).representationUsingTypeProperties($.NSBitmapImageFileTypePNG, $({})).writeToFileAtomically(argv[3], true)
-      app.abortModal
+      finish(0)
     } } } })
     const timer = $.NSTimer.timerWithTimeIntervalTargetSelectorUserInfoRepeats(1.5, $.YunBoxSnapshot.alloc.init, 'capture:', $.nil, false)
-    $.NSRunLoop.currentRunLoop.addTimerForMode(timer, $.NSModalPanelRunLoopMode)
+    $.NSRunLoop.currentRunLoop.addTimerForMode(timer, $.NSDefaultRunLoopMode)
   }
+  // What runModal did: lay out, center, stay above other apps' windows, take focus.
+  alert.layout
+  alert.window.level = $.NSModalPanelWindowLevel
+  alert.window.center
+  // Activating before launch finishes is often ignored.
+  app.finishLaunching
   app.activateIgnoringOtherApps(true)
-  const answer = alert.runModal
+  alert.window.makeKeyAndOrderFront($.nil)
+  app.run
   if (preview) {
     if ($.QLPreviewPanel.sharedPreviewPanelExists)
       $.QLPreviewPanel.sharedPreviewPanel.orderOut($.nil)
     $.NSFileManager.defaultManager.removeItemAtPathError(preview.dir, null)
   }
-  return answer === $.NSAlertSecondButtonReturn ? 'continue' : 'cancel'
+  return answer === 1 ? 'continue' : 'cancel'
 }
 `
 
