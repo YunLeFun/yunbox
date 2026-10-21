@@ -74,6 +74,8 @@ const t = useCopy({
     none: '无',
     delta: (text: string, delta: string) => `${text}（${delta}）`,
     note: '「本次上传」是文件原始大小，Git 会压缩和增量传输；同一文件的每个历史版本分别统计。',
+    reasonField: '原因（可选）：为什么取消或继续推送，会转告发起推送的人或 AI',
+    reasonSample: '先把 opening.mp4 压到 200 MiB 以下再推',
     proceed: '继续推送',
     cancel: '取消',
   },
@@ -98,6 +100,8 @@ const t = useCopy({
     none: 'none',
     delta: (text: string, delta: string) => `${text} (${delta})`,
     note: '“This push” is the original file size; Git compresses and sends deltas. Each past version of a file counts separately.',
+    reasonField: 'Reason (optional): why you cancel or push anyway; passed on to whoever started the push, or the AI',
+    reasonSample: 'Compress opening.mp4 under 200 MiB before pushing',
     proceed: 'Push Anyway',
     cancel: 'Cancel',
   },
@@ -229,6 +233,11 @@ function percent(ratio: number): string {
           {{ t.note }}
         </p>
       </div>
+
+      <!-- The optional reason under the report, typed in and focused as when the dialog opens. -->
+      <p class="reason-field" role="textbox" aria-readonly="true" :aria-label="t.reasonField" :title="t.reasonField">
+        {{ t.reasonSample }}<span class="caret" aria-hidden="true" />
+      </p>
 
       <div class="actions">
         <span class="button button-destructive">{{ t.proceed }}</span>
@@ -521,6 +530,27 @@ i {
   margin: 10px 2px 0 !important;
   color: var(--muted);
   font-size: 11px;
+}
+
+/* NSTextField, rounded bezel, with the focus ring it has when the dialog opens. */
+.reason-field {
+  overflow: hidden;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--yb-window);
+  box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.2), 0 0 0 3.5px color-mix(in srgb, var(--bar) 45%, transparent);
+  font-size: 13px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.caret {
+  display: inline-block;
+  width: 1px;
+  height: 1.1em;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  background: var(--fg);
 }
 
 /* NSButton look: small link buttons, then the alert's own buttons. */

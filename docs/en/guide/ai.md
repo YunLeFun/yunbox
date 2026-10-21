@@ -49,3 +49,13 @@ The CLI's human-readable messages are in Chinese for now, but JSON field names a
 | `yunbox freeze set / list --json / check --json / off / on` | [push freeze](./freeze) | set, view and temporarily switch off push freeze windows |
 
 `yunbox login` also accepts `--secret-key-stdin`, but run it yourself; don't let the AI pass your key along.
+
+## When the AI's push is stopped
+
+With `yunbox hook install --confirm`, a `git push` run by the AI that goes over budget opens the [confirmation dialog](../inspect#confirming-over-budget-pushes) on your screen, and you decide. At the bottom you can type a one-line reason, whether you cancel or push anyway. The cursor starts in that field, so type and click a button, or leave it empty.
+
+The reason appears in the output of `git push`, where the coding assistant reads it (the CLI's messages are in Chinese for now). For example, a cancel with the reason “compress opening.mp4 under 200 MiB first” prints that reason, followed by a note that this was a human decision and that the budget must not be raised nor the check bypassed with `--no-verify`.
+
+So the AI doesn't just see “push failed” and raise the budget to retry. It does what you asked instead: compresses the file, splits the push, or stops to ask you. A reason given when pushing anyway (such as “approved by the art team”) is shown too. Cancelled pushes are recorded on your Mac with their reason and appear under Recently Blocked in the macOS app.
+
+Where there is no window (a Linux terminal, for example), put the reason after the answer: `n compress the images first`, `y approved by the art team`.

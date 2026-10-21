@@ -29,7 +29,7 @@ const t = useCopy({
     setup: '管理员给仓库接一次 COS（或 R2 等 S3 兼容存储），再给每位协作者一把自己的密钥。协作者登录后 clone，素材自动下载。哪里不对，先跑 <code>yunbox doctor</code>，每一项都附修复命令。',
     checkTitle: '推送之前，先看看有多大',
     check: 'macOS 客户端和 <code>yunbox inspect --push</code> 用同一套检查：分别统计 Git pack 和 LFS 候选量，按大小列出每个文件，超出预算的标出来。下面的窗口可以直接操作。',
-    confirm: '用 <code>yunbox hook install --confirm</code> 装上推送钩子后，超出预算的 <code>git push</code> 不会被直接拦下，而是弹出下面的对话框：推到哪个远端、哪些文件超限、每个文件多大，看完再决定取消还是继续。',
+    confirm: '用 <code>yunbox hook install --confirm</code> 装上推送钩子后，超出预算的 <code>git push</code> 不会被直接拦下，而是弹出下面的对话框：推到哪个远端、哪些文件超限、每个文件多大，看完再决定取消还是继续。底部可以顺手写一句原因：推送由 AI 编程助手发起时，它会在输出里读到「已取消推送，原因：先压缩视频」，照着处理，而不是调高限额或用 <code>--no-verify</code> 绕过去。',
     checkLinks: [
       { text: '推送检查的统计口径', path: '/inspect' },
       { text: '超限时如何确认', path: '/inspect#超限确认' },
@@ -64,7 +64,7 @@ const t = useCopy({
     setup: 'An admin connects the repository to R2 or any S3-compatible bucket (or to COS) once and gives each collaborator a key of their own. Collaborators sign in and clone; assets download on their own. If anything is off, run <code>yunbox doctor</code>: every failed check comes with the command that fixes it.',
     checkTitle: 'See how big a push is before you push',
     check: 'The macOS app and <code>yunbox inspect --push</code> run the same check: Git pack and LFS candidates are counted separately, every file is listed by size, and anything over budget is flagged. Try the window below; it works.',
-    confirm: 'Install the hook with <code>yunbox hook install --confirm</code> and an over-budget <code>git push</code> is not simply refused. You get the dialog below instead: which remote, which files are over, how big each one is. Then you decide whether to cancel or push anyway. (The real dialog is in Chinese for now.)',
+    confirm: 'Install the hook with <code>yunbox hook install --confirm</code> and an over-budget <code>git push</code> is not simply refused. You get the dialog below instead: which remote, which files are over, how big each one is. Then you decide whether to cancel or push anyway. You can add a one-line reason at the bottom: when an AI coding assistant started the push, it reads “cancelled, reason: compress the video first” in the output and does that, instead of raising the budget or bypassing the check with <code>--no-verify</code>. (The real dialog is in Chinese for now.)',
     checkLinks: [
       { text: 'What the push check counts', path: '/inspect' },
       { text: 'Confirming over-budget pushes', path: '/inspect#confirming-over-budget-pushes' },
