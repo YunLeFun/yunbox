@@ -52,7 +52,7 @@ if [ "${ACTOOL_MAJOR:-0}" -ge 26 ]; then
   ICON_BUILD_DIR="$ROOT_DIR/dist/YunBox.icon-build"
   rm -rf "$ICON_BUILD_DIR"
   mkdir -p "$ICON_BUILD_DIR"
-  xcrun actool assets/brand/YunBox.icon --compile "$ICON_BUILD_DIR" \
+  xcrun actool "$ROOT_DIR/assets/brand/YunBox.icon" --compile "$ICON_BUILD_DIR" \
     --platform macosx --target-device mac --minimum-deployment-target 14.0 \
     --app-icon YunBox --output-partial-info-plist "$ICON_BUILD_DIR/partial.plist" \
     --errors --warnings --output-format human-readable-text >/dev/null
