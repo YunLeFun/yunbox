@@ -366,11 +366,9 @@ function resolveAgentCommand(context: CliContext): { path: string, args: string,
     return { path: 'git-yunbox', args: 'lfs-agent', display: 'git-yunbox lfs-agent' }
   if (script === undefined || !/(?:git-yunbox|yunbox|cli\.m?js)$/.test(script))
     throw new CliError('找不到 git-yunbox 命令。先全局安装 YunBox 命令行（见 README「安装命令行」），再重新运行 git yunbox init')
-  if (process.platform === 'win32') {
-    // sh joins path and args into one command line: quote both and use forward slashes.
-    const node = process.execPath.replaceAll('\\', '/')
-    return { path: `"${node}"`, args: `"${script.replaceAll('\\', '/')}" lfs-agent`, display: `${node} ${script} lfs-agent` }
-  }
-  // git-lfs quotes the executable on POSIX; only its args need shell quoting here.
-  return { path: process.execPath, args: `${shellQuote(script)} lfs-agent`, display: `${basename(process.execPath)} ${script} lfs-agent` }
+  // git-lfs quotes the executable itself on every platform, then passes args to sh.
+  // Git for Windows also uses sh, so normalize its paths and quote only the args.
+  const node = process.platform === 'win32' ? process.execPath.replaceAll('\\', '/') : process.execPath
+  const entry = process.platform === 'win32' ? script.replaceAll('\\', '/') : script
+  return { path: node, args: `${shellQuote(entry)} lfs-agent`, display: `${basename(node)} ${entry} lfs-agent` }
 }

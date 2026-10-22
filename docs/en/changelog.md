@@ -37,6 +37,7 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ### Fixed
 
+- Fix direct transfers on Windows when the CLI is not installed globally: the transfer agent now starts correctly from its absolute path.
 - The macOS client uses its bundled transfer agent when connecting storage, preventing an older command-line installation from breaking S3 pushes.
 - The macOS Storage panel refreshes setup after saving COS keys. Restricted accounts that cannot list buckets can connect an existing bucket without being asked to create one.
 - Fixed intermittent missing-icon errors that prevented the macOS app from being packaged when building from source.
