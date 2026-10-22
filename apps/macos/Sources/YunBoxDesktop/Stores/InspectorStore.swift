@@ -25,13 +25,13 @@ final class InspectorStore {
     var selectedFile: String?
     var choosingRepository = false
     var copiedJSON = false
-    /// `yunbox doctor` for the current repository: direct-COS status and every check.
-    var cosReport: DoctorReport?
-    var isCheckingCos = false
-    var cosError: String?
-    var showingCos = false
-    @ObservationIgnored private var cosTask: Task<Void, Never>?
-    @ObservationIgnored private var cosRequestID = UUID()
+    /// `yunbox doctor` for the current repository: direct-storage (COS or S3) status and every check.
+    var storageReport: DoctorReport?
+    var isCheckingStorage = false
+    var storageError: String?
+    var showingStorage = false
+    @ObservationIgnored private var storageTask: Task<Void, Never>?
+    @ObservationIgnored private var storageRequestID = UUID()
     @ObservationIgnored private var task: Task<Void, Never>?
     @ObservationIgnored private var copyFeedback: Task<Void, Never>?
     @ObservationIgnored private var requestID = UUID()
@@ -134,7 +134,7 @@ final class InspectorStore {
         saveRecents()
         showCachedResult(for: root.path)
         inspect()
-        checkCos()
+        checkStorage()
         return true
     }
 
@@ -241,30 +241,30 @@ final class InspectorStore {
     }
 
     /// Run `yunbox doctor` for the current repository; a newer call or a switch supersedes older ones.
-    func checkCos() {
+    func checkStorage() {
         guard let repository else { return }
-        cosTask?.cancel()
+        storageTask?.cancel()
         let id = UUID()
-        cosRequestID = id
-        if cosReport != nil, cosReportPath != repository.path { cosReport = nil }
-        cosError = nil
-        isCheckingCos = true
-        cosTask = Task {
+        storageRequestID = id
+        if storageReport != nil, storageReportPath != repository.path { storageReport = nil }
+        storageError = nil
+        isCheckingStorage = true
+        storageTask = Task {
             do {
                 let report = try await client().doctor(repository: repository)
-                guard cosRequestID == id else { return }
-                cosReport = report
-                cosReportPath = repository.path
+                guard storageRequestID == id else { return }
+                storageReport = report
+                storageReportPath = repository.path
             } catch is CancellationError {
             } catch {
-                guard cosRequestID == id else { return }
-                cosError = (error as? LocalizedError)?.errorDescription ?? String(localized: "检查程序未能运行。请在设置中确认 Node.js 路径。")
+                guard storageRequestID == id else { return }
+                storageError = (error as? LocalizedError)?.errorDescription ?? String(localized: "检查程序未能运行。请在设置中确认 Node.js 路径。")
             }
-            if cosRequestID == id { isCheckingCos = false; cosTask = nil }
+            if storageRequestID == id { isCheckingStorage = false; storageTask = nil }
         }
     }
 
-    @ObservationIgnored private var cosReportPath: String?
+    @ObservationIgnored private var storageReportPath: String?
 
     func cancel() {
         requestID = UUID()

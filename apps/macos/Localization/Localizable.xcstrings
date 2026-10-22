@@ -356,16 +356,16 @@
     },
     "%lld 个素材对象，%lld 个已在 %@" : {
       "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$lld 个素材对象，%2$lld 个已在 %3$@"
-          }
-        },
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "To upload: %1$lld · already in %3$@: %2$lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$lld 个素材对象，%2$lld 个已在 %3$@"
           }
         }
       }
@@ -453,6 +453,16 @@
         }
       }
     },
+    "Access Key ID" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Access Key ID"
+          }
+        }
+      }
+    },
     "Bucket" : {
       "localizations" : {
         "en" : {
@@ -473,32 +483,12 @@
         }
       }
     },
-    "COS 状态未知" : {
+    "Cloudflare 账户 ID（R2 概览页右侧的 Account ID）" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "COS status unknown"
-          }
-        }
-      }
-    },
-    "COS 直连" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Direct COS"
-          }
-        }
-      }
-    },
-    "COS 直连状态，点击查看检查结果和接入" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Direct COS status. Click to see the checks and set it up."
+            "value" : "Cloudflare account ID (Account ID on the right of the R2 overview page)"
           }
         }
       }
@@ -585,6 +575,56 @@
         }
       }
     },
+    "R2 的 API token 只能限定到 bucket，不能限定到前缀：能访问这个 bucket 的 token 可以读写其中所有前缀。建议每个项目一个 bucket，给协作者的 token 只授权这个 bucket。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "R2 API tokens can be limited to buckets but not to prefixes: a token that can access this bucket can read and write every prefix in it. Use one bucket per project and give collaborators tokens for that bucket only."
+          }
+        }
+      }
+    },
+    "R2 账户 ID 是 32 位十六进制字符，在 Cloudflare 控制台的 R2 概览页可以复制。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The R2 account ID is 32 hexadecimal characters; copy it from the R2 overview page in the Cloudflare dashboard."
+          }
+        }
+      }
+    },
+    "S3 兼容存储" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "S3-compatible storage"
+          }
+        }
+      }
+    },
+    "S3 兼容存储（R2、AWS S3、MinIO）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "S3-Compatible (R2, AWS S3, MinIO)"
+          }
+        }
+      }
+    },
+    "Secret Access Key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Secret Access Key"
+          }
+        }
+      }
+    },
     "SecretId" : {
       "shouldTranslate" : false
     },
@@ -621,13 +661,31 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Please connect this Git repository to YunBox (Git LFS assets go straight to my own Tencent Cloud COS, no server needed) and install the push check.\n\nRepository: %1$@\nCurrent state: %2$@\n%3$@\n\nWork through these steps in order, reading each JSON result before deciding the next step:\n1. In the repository, run `%4$@ doctor --json` to see where things stand; for options you are unsure about, see `%5$@ init --help`.\n2. If the report is missing COS keys (the failed check titled \"COS 密钥\"): stop and ask me to run `%6$@ login` in a terminal myself, or to save them in the YunBox app's Direct COS panel. Do not ask me for the SecretId / SecretKey, and never put keys in command-line arguments, files or the repository.\n3. Run `%7$@ buckets --json` to list the available buckets, and confirm with me which bucket and folder prefix to use (default yunbox/<owner>/<repo>); ask me before creating a new bucket.\n4. Run `%8$@ init --bucket <name-APPID> --region <region> --prefix <prefix> --yes` (add --create for a new bucket).\n5. Run `%9$@ doctor --json` again and make sure nothing fails; if something does, apply its fixes or tell me.\n6. Run `%10$@ hook install` so pre-push checks sizes and push freezes before uploading.\n7. Ask me whether I want push freeze windows; if so, use `%11$@ freeze set \"Mo-Fr 09:00-18:00\"` (add --shared to share it with the team), then confirm with `%12$@ freeze check --json`. See `%13$@ freeze --help` for the syntax.\n8. Show me the changes to .gitattributes and .yunbox/config and let me decide whether to commit them; do not git push, and do not change existing commits."
+            "value" : "Please connect this Git repository to YunBox (Git LFS assets go straight to my own Tencent Cloud COS, no server needed) and install the push check.\n\nRepository: %1$@\nCurrent state: %2$@\n%3$@\n\nWork through these steps in order, reading each JSON result before deciding the next step:\n1. In the repository, run `%4$@ doctor --json` to see where things stand; for options you are unsure about, see `%5$@ init --help`.\n2. If the report is missing COS keys (the failed check titled \"COS 密钥\"): stop and ask me to run `%6$@ login` in a terminal myself, or to save them in the YunBox app's Storage panel. Do not ask me for the SecretId / SecretKey, and never put keys in command-line arguments, files or the repository.\n3. Run `%7$@ buckets --json` to list the available buckets, and confirm with me which bucket and folder prefix to use (default yunbox/<owner>/<repo>); ask me before creating a new bucket.\n4. Run `%8$@ init --bucket <name-APPID> --region <region> --prefix <prefix> --yes` (add --create for a new bucket).\n5. Run `%9$@ doctor --json` again and make sure nothing fails; if something does, apply its fixes or tell me.\n6. Run `%10$@ hook install` so pre-push checks sizes and push freezes before uploading.\n7. Ask me whether I want push freeze windows; if so, use `%11$@ freeze set \"Mo-Fr 09:00-18:00\"` (add --shared to share it with the team), then confirm with `%12$@ freeze check --json`. See `%13$@ freeze --help` for the syntax.\n8. Show me the changes to .gitattributes and .yunbox/config and let me decide whether to commit them; do not git push, and do not change existing commits."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "请帮我把这个 Git 仓库接入云匣 YunBox（Git LFS 素材直传我自己的腾讯云 COS，不需要服务端），并安装推送检查。\n\n仓库：%1$@\n当前状态：%2$@\n%3$@\n\n按顺序做，每一步先读 JSON 结果再决定下一步：\n1. 在仓库目录运行 `%4$@ doctor --json` 查看现状；不清楚的选项看 `%5$@ init --help`。\n2. 如果报告缺少 COS 密钥（标题为「COS 密钥」的失败项）：停下来，请我自己在终端运行 `%6$@ login`，或在云匣客户端的「COS 直连」面板里保存。不要向我索要 SecretId / SecretKey，也不要把密钥写进命令行参数、文件或仓库。\n3. 运行 `%7$@ buckets --json` 列出可用的 bucket，和我确认用哪个 bucket 和目录前缀（默认 yunbox/<owner>/<repo>）；需要新建 bucket 时先问我。\n4. 运行 `%8$@ init --bucket <名称-APPID> --region <地域> --prefix <前缀> --yes`（新建 bucket 再加 --create）。\n5. 再运行 `%9$@ doctor --json`，确认没有失败项；有失败项时按其中的 fixes 处理或告诉我。\n6. 运行 `%10$@ hook install`，让 pre-push 在上传前检查体积和禁推时段。\n7. 问我是否需要禁推时段；需要时用 `%11$@ freeze set \"Mo-Fr 09:00-18:00\"`（团队共享加 --shared），再用 `%12$@ freeze check --json` 核对。写法见 `%13$@ freeze --help`。\n8. 把 .gitattributes、.yunbox/config 的改动给我看，由我决定是否提交；不要 git push，也不要改动已有提交。"
+            "value" : "请帮我把这个 Git 仓库接入云匣 YunBox（Git LFS 素材直传我自己的腾讯云 COS，不需要服务端），并安装推送检查。\n\n仓库：%1$@\n当前状态：%2$@\n%3$@\n\n按顺序做，每一步先读 JSON 结果再决定下一步：\n1. 在仓库目录运行 `%4$@ doctor --json` 查看现状；不清楚的选项看 `%5$@ init --help`。\n2. 如果报告缺少 COS 密钥（标题为「COS 密钥」的失败项）：停下来，请我自己在终端运行 `%6$@ login`，或在云匣客户端的「存储」面板里保存。不要向我索要 SecretId / SecretKey，也不要把密钥写进命令行参数、文件或仓库。\n3. 运行 `%7$@ buckets --json` 列出可用的 bucket，和我确认用哪个 bucket 和目录前缀（默认 yunbox/<owner>/<repo>）；需要新建 bucket 时先问我。\n4. 运行 `%8$@ init --bucket <名称-APPID> --region <地域> --prefix <前缀> --yes`（新建 bucket 再加 --create）。\n5. 再运行 `%9$@ doctor --json`，确认没有失败项；有失败项时按其中的 fixes 处理或告诉我。\n6. 运行 `%10$@ hook install`，让 pre-push 在上传前检查体积和禁推时段。\n7. 问我是否需要禁推时段；需要时用 `%11$@ freeze set \"Mo-Fr 09:00-18:00\"`（团队共享加 --shared），再用 `%12$@ freeze check --json` 核对。写法见 `%13$@ freeze --help`。\n8. 把 .gitattributes、.yunbox/config 的改动给我看，由我决定是否提交；不要 git push，也不要改动已有提交。"
+          }
+        }
+      }
+    },
+    "ai.onboardingPromptS3" : {
+      "comment" : "Pasted into an AI coding assistant; keep the commands and placeholders exactly.",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Please connect this Git repository to YunBox (Git LFS assets go straight to my own S3-compatible storage, such as Cloudflare R2, AWS S3 or MinIO, no server needed) and install the push check.\n\nRepository: %1$@\nCurrent state: %2$@\n%3$@\n\nWork through these steps in order, reading each JSON result before deciding the next step:\n1. In the repository, run `%4$@ doctor --json` to see where things stand; for options you are unsure about, see `%5$@ init --help`.\n2. If the report is missing S3 keys (the failed check titled \"S3 密钥\"), or step 4 says this machine has no S3 keys yet: stop and ask me to run `%6$@ login --provider s3` in a terminal myself, or to save them in the YunBox app's Storage panel. Do not ask me for the Access Key ID / Secret Access Key, and never put keys in command-line arguments, files or the repository.\n3. YunBox cannot list or create S3 buckets. Confirm with me which service to use (Cloudflare R2, AWS S3, MinIO or another endpoint), the private bucket I have already created in the service's console, and the folder prefix (default yunbox/<owner>/<repo>); R2 also needs the account ID. R2 tokens can be limited to buckets but not to prefixes, so one bucket per project is recommended.\n4. Run `%7$@ init --preset r2 --account-id <account ID> --bucket <name> --prefix <prefix> --yes`; for AWS S3 use `--preset aws --region <region>`, for MinIO `--preset minio --endpoint <address>`, and for other services `--provider s3 --endpoint <address> --region <region>`.\n5. Run `%8$@ doctor --json` again and make sure nothing fails; if something does, apply its fixes or tell me.\n6. Run `%9$@ hook install` so pre-push checks sizes and push freezes before uploading.\n7. Ask me whether I want push freeze windows; if so, use `%10$@ freeze set \"Mo-Fr 09:00-18:00\"` (add --shared to share it with the team), then confirm with `%11$@ freeze check --json`. See `%12$@ freeze --help` for the syntax.\n8. Show me the changes to .gitattributes and .yunbox/config and let me decide whether to commit them; do not git push, and do not change existing commits."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "请帮我把这个 Git 仓库接入云匣 YunBox（Git LFS 素材直传我自己的 S3 兼容存储，例如 Cloudflare R2、AWS S3、MinIO，不需要服务端），并安装推送检查。\n\n仓库：%1$@\n当前状态：%2$@\n%3$@\n\n按顺序做，每一步先读 JSON 结果再决定下一步：\n1. 在仓库目录运行 `%4$@ doctor --json` 查看现状；不清楚的选项看 `%5$@ init --help`。\n2. 如果报告缺少 S3 密钥（标题为「S3 密钥」的失败项），或者第 4 步提示本机还没有 S3 密钥：停下来，请我自己在终端运行 `%6$@ login --provider s3`，或在云匣客户端的「存储」面板里保存。不要向我索要 Access Key ID / Secret Access Key，也不要把密钥写进命令行参数、文件或仓库。\n3. 云匣不能列出或新建 S3 的 bucket。和我确认用哪个服务（Cloudflare R2、AWS S3、MinIO 或其他 endpoint）、我已在服务控制台建好的私有 bucket，以及目录前缀（默认 yunbox/<owner>/<repo>）；R2 还需要账户 ID。R2 的 token 只能限定到 bucket，不能限定到前缀，建议每个项目一个 bucket。\n4. 运行 `%7$@ init --preset r2 --account-id <账户 ID> --bucket <名称> --prefix <前缀> --yes`；AWS S3 用 `--preset aws --region <地域>`，MinIO 用 `--preset minio --endpoint <地址>`，其他服务用 `--provider s3 --endpoint <地址> --region <地域>`。\n5. 再运行 `%8$@ doctor --json`，确认没有失败项；有失败项时按其中的 fixes 处理或告诉我。\n6. 运行 `%9$@ hook install`，让 pre-push 在上传前检查体积和禁推时段。\n7. 问我是否需要禁推时段；需要时用 `%10$@ freeze set \"Mo-Fr 09:00-18:00\"`（团队共享加 --shared），再用 `%11$@ freeze check --json` 核对。写法见 `%12$@ freeze --help`。\n8. 把 .gitattributes、.yunbox/config 的改动给我看，由我决定是否提交；不要 git push，也不要改动已有提交。"
           }
         }
       }
@@ -796,6 +854,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "YunBox"
+          }
+        }
+      }
+    },
+    "云匣不能列出或新建 S3 兼容存储的 bucket：请先在服务自己的控制台建好私有 bucket，再填写在这里。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YunBox can't list or create buckets on S3-compatible storage. Create a private bucket in the service's own console first, then enter it here."
           }
         }
       }
@@ -970,12 +1038,12 @@
         }
       }
     },
-    "使用 YunBox 服务端（lfs.url）；改成直连 COS 需要 git yunbox init --force，先和我确认" : {
+    "使用 YunBox 服务端（lfs.url）；改成直连存储需要 git yunbox init --force，先和我确认" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "uses the YunBox server (lfs.url); switching to direct COS needs git yunbox init --force, so check with me first"
+            "value" : "uses a YunBox server (lfs.url); switching to direct storage needs git yunbox init --force, so check with me first"
           }
         }
       }
@@ -1020,12 +1088,32 @@
         }
       }
     },
+    "保存 S3 密钥" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save S3 Keys"
+          }
+        }
+      }
+    },
     "保存到" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Save to"
+          }
+        }
+      }
+    },
+    "保存前会用这对密钥读取一次这个 bucket，确认密钥有效。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Before saving, YunBox reads this bucket once with the keys to make sure they work."
           }
         }
       }
@@ -1196,6 +1284,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Switch off push freezes for this project"
+          }
+        }
+      }
+    },
+    "其他（自定义 endpoint）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Other (Custom Endpoint)"
           }
         }
       }
@@ -1630,12 +1728,42 @@
         }
       }
     },
+    "地域（默认 us-east-1）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Region (default us-east-1)"
+          }
+        }
+      }
+    },
     "地域，例如 ap-guangzhou" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Region, e.g. ap-guangzhou"
+          }
+        }
+      }
+    },
+    "填写已在服务控制台建好的 bucket 名称。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter the name of a bucket you've already created in the service's console."
+          }
+        }
+      }
+    },
+    "填写服务地址（不含 bucket），例如 https://minio.example.com。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter the service address (without the bucket), such as https://minio.example.com."
           }
         }
       }
@@ -1730,6 +1858,36 @@
         }
       }
     },
+    "存储" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Storage"
+          }
+        }
+      }
+    },
+    "存储状态未知" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Storage status unknown"
+          }
+        }
+      }
+    },
+    "存储直连状态（腾讯云 COS 或 S3 兼容存储），点击查看检查结果和接入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Direct storage status (Tencent Cloud COS or S3-compatible storage). Click to see the checks and connect."
+          }
+        }
+      }
+    },
     "安装" : {
       "localizations" : {
         "en" : {
@@ -1770,12 +1928,22 @@
         }
       }
     },
-    "密钥只保存在这台电脑上（钥匙串），仓库里只记录 bucket、地域和前缀。" : {
+    "密钥" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Keys stay on this Mac (in the keychain); the repository records only the bucket, region and prefix."
+            "value" : "Keys"
+          }
+        }
+      }
+    },
+    "密钥只保存在这台电脑上（钥匙串），仓库里只记录 bucket、地域、前缀等位置信息。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keys stay on this Mac (in the keychain); the repository records only where objects go, such as the bucket, region and prefix."
           }
         }
       }
@@ -1796,6 +1964,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Invalid object ID."
+          }
+        }
+      }
+    },
+    "对象保存在 <前缀>/<oid 前两位>/…；密钥的权限只需要这个 bucket（AWS 可以用 IAM 策略限定到前缀）。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Objects are stored under <prefix>/<first two characters of the oid>/…. Keys only need access to this bucket (on AWS, an IAM policy can limit them to the prefix)."
           }
         }
       }
@@ -1978,28 +2156,34 @@
         }
       }
     },
-    "已直连 COS（%@），检查全部通过；只需确认推送检查和禁推时段" : {
+    "已直连 %@（%@），检查全部通过；只需确认推送检查和禁推时段" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "connected directly to COS (%@) and every check passes; only the push check and push freezes need confirming"
-          }
-        }
-      }
-    },
-    "已直连 COS（%@），需要处理：%@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "connected directly to COS (%1$@); needs attention: %2$@"
+            "value" : "connected directly to %1$@ (%2$@) and every check passes; only the push check and push freeze need confirming"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "已直连 COS（%1$@），需要处理：%2$@"
+            "value" : "已直连 %1$@（%2$@），检查全部通过；只需确认推送检查和禁推时段"
+          }
+        }
+      }
+    },
+    "已直连 %@（%@），需要处理：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "connected directly to %1$@ (%2$@); needs attention: %3$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "已直连 %1$@（%2$@），需要处理：%3$@"
           }
         }
       }
@@ -2320,6 +2504,16 @@
         }
       }
     },
+    "接入 R2 和 S3 兼容存储" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "R2 and S3-Compatible Storage"
+          }
+        }
+      }
+    },
     "接入说明" : {
       "localizations" : {
         "en" : {
@@ -2330,12 +2524,12 @@
         }
       }
     },
-    "接入：把素材直传到 COS" : {
+    "接入：把素材直传到自己的存储" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Connect: Upload Assets Straight to COS"
+            "value" : "Connect: Upload Assets Straight to Your Own Storage"
           }
         }
       }
@@ -2686,6 +2880,36 @@
         }
       }
     },
+    "服务" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service"
+          }
+        }
+      }
+    },
+    "服务地址必须是 https，只有本机地址可以用 http。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service address must use https; only addresses on this Mac can use http."
+          }
+        }
+      }
+    },
+    "服务地址（不含 bucket），例如 https://minio.example.com" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service address (without the bucket), such as https://minio.example.com"
+          }
+        }
+      }
+    },
     "未安装包装层" : {
       "localizations" : {
         "en" : {
@@ -2726,12 +2950,12 @@
         }
       }
     },
-    "未接入 COS" : {
+    "未接入存储" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Not connected to COS"
+            "value" : "Storage not connected"
           }
         }
       }
@@ -3036,12 +3260,12 @@
         }
       }
     },
-    "正在检查 COS…" : {
+    "正在检查存储…" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Checking COS…"
+            "value" : "Checking storage…"
           }
         }
       }
@@ -3342,6 +3566,26 @@
         }
       }
     },
+    "用管理员在 Cloudflare 控制台「管理 R2 API 令牌」里为你创建的令牌：访问密钥 ID 和机密访问密钥。令牌只需要授权这个 bucket。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use the token your admin created for you under Manage R2 API Tokens in the Cloudflare dashboard: its Access Key ID and Secret Access Key. The token only needs access to this bucket."
+          }
+        }
+      }
+    },
+    "用管理员在存储服务控制台为你创建的 Access Key，只授权这个 bucket。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use the access key your admin created for you in the storage service's console, with access to this bucket only."
+          }
+        }
+      }
+    },
     "界面语言" : {
       "localizations" : {
         "en" : {
@@ -3372,22 +3616,22 @@
         }
       }
     },
-    "直连 COS · 正常" : {
+    "直连 %@ · 正常" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Direct COS · OK"
+            "value" : "Direct %@ · OK"
           }
         }
       }
     },
-    "直连 COS · 需要处理" : {
+    "直连 %@ · 需要处理" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Direct COS · Needs attention"
+            "value" : "Direct %@ · Needs attention"
           }
         }
       }
@@ -3586,6 +3830,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Edit Push Freeze…"
+          }
+        }
+      }
+    },
+    "腾讯云 COS" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tencent Cloud COS"
           }
         }
       }
@@ -3908,12 +4162,12 @@
         }
       }
     },
-    "这个仓库使用 YunBox 服务端（lfs.url）。要改成直连 COS，请在终端运行 git yunbox init --force。" : {
+    "这个仓库使用 YunBox 服务端（lfs.url）。要改成直连 COS 或 S3 兼容存储，请在终端运行 git yunbox init --force。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This repository uses the YunBox server (lfs.url). To switch to direct COS, run git yunbox init --force in the terminal."
+            "value" : "This repository uses a YunBox server (lfs.url). To switch to direct COS or S3-compatible storage, run git yunbox init --force in Terminal."
           }
         }
       }
@@ -3944,6 +4198,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "These files belong to the asset types above but are stored in Git as ordinary files, not LFS pointers."
+          }
+        }
+      }
+    },
+    "这台电脑已经保存过 S3 密钥（yunbox login --provider s3）时可以留空。填写后先存进钥匙串，接入时再用它检查能否读写这个 bucket。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Leave these empty if this Mac already has S3 keys saved (yunbox login --provider s3). Keys you enter are saved to the keychain first, then used to check that they can read and write this bucket."
           }
         }
       }

@@ -41,7 +41,7 @@ const t = useCopy({
     menu: '当前仓库处在禁推时段时，菜单栏的云匣图标右上角会多一个圆点。点开面板：现在能不能推、今天和未来 7 天的禁推分布、每个项目的规则。勾选预设就能设置，右上角的开关和定时按钮可以一次关闭所有仓库。这里的演示面板可以直接操作：勾选预设、拨动开关试试。',
     commands: '命令行示例',
     aiTitle: '交给 AI 接入',
-    ai: '客户端的 COS 面板里有「复制给 AI 的接入说明」，粘贴给 Claude Code、Codex 或 Cursor 即可。云匣的命令都不需要交互、都有 JSON 输出，编程助手可以自己检查、接入、设时段；只有保存存储密钥这一步留给你自己。',
+    ai: '客户端的存储面板里有「复制给 AI 的接入说明」，粘贴给 Claude Code、Codex 或 Cursor 即可。云匣的命令都不需要交互、都有 JSON 输出，编程助手可以自己检查、接入、设时段；只有保存存储密钥这一步留给你自己。',
     freezeLinks: [
       { text: '禁推时段的写法和场景', path: '/guide/freeze' },
       { text: '用 AI 编程助手接入', path: '/guide/ai' },
@@ -76,7 +76,7 @@ const t = useCopy({
     menu: 'When the current repository is in a push freeze, the YunBox icon in the menu bar gets a dot. Open the panel to see whether you can push now, today\'s and the next 7 days\' freeze windows, and each project\'s rules. Tick a preset to set one; the switch and timer at the top switch off every repository at once. The demo panel here works too: tick a preset or flip the switch.',
     commands: 'Command-line examples',
     aiTitle: 'Let AI set it up',
-    ai: 'The app\'s COS panel has Copy Setup Prompt for AI: paste it into Claude Code, Codex or Cursor. Every YunBox command runs without prompts and has JSON output, so a coding assistant can check, connect and set freeze windows by itself. Saving your storage key is the one step left to you.',
+    ai: 'The app\'s Storage panel has Copy Setup Prompt for AI: paste it into Claude Code, Codex or Cursor. Every YunBox command runs without prompts and has JSON output, so a coding assistant can check, connect and set freeze windows by itself. Saving your storage key is the one step left to you.',
     freezeLinks: [
       { text: 'Freeze window syntax and examples', path: '/guide/freeze' },
       { text: 'Set up with an AI coding assistant', path: '/guide/ai' },

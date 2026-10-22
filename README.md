@@ -79,7 +79,7 @@ git yunbox clone <仓库地址>   # = clone 历史 + git yunbox init + git lfs p
 - Docker 镜像、免鉴权的健康检查 `GET /_health`、全部来自环境变量的配置和启动时的配置自检
 - 命令行 `git yunbox init` / `yunbox doctor` / `yunbox status`：一条命令接入仓库，自检配置、凭据和读写权限；`git yunbox types` 按素材类型查看、添加、移除 LFS 规则
 - [推送体积检查](./docs/inspect.md)：`yunbox inspect --push` 分别统计 Git pack 和 LFS 候选量，列出超限文件，支持 JSON；`yunbox hook install` 在原有上传钩子前串行执行检查；`yunbox freeze set "Mo-Fr 09:00-18:00"` 按 opening_hours 写法设置[禁推时段](./docs/guide/freeze.md)（如工作时间），时段内直接中断推送；超限时的[确认对话框](./docs/inspect.md#超限确认)可以写一句取消或继续的原因，原因会出现在推送输出里，从 AI 编程助手发起的推送也能读到并照做
-- [macOS 原生客户端](./apps/macos/README.md)：选择仓库查看 Git/LFS 预算、搜索超限文件、复制完整 JSON；显示 COS 直连状态，可以在窗口里保存密钥、选择或新建 bucket 一键接入；SwiftUI 界面复用 CLI，可安装到本机 Applications
+- [macOS 原生客户端](./apps/macos/README.md)：选择仓库查看 Git/LFS 预算、搜索超限文件、复制完整 JSON；显示存储直连状态（腾讯云 COS 或 R2 等 S3 兼容存储），可以在窗口里保存密钥、选择提供方一键接入（COS 可以选择或新建 bucket）；SwiftUI 界面复用 CLI，可安装到本机 Applications
 
 默认只监听 `127.0.0.1`。监听其他地址时必须用 `--public-url` 配置 https 地址，否则拒绝启动；Basic 认证的内容是明文，**公网部署必须经过 HTTPS**。部署方式见 [docs/deploy.md](./docs/deploy.md)，按其中的检查清单确认之前不要把服务暴露到其他网络。
 

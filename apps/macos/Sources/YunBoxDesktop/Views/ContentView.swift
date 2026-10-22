@@ -71,7 +71,7 @@ struct ContentView: View {
                         }
                         Spacer(minLength: 0)
                         AssetTypesChip(types: types)
-                        CosStatusChip(store: store)
+                        StorageStatusChip(store: store)
                     }
                     .padding(.horizontal, 24).padding(.vertical, 18)
                     // Also re-reads after switching repositories; the CLI only looks at .gitattributes and the index.
@@ -114,7 +114,7 @@ struct ContentView: View {
                 }
             }
         }
-        .sheet(isPresented: $store.showingCos) { CosSheet(store: store) }
+        .sheet(isPresented: $store.showingStorage) { StorageSheet(store: store) }
         .sheet(isPresented: $types.showing) { AssetTypesSheet(types: types) }
         .fileImporter(isPresented: $store.choosingRepository, allowedContentTypes: [.folder]) { result in
             if case .success(let url) = result { store.select(url) }

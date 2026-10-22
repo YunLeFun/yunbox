@@ -396,6 +396,12 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **JSON 兼容**：`doctor --json` 的 `mode` 在任何直连提供方下都是 `cos`（macOS 客户端按枚举严格解码，新值会让旧客户端解析失败），新增 `provider`（`cos` / `s3`）和 S3 的 `location.endpoint`；Swift 的 `Decodable` 会忽略多出的字段。S3 的检查项标题是「S3 位置」「S3 密钥」「S3 权限」，所以 macOS 客户端在 S3 仓库里缺密钥时不会出现「登录」引导，面板改造留到下一阶段。
 - **测试替身而不是 Docker 里的 MinIO**：`FakeS3Server` 用 AWS SDK 的签名器重新计算每个请求的签名，核对 `x-amz-content-sha256` 和请求体，模拟 R2 的 `auto` 地域、只读 token、不支持 `If-None-Match`（501）的服务。选它是因为：macOS、Linux、Windows 三个 CI 都能跑，不依赖 Docker；能稳定地注入 501、只读、篡改等情况；不需要下载镜像。真实服务由默认跳过的 `s3-live.test.ts` 覆盖（`YUNBOX_S3_E2E=1` 加 endpoint、bucket、密钥），也可以指向本机 Docker 里的 MinIO。
 
+### macOS 客户端的存储面板（2026-10-21）
+
+- **COS 面板改为通用的「存储」面板**：按 `doctor --json` 的 `provider` 区分 COS 和 S3；没有这个字段的旧版 CLI 按 COS 处理，`provider` 是不认识的值时照常显示检查结果，只是不出现登录表单。S3 的服务按 `location.endpoint` 的主机名识别（`*.r2.cloudflarestorage.com` 为 R2、`*.amazonaws.com` 为 AWS S3、主机名含 `minio` 为 MinIO），其他（包括本机的 `127.0.0.1:9000` 这类 MinIO）显示为「S3」。登录引导按 `<提供方> 密钥`（「COS 密钥」或「S3 密钥」）的失败项触发。
+- **S3 接入表单**：预设和 `git yunbox init` 的参数一一对应（r2 要账户 ID，aws 填地域，minio 和自定义填 endpoint），校验规则和 CLI 一致（账户 ID 32 位十六进制、endpoint 只有本机地址可以用 http）。S3 没有列出 / 新建 bucket 的能力，表单只说明去服务的控制台创建。`init` 需要本机已有密钥，所以表单里可以顺带填写密钥：先在仓库还没接入 S3 时运行 `yunbox login --provider s3`（这时 CLI 不检查密钥，直接保存），再由 `init` 的读写探测检查它；探测失败时仓库不变，密钥仍留在本机，可以在面板里重新保存。
+- **实测**：在本机 Homebrew 的 MinIO（`127.0.0.1`，临时数据目录）上用客户端会运行的同一组命令走了一遍：未接入时 `init` 报缺少密钥，`login --provider s3`（Secret 只经标准输入）后 `init --provider s3 --preset minio --endpoint … --yes` 通过，`doctor` 全部通过；删除密钥后 `doctor` 的「S3 密钥」失败、模型给出登录引导；错误的 Secret 被拒绝且不保存。三份 `doctor --json` 都用客户端的模型解码核对了状态文字。客户端窗口本身这次没有截图确认。
+
 ### 不做插件市场，也不加载用户插件（2026-10-21）
 
 - **决定**：使用者同意不做插件市场，也不在进程内加载用户自己的存储插件。COS 和 S3 在架构上也是「插件」，区别在信任边界：它们和命令行一起发布在同一个 npm 包里（带 provenance），经过审查，有官方签名测试向量和独立实现的测试替身。

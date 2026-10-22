@@ -4,7 +4,7 @@ Every YunBox command can run without prompts and print JSON, so you can hand the
 
 ## Copy it from the app
 
-In the [macOS app](./macos), the Direct COS panel (click the COS status next to the repository title) has **Copy Setup Prompt for AI**. It builds a prompt that includes:
+In the [macOS app](./macos), the Storage panel (click the storage status next to the repository title) has **Copy Setup Prompt for AI**. It builds a prompt for the repository's storage (Tencent Cloud COS, or S3-compatible storage such as R2; before the repository is connected, the storage chosen in the panel) that includes:
 
 - the repository path and the current check results (connected, what needs attention, or not connected);
 - the path to the CLI bundled with the app, so it works even if `yunbox` isn't installed in your terminal;

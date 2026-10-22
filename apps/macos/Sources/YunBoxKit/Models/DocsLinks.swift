@@ -9,6 +9,7 @@ public enum DocsPage: String, CaseIterable, Sendable, Identifiable {
     case freezeQuickOff = "guide/freeze#快速关闭"
     case assetTypes = "guide/macos#素材类型"
     case ai = "guide/ai"
+    case r2 = "guide/r2"
     case inspect = "inspect"
     case changelog = "changelog"
 
@@ -26,6 +27,7 @@ public enum DocsPage: String, CaseIterable, Sendable, Identifiable {
         case .freezeQuickOff: String(localized: "快速关闭")
         case .assetTypes: String(localized: "素材类型")
         case .ai: String(localized: "用 AI 编程助手接入")
+        case .r2: String(localized: "接入 R2 和 S3 兼容存储")
         case .inspect: String(localized: "推送体积检查")
         case .changelog: String(localized: "更新日志")
         }
