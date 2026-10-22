@@ -1,10 +1,13 @@
 import type { PushInspection } from '../src/inspect.ts'
 import type { Sandbox } from './helpers.ts'
 import { Buffer } from 'node:buffer'
+import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { readFile, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
+import { pathToFileURL } from 'node:url'
+import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
 import { FakeS3Server } from '../../core/test/fake-s3-server.ts'
 import { credentialsFilePath } from '../src/cos/credentials.ts'
@@ -51,6 +54,35 @@ function initArgs(s3: FakeS3Server, extra: string[] = []): string[] {
 }
 
 describe('git-lfs directly to S3-compatible storage', () => {
+  it('uses the desktop bundle for transfers when an incompatible CLI is on PATH', async () => {
+    const { sandbox, s3 } = await setup()
+    Object.assign(sandbox.env, { YUNBOX_S3_ACCESS_KEY_ID: keys.accessKeyId, YUNBOX_S3_SECRET_ACCESS_KEY: keys.secretAccessKey })
+    await writeFile(join(sandbox.root, 'bin', 'git-yunbox'), '#!/bin/sh\necho incompatible-old-cli >&2\nexit 97\n')
+
+    // Keep the real bundled entrypoint shape while running current source, not stale dist output.
+    const resources = join(sandbox.root, 'Desktop App.app', 'Contents', 'Resources', 'cli')
+    await mkdir(resources, { recursive: true })
+    const entry = join(resources, 'cli.mjs')
+    const tsx = new URL('../../../node_modules/tsx/dist/esm/api/index.mjs', import.meta.url).href
+    const source = new URL('../src/cli.ts', import.meta.url).href
+    await writeFile(entry, `import { tsImport } from ${JSON.stringify(tsx)}; await tsImport(${JSON.stringify(source)}, ${JSON.stringify(pathToFileURL(entry).href)});\n`)
+    const bundled = (cwd: string, args: string[]) => promisify(execFile)(process.execPath, [entry, ...args], { cwd, env: sandbox.env })
+    const origin = join(sandbox.root, 'origin.git')
+    await git(sandbox, sandbox.root, 'init', '--bare', '--quiet', origin)
+    const repo = await createRepository(sandbox)
+    await git(sandbox, repo, 'remote', 'add', 'origin', origin)
+    await bundled(repo, initArgs(s3))
+    expect(await git(sandbox, repo, 'config', 'lfs.customtransfer.yunbox.args')).toContain('Desktop App.app')
+    const asset = Buffer.alloc(32 * 1024, 5)
+    await writeFile(join(repo, 'asset.fbx'), asset)
+    await git(sandbox, repo, 'add', '.')
+    await git(sandbox, repo, 'commit', '--quiet', '-m', 'asset')
+    await git(sandbox, repo, 'push', '--quiet', 'origin', 'HEAD:main')
+    expect(s3.objects.get(objectKey(sha256(asset)))?.body.equals(asset)).toBe(true)
+    await bundled(sandbox.root, ['clone', origin, 'fresh'])
+    expect(await readFile(join(sandbox.root, 'fresh', 'asset.fbx'))).toEqual(asset)
+  }, 60_000)
+
   it('logs in, sets up, pushes, clones, restores history and never uploads twice', async () => {
     const { sandbox, s3, outputs } = await setup()
 

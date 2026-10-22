@@ -366,7 +366,7 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **签名顺序**：按 Sparkle 文档由内到外重新签名 `Installer.xpc`、`Downloader.xpc`（按 Sparkle 文档加 `--preserve-metadata=entitlements`；这个服务只给沙盒应用用，Sparkle 2.10 的 SwiftPM 版本里没有 entitlements）、`Autoupdate`、`Updater.app`、`Sparkle.framework`，最后是应用，全部 `--options runtime --timestamp`。没有用 `codesign --deep` 签名：它会给每个组件套同样的参数，Sparkle 文档也不建议。应用本身不需要 entitlements：不用 AppleScript，调用 Node.js、git 是普通的子进程，Hardened Runtime 不限制。
 - **凭据**：CI 用 App Store Connect 团队 API 密钥（Developer 角色）公证，不用 Apple ID 加 App 专用密码，因为 API 密钥可以单独吊销，也不绑定个人账号的两步验证；本地可复用已有的团队 API 密钥，或使用 `notarytool store-credentials` 存进钥匙串的 profile。证书 `.p12` 和 API 密钥放在 GitHub `sparkle` environment，工作流把证书导入临时钥匙串，任务结束时删除。任何一个 secret 缺失都直接失败，不退回 ad-hoc 签名，避免发出未公证、官网却说已公证的版本。
 - **顺序**：先公证并 staple，再生成 appcast。staple 会改动应用包，Sparkle 的 EdDSA 签名必须覆盖 staple 之后的 zip。`notarytool submit --wait` 在被拒时也返回 0，所以脚本读 JSON 里的 `status`，被拒时打印 Apple 的日志。
-- **从 ad-hoc 迁移**：0.1.5 是第一个 Developer ID 版本，签名身份和已安装的 ad-hoc 版本不同，Sparkle 只要求 EdDSA 签名有效、新应用自身签名完整，所以能直接更新过去，不需要用户重新下载。
+- **从 ad-hoc 迁移**：0.1.5 是第一个 Developer ID 版本，签名身份和本机的 ad-hoc 开发版不同，已带 Sparkle 的开发版只要求 EdDSA 签名有效、新应用自身签名完整，可以直接更新过去。官方 0.1.4 及更早版本尚未内置 Sparkle，用户需要手动下载并替换一次。
 - **本机验收（2026-10-21）**：维护者确认接受公开版本显示当前个人证书姓名。使用本机已有的团队 API 密钥公证通用构建，Apple 返回 `Accepted`，staple、`stapler validate` 和 `codesign --verify --deep --strict` 通过，`spctl` 显示 `source=Notarized Developer ID`。随后生成的 appcast 和 zip 均通过 Sparkle EdDSA 验签，解压 zip 后再次核对应用签名和公证票据通过，中英文更新说明齐全。GitHub `sparkle` environment 的 5 个签名与公证 secret 已配置，PKCS12 在临时钥匙串中的导入、签名测试和 Apple API 认证均通过，原有 Sparkle 私钥未修改，临时导出和验证钥匙串已删除；尚未运行发布工作流。这次验收使用本地版本号为 `0.1.4` 的构建；`0.1.5` 尚未发布，正式发版仍需在版本更新后重新构建、公证和生成 appcast。
 - **风险**：证书私钥和 API 密钥泄露后，别人可以用这个名字签名并公证恶意软件；泄露时要在 Apple Developer 后台吊销证书、在 App Store Connect 吊销密钥。证书 5 年过期，过期前要续期并更新 secret（已签名的版本因为带时间戳仍然可以打开）。`.p12` 要和 Sparkle 私钥一样备份在维护者钥匙串以外的安全位置。
 
@@ -419,6 +419,14 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **附带修复**：对话框是没有菜单栏的 accessory 应用，原来 ⌘C / ⌘V / ⌘A 都不起作用；现在补了一个隐藏的「编辑」菜单。
 - **未实测**：自动化拿不到 `osascript` 的辅助功能权限，在真实对话框里输入、粘贴、中文输入法回车上屏都只能人工验证；截图和输出解析已经验证过。
 
+### macOS COS / S3 真实窗口验收（2026-10-23）
+
+- 在独立临时仓库中，从原生存储窗口接入真实 COS 测试 bucket 和本机 MinIO；覆盖缺密钥、错误密钥拒绝且不保存、已有 bucket、保存后立即刷新、重新检查，以及 S3 密钥写入和读取 macOS 钥匙串。原有 COS 钥匙串密钥保留。
+- 修复不能列举 bucket 的 COS 子账号填写已有 bucket 时误走新建确认；列举失败后默认手工填写已有 bucket，只有主动选择新建才创建。
+- 修复客户端接入后使用 PATH 上旧版 CLI 的问题。桌面应用登记自己的 CLI 绝对路径；独立 CLI 继续优先按命令名登记。回归测试在带空格的应用路径和故意不兼容的 PATH 命令下完成真实 git-lfs 上传、全新克隆。
+- 真实 COS 和 MinIO 均完成 32 KiB 素材 push → 全新 clone → SHA-256 一致，克隆后的 doctor 通过。COS 使用刷新后的 tccli 临时登录；原有受限账号无法访问测试 bucket 时正确报错，不修改仓库配置。
+- 本地构建、lint、类型检查全部通过；Vitest 267 项通过，8 项需显式真实环境的测试跳过；Swift 49 项通过，427 条原生界面字符串均有英文。正式发布包的下载安装和 Sparkle 升级另行验证。
+
 ### 后续风险
 
 - CloudBase 云托管绑定运行角色后是否以 `TENCENTCLOUD_*` 环境变量注入临时密钥**未核实**（云函数是这样做的）。如果不是，需要在服务端增加从平台元数据接口获取密钥的代码，或者临时改用只挂最小权限策略的子账号长期密钥。
@@ -463,6 +471,6 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **S3 提供方新增（2026-10-21）**：已在真实 R2（2026-10-21）和本机 MinIO（2026-10-20）上跑通 `s3-live.test.ts`，两者对已存在的键带 `If-None-Match: *` 均返回 412。真实 AWS S3 尚未实测，接入 AWS S3 试点前要先跑一次。
 - **S3 提供方新增**：R2 token 不能限定到前缀。多个项目共用一个 R2 bucket 时，任何一个项目的 token 都能读写、覆盖其他项目的素材（下载时的 SHA-256 校验能发现被替换的内容，但找不回来，R2 也没有 COS 那样的版本控制）。只能靠每个项目一个 bucket。
 - **S3 提供方新增**：一台电脑同一时间只保存一组 S3 密钥。同时参与多个 R2 账户、或同时用 R2 和 MinIO 的人要来回 `yunbox login`，或者用 `YUNBOX_S3_*` 环境变量。真有需要再按 endpoint 分开保存。
-- **S3 提供方新增**：0.1.x 和本版本之前的命令行读不到 `storage.provider = s3`，在 S3 仓库里会提示「还没有 .yunbox/config」。团队改用 S3 前，所有协作者要先升级。
+- **S3 提供方新增**：0.1.4 及更早的命令行读不到 `storage.provider = s3`，在 S3 仓库里会提示「还没有 .yunbox/config」。团队改用 S3 前，所有协作者要先升级。
 - **S3 提供方新增**：单个 PUT 的上限（AWS 和 R2 都是 5 GB 左右）高于本项目 2 GB 的单文件上限，所以没有实现分片上传；以后放宽单文件上限时要加分片，并且分片上传要用 `CompleteMultipartUpload` 的条件写入。
 - **S3 提供方新增**：签名里的时间来自本机时钟，偏差超过 15 分钟时 S3 拒绝请求（`RequestTimeTooSkewed`，错误信息会提示校准时间）。HEAD 没有响应体，这时 `doctor` 只能显示 HTTP 403，看不出是时钟问题。

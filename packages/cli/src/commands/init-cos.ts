@@ -12,7 +12,7 @@ import process from 'node:process'
 import { cosAppIdOf } from '@yunbox/core'
 import { CliError, print, USAGE_EXIT_CODE } from '../context.ts'
 import { LEGACY_LOCATION_FILE, LOCATION_FILE, normalizeLocation } from '../cos/location.ts'
-import { readGitConfig, runGit, runGitChecked } from '../git.ts'
+import { readGitConfig, runGit, runGitChecked, shellQuote } from '../git.ts'
 import { askRequired, createLineReader } from '../prompt.ts'
 import { printStep } from '../report.ts'
 import { isR2, normalizeS3Location, S3_PRESETS } from '../s3/location.ts'
@@ -352,17 +352,18 @@ async function suggestPrefix(repo: CliContext, root: string): Promise<string> {
 }
 
 /**
- * How git-lfs should start the agent: `git-yunbox lfs-agent` when it is on
- * PATH (survives upgrades), else this Node.js and script by absolute path.
+ * Desktop bundles use their own CLI; standalone installs prefer the command
+ * on PATH (survives upgrades), else this Node.js and script by absolute path.
  */
 function resolveAgentCommand(context: CliContext): { path: string, args: string, display: string } {
   // git-lfs starts agents through sh (Git for Windows' sh on Windows), which ignores
   // PATHEXT: only an extension-less `git-yunbox` script works by name. npm and pnpm
   // create one next to the .cmd shim.
-  const onPath = (context.env.PATH ?? '').split(delimiter).some(directory => directory !== '' && existsSync(join(directory, 'git-yunbox')))
-  if (onPath)
-    return { path: 'git-yunbox', args: 'lfs-agent', display: 'git-yunbox lfs-agent' }
   const script = process.argv[1]
+  const bundled = script !== undefined && /\.app\/Contents\/Resources\/cli\/cli\.mjs$/.test(script.replaceAll('\\', '/'))
+  const onPath = (context.env.PATH ?? '').split(delimiter).some(directory => directory !== '' && existsSync(join(directory, 'git-yunbox')))
+  if (!bundled && onPath)
+    return { path: 'git-yunbox', args: 'lfs-agent', display: 'git-yunbox lfs-agent' }
   if (script === undefined || !/(?:git-yunbox|yunbox|cli\.m?js)$/.test(script))
     throw new CliError('找不到 git-yunbox 命令。先全局安装 YunBox 命令行（见 README「安装命令行」），再重新运行 git yunbox init')
   if (process.platform === 'win32') {
@@ -370,5 +371,6 @@ function resolveAgentCommand(context: CliContext): { path: string, args: string,
     const node = process.execPath.replaceAll('\\', '/')
     return { path: `"${node}"`, args: `"${script.replaceAll('\\', '/')}" lfs-agent`, display: `${node} ${script} lfs-agent` }
   }
-  return { path: process.execPath, args: `"${script}" lfs-agent`, display: `${basename(process.execPath)} ${script} lfs-agent` }
+  // git-lfs quotes the executable on POSIX; only its args need shell quoting here.
+  return { path: process.execPath, args: `${shellQuote(script)} lfs-agent`, display: `${basename(process.execPath)} ${script} lfs-agent` }
 }

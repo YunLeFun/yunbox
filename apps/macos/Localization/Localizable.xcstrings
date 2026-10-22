@@ -4451,6 +4451,16 @@
           }
         }
       }
+    },
+    "填写已有 bucket…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter an existing bucket…"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"

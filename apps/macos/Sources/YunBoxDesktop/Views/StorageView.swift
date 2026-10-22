@@ -52,6 +52,7 @@ struct StorageSheet: View {
     @State private var output: CommandOutput?
     @State private var running = false
     @State private var copiedPrompt = false
+    @State private var setupRefreshID = 0
     /// The store to connect to while the repository is not set up; the English site leads with R2.
     @State private var setupProvider: StorageProvider = AppLanguage.interfaceIsEnglish ? .s3 : .cos
 
@@ -68,7 +69,10 @@ struct StorageSheet: View {
                     Label(copiedPrompt ? "已复制" : "复制给 AI 的接入说明", systemImage: copiedPrompt ? "checkmark" : "sparkles")
                 }
                 .help("复制一段提示词，粘贴给 Claude Code、Codex 等编程助手，由它按步骤接入；密钥仍由你自己保存")
-                Button("重新检查") { store.checkStorage() }.disabled(store.isCheckingStorage || running)
+                Button("重新检查") {
+                    store.checkStorage()
+                    setupRefreshID += 1
+                }.disabled(store.isCheckingStorage || running)
             }
             if let report = store.storageReport, report.mode == .cos, let location = report.location {
                 Label(report.storageFullName + " · " + location.label, systemImage: "externaldrive.connected.to.line.below")
@@ -86,7 +90,7 @@ struct StorageSheet: View {
                             LoginForm(store: store, provider: report.provider ?? .cos, service: report.s3Service, running: $running, output: $output)
                         } else if report.mode == .none {
                             Divider()
-                            SetupForm(store: store, provider: $setupProvider, running: $running, output: $output)
+                            SetupForm(store: store, provider: $setupProvider, refreshID: setupRefreshID, running: $running, output: $output)
                         } else if report.mode == .server {
                             Text("这个仓库使用 YunBox 服务端（lfs.url）。要改成直连 COS 或 S3 兼容存储，请在终端运行 git yunbox init --force。")
                                 .font(.callout).foregroundStyle(.secondary)
@@ -177,6 +181,7 @@ private struct LoginForm: View {
     @Binding var output: CommandOutput?
     @State private var secretId = ""
     @State private var secretKey = ""
+    var didSave: (() async -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -221,6 +226,7 @@ private struct LoginForm: View {
                 if output?.succeeded == true {
                     secretKey = ""
                     store.checkStorage()
+                    await didSave?()
                 }
             } catch {
                 output = CommandOutput(exitCode: -1, text: error.localizedDescription)
@@ -233,6 +239,7 @@ private struct LoginForm: View {
 private struct SetupForm: View {
     let store: InspectorStore
     @Binding var provider: StorageProvider
+    let refreshID: Int
     @Binding var running: Bool
     @Binding var output: CommandOutput?
 
@@ -247,7 +254,7 @@ private struct SetupForm: View {
             .labelsHidden()
             .disabled(running)
             switch provider {
-            case .cos: CosSetupForm(store: store, running: $running, output: $output)
+            case .cos: CosSetupForm(store: store, refreshID: refreshID, running: $running, output: $output)
             case .s3: S3SetupForm(store: store, running: $running, output: $output)
             }
         }
@@ -346,6 +353,7 @@ private struct S3SetupForm: View {
 /// Picks or creates a bucket and runs `git yunbox init` for direct COS.
 private struct CosSetupForm: View {
     let store: InspectorStore
+    let refreshID: Int
     @Binding var running: Bool
     @Binding var output: CommandOutput?
     @State private var buckets: [CosBucket] = []
@@ -358,6 +366,7 @@ private struct CosSetupForm: View {
     @State private var prefix = ""
     @State private var confirmingCreate = false
     private static let newBucket = "__new__"
+    private static let existingBucket = "__existing__"
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -369,7 +378,7 @@ private struct CosSetupForm: View {
                 }
             } else if let loadError, loadError.needsLogin {
                 Text(loadError.message).font(.callout).foregroundStyle(.secondary)
-                LoginForm(store: store, provider: .cos, service: nil, running: $running, output: $output)
+                LoginForm(store: store, provider: .cos, service: nil, running: $running, output: $output, didSave: { await load() })
             } else {
                 if let loadError {
                     Text("\(loadError.message)。可以直接填写 bucket 名称和地域。").font(.callout).foregroundStyle(.secondary)
@@ -377,9 +386,10 @@ private struct CosSetupForm: View {
                 Picker("Bucket", selection: $choice) {
                     ForEach(buckets) { bucket in Text("\(bucket.name)（\(bucket.region)）").tag(bucket.name) }
                     Divider()
+                    Text("填写已有 bucket…").tag(Self.existingBucket)
                     Text("新建私有 bucket…").tag(Self.newBucket)
                 }
-                if choice == Self.newBucket || (loadError != nil && buckets.isEmpty) {
+                if choice == Self.newBucket || choice == Self.existingBucket {
                     TextField(appIdHint, text: $newName).textFieldStyle(.roundedBorder)
                     TextField("地域，例如 ap-guangzhou", text: choice == Self.newBucket ? $newRegion : $manualRegion)
                         .textFieldStyle(.roundedBorder)
@@ -396,7 +406,7 @@ private struct CosSetupForm: View {
                 }
             }
         }
-        .task { await load() }
+        .task(id: refreshID) { await load() }
         .confirmationDialog("新建私有 bucket \(target?.name ?? "")？", isPresented: $confirmingCreate) {
             Button("新建并接入") { run(create: true) }
         } message: {
@@ -411,7 +421,7 @@ private struct CosSetupForm: View {
 
     /// The bucket and region the form currently points at.
     private var target: (name: String, region: String)? {
-        if choice == Self.newBucket || (loadError != nil && buckets.isEmpty) {
+        if choice == Self.newBucket || choice == Self.existingBucket {
             var name = newName.trimmingCharacters(in: .whitespaces)
             if !name.isEmpty, name.range(of: #"-\d{5,20}$"#, options: .regularExpression) == nil,
                let appId = buckets.first.flatMap({ $0.name.split(separator: "-").last }) {
@@ -434,9 +444,10 @@ private struct CosSetupForm: View {
             choice = buckets.first?.name ?? Self.newBucket
         } catch let error as BucketListingError {
             loadError = error
-            choice = Self.newBucket
+            choice = Self.existingBucket
         } catch {
             loadError = BucketListingError(code: "REQUEST_FAILED", message: error.localizedDescription)
+            choice = Self.existingBucket
         }
     }
 
