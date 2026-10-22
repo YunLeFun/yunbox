@@ -4,6 +4,7 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ## Unreleased
 
+## 0.1.5 - 2026-10-23
 
 ### Added
 
