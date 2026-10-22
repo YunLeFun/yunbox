@@ -24,6 +24,55 @@ private let exceededJSON = okJSON
     #expect(recents.paths == ["/c", "/a"])
 }
 
+@Test func keepsPinnedRepositoriesFirstAndOutsideTheLimit() {
+    var recents = RecentRepositories(paths: ["/a", "/b", "/c"], pinned: ["/b", "/p"], limit: 2)
+    #expect(recents.pinned == ["/b", "/p"])
+    #expect(recents.paths == ["/a", "/c"])
+    #expect(recents.all == ["/b", "/p", "/a", "/c"])
+    #expect(recents.open("/p").isEmpty)
+    recents.pin("/a")
+    #expect(recents.pinned == ["/b", "/p", "/a"])
+    #expect(recents.paths == ["/c"])
+    #expect(recents.open("/d").isEmpty)
+    #expect(recents.open("/e") == ["/c"])
+    #expect(recents.unpin("/b") == ["/d"])
+    #expect(recents.all == ["/p", "/a", "/b", "/e"])
+    recents.movePinned(fromOffsets: [1], toOffset: 0)
+    #expect(recents.pinned == ["/a", "/p"])
+    recents.remove("/a")
+    #expect(recents.pinned == ["/p"])
+}
+
+@Test func mergesRepositoriesUsedElsewhereAboveTheRecentList() {
+    var recents = RecentRepositories(paths: ["/a", "/b"], pinned: ["/p"], limit: 3)
+    #expect(recents.merge(["/n", "/p", "/a", "/m", "/n"]) == ["/b"])
+    #expect(recents.paths == ["/n", "/m", "/a"])
+    #expect(recents.merge([]).isEmpty)
+}
+
+@Test func readsTheRecordOfRepositoriesTheCLIUsed() throws {
+    let json = Data(#"""
+    {"version":1,"entries":[
+      {"root":"/work/old","at":"2026-10-20T01:00:00.000Z"},
+      {"root":"/work/new/","at":"2026-10-21T01:00:00Z"},
+      {"root":"relative","at":"2026-10-21T02:00:00.000Z"},
+      {"root":"/work/gone","at":"2026-10-21T00:30:00.000Z"},
+      {"root":42}
+    ]}
+    """#.utf8)
+    #expect(UsedRepositories.decode(json).map(\.path) == ["/work/new", "/work/gone", "/work/old"])
+    #expect(UsedRepositories.decode(Data(#"{"version":2,"entries":[]}"#.utf8)).isEmpty)
+    let file = FileManager.default.temporaryDirectory.appending(path: "yunbox-used-\(UUID().uuidString).json")
+    defer { try? FileManager.default.removeItem(at: file) }
+    try json.write(to: file)
+    let since = ISO8601DateFormatter().date(from: "2026-10-20T12:00:00Z")
+    let loaded = UsedRepositories.load(from: file, since: since, exists: { $0 != "/work/gone" })
+    #expect(loaded.paths == ["/work/new"])
+    #expect(loaded.latest == ISO8601DateFormatter().date(from: "2026-10-21T01:00:00Z"))
+    #expect(UsedRepositories.load(from: file, since: nil, exists: { _ in true }).paths.count == 3)
+    #expect(UsedRepositories.fileURL(environment: ["YUNBOX_CONFIG_DIR": "/cfg"]).path == "/cfg/repositories.json")
+}
+
 @Test func roundTripsReportsPerRepositoryAndPrunes() throws {
     let directory = FileManager.default.temporaryDirectory.appending(path: "yunbox-cache-\(UUID().uuidString)")
     defer { try? FileManager.default.removeItem(at: directory) }

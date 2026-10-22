@@ -40,9 +40,9 @@ final class FreezeStore {
     var hasRepository: Bool { inspector.repository != nil }
     var status: FreezeStatus? { statuses[currentPath] }
     var error: String? { errors[currentPath] }
-    /// Recent repositories, current first.
+    /// Pinned and recent repositories, current first.
     var projectPaths: [String] {
-        let recents = inspector.recentPaths
+        let recents = inspector.repositoryPaths
         guard let current = inspector.repository?.path else { return recents }
         return [current] + recents.filter { $0 != current }
     }
@@ -103,7 +103,7 @@ final class FreezeStore {
                 }
             }
         }
-        // Forget repositories that left the recent list.
+        // Forget repositories that left the pinned and recent lists.
         let known = Set(projectPaths + [Self.homePath])
         for path in statuses.keys where !known.contains(path) { statuses[path] = nil }
     }

@@ -34,10 +34,19 @@ struct YunBoxApp: App {
             CommandGroup(replacing: .newItem) {
                 Button("打开仓库…") { store.choosingRepository = true }.keyboardShortcut("o")
                 Menu("最近的仓库") {
-                    ForEach(Array(store.recentPaths.enumerated()), id: \.element) { index, path in
-                        RecentRepositoryButton(store: store, index: index, path: path)
+                    if !store.pinnedPaths.isEmpty {
+                        Section("已固定") {
+                            ForEach(store.pinnedPaths, id: \.self) { path in
+                                RecentRepositoryButton(store: store, index: store.repositoryPaths.firstIndex(of: path), path: path)
+                            }
+                        }
                     }
-                    if !store.recentPaths.isEmpty { Divider() }
+                    Section {
+                        ForEach(store.recentPaths, id: \.self) { path in
+                            RecentRepositoryButton(store: store, index: store.repositoryPaths.firstIndex(of: path), path: path)
+                        }
+                    }
+                    if !store.repositoryPaths.isEmpty { Divider() }
                     Button("清除最近列表") { store.clearRecents() }
                         .disabled(store.recentPaths.allSatisfy { $0 == store.repository?.path })
                 }
@@ -74,10 +83,10 @@ struct YunBoxApp: App {
     }
 }
 
-/// One "最近的仓库" menu item; the first nine get ⌘1–⌘9.
+/// One "最近的仓库" menu item; the first nine pinned or recent repositories get ⌘1–⌘9.
 private struct RecentRepositoryButton: View {
     let store: InspectorStore
-    let index: Int
+    let index: Int?
     let path: String
 
     var body: some View {
@@ -85,7 +94,7 @@ private struct RecentRepositoryButton: View {
         let button = Button("\(url.lastPathComponent) — \(url.deletingLastPathComponent().lastPathComponent)") {
             store.select(url)
         }
-        if index < RecentRepositories.shortcutCount {
+        if let index, index < RecentRepositories.shortcutCount {
             button.keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
         } else {
             button

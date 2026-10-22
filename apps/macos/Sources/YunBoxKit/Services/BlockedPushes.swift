@@ -82,10 +82,7 @@ public enum BlockedPushes {
         dismissed: [String: Date] = [:],
         maxAge: TimeInterval = maxAge,
         limit: Int = defaultLimit,
-        exists: (String) -> Bool = { path in
-            var isDirectory: ObjCBool = false
-            return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) && isDirectory.boolValue
-        }
+        exists: (String) -> Bool = directoryExists
     ) -> [BlockedPush] {
         var shown: [BlockedPush] = []
         for entry in entries where shown.count < limit {
@@ -95,6 +92,12 @@ public enum BlockedPushes {
             shown.append(entry)
         }
         return shown
+    }
+
+    /// Whether `path` is an existing directory.
+    public static func directoryExists(_ path: String) -> Bool {
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) && isDirectory.boolValue
     }
 
     private struct Document: Decodable {
@@ -120,7 +123,7 @@ public enum BlockedPushes {
         }
     }
 
-    private static func parseDate(_ text: String) -> Date? {
+    static func parseDate(_ text: String) -> Date? {
         // `Date.toISOString()` always has milliseconds; accept the plain form too.
         let fractional = ISO8601DateFormatter()
         fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

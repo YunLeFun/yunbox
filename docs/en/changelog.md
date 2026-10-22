@@ -22,6 +22,8 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 - S3-compatible storage such as Cloudflare R2, AWS S3 and MinIO: connect a repository with `git yunbox init --preset r2` (or `aws`, `minio`, `--endpoint`) and save keys with `yunbox login --provider s3`; pushing, cloning, `doctor` and the push check work as they do with COS. R2 tokens can be limited to buckets but not to prefixes, so use one bucket per project; see the new guide on R2 and S3-compatible storage.
 - The push confirmation dialog takes an optional reason for cancelling or going ahead, and on the terminal a reason can follow `y` / `n`. It shows in the push output, so whoever started the push, or the AI coding assistant that did, knows why and what to do next; a cancel reason also shows under Recently Blocked.
 - A new guide, “Migrating from GitHub LFS”, shows how to move every past version of your assets from GitHub LFS or another LFS service to your own COS bucket, check the result, switch collaborators over and roll back.
+- The macOS app's Recent Repositories now lists the repositories you used from the command line (for example ones you ran `git yunbox init` in, or pushed from with the pre-push check), so you no longer have to open each one in the app first.
+- Pin the repositories you use most in the macOS app: right-click → Pin moves one to the Pinned section at the top of the sidebar, where new repositories never push it out and Clear Recents leaves it alone; drag to reorder. `⌘1`–`⌘9` go to pinned repositories first.
 
 ### Changed
 

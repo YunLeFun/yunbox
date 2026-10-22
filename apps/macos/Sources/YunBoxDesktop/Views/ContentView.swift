@@ -22,24 +22,21 @@ struct ContentView: View {
                         }
                     }
                 }
+                if !store.pinnedPaths.isEmpty {
+                    Section("已固定") {
+                        ForEach(store.pinnedPaths, id: \.self) { path in
+                            RepositoryRow(path: path, index: store.repositoryPaths.firstIndex(of: path), pinned: true)
+                                .tag(path)
+                                .contextMenu { RepositoryMenu(store: store, path: path) }
+                        }
+                        .onMove { store.movePinned(fromOffsets: $0, toOffset: $1) }
+                    }
+                }
                 Section("最近的仓库") {
-                    ForEach(Array(store.recentPaths.enumerated()), id: \.element) { index, path in
-                        Label {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(URL(fileURLWithPath: path).lastPathComponent).lineLimit(1)
-                                    Text(URL(fileURLWithPath: path).deletingLastPathComponent().lastPathComponent)
-                                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                                }
-                                Spacer(minLength: 4)
-                                if index < RecentRepositories.shortcutCount {
-                                    Text("⌘\(index + 1)").font(.caption.monospacedDigit()).foregroundStyle(.tertiary)
-                                }
-                            }
-                        } icon: { Image(systemName: "folder") }
-                        .tag(path)
-                        .help(path)
-                        .contextMenu { Button("从最近列表移除") { store.forget(path) } }
+                    ForEach(store.recentPaths, id: \.self) { path in
+                        RepositoryRow(path: path, index: store.repositoryPaths.firstIndex(of: path), pinned: false)
+                            .tag(path)
+                            .contextMenu { RepositoryMenu(store: store, path: path) }
                     }
                 }
             }
@@ -165,6 +162,49 @@ private struct StatusBanner: View {
 }
 
 private let blockedTagPrefix = "blocked:"
+
+/// One pinned or recent repository: its name, parent folder and ⌘-number shortcut; the full path on hover.
+private struct RepositoryRow: View {
+    let path: String
+    /// Position among pinned and recent repositories, for the ⌘-number shortcut.
+    let index: Int?
+    let pinned: Bool
+
+    var body: some View {
+        let url = URL(fileURLWithPath: path)
+        Label {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(url.lastPathComponent).lineLimit(1)
+                    Text(url.deletingLastPathComponent().lastPathComponent)
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                if let index, index < RecentRepositories.shortcutCount {
+                    Text("⌘\(index + 1)").font(.caption.monospacedDigit()).foregroundStyle(.tertiary)
+                }
+            }
+        } icon: { Image(systemName: pinned ? "pin" : "folder") }
+        .help(path)
+    }
+}
+
+/// Context menu of a pinned or recent repository.
+private struct RepositoryMenu: View {
+    let store: InspectorStore
+    let path: String
+
+    var body: some View {
+        if store.pinnedPaths.contains(path) {
+            Button("取消固定") { store.unpin(path) }
+        } else {
+            Button("固定") { store.pin(path) }
+        }
+        Button("在访达中显示") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
+        Divider()
+        Button("从列表移除") { store.forget(path) }
+    }
+}
 
 /// One repository in “最近被拦截”: why and when its last push was stopped; the CLI's summary on hover.
 private struct BlockedPushRow: View {

@@ -14,6 +14,7 @@ import { runStatus } from './commands/status.ts'
 import { runSubaccount } from './commands/subaccount.ts'
 import { runTypes } from './commands/types.ts'
 import { CliError, printError, USAGE_EXIT_CODE } from './context.ts'
+import { recordCurrentRepository } from './used-repositories.ts'
 
 /** Version reported by `yunbox --version`. */
 export const CLI_VERSION: string = packageJson.version
@@ -61,6 +62,9 @@ const COMMANDS: Record<string, (context: CliContext, args: string[]) => Promise<
   'freeze': runFreeze,
 }
 
+/** Commands that act on the current repository; running one adds it to the record the macOS client reads. */
+const REPOSITORY_COMMANDS = new Set(['init', 'types', 'doctor', 'status', 'inspect', 'hook', 'freeze'])
+
 /**
  * Run the `yunbox` / `git-yunbox` command line and return the exit code.
  * Never throws for user errors; they are printed to stderr instead.
@@ -98,5 +102,9 @@ export async function runCli(argv: string[], context: CliContext): Promise<numbe
     }
     printError(context, `错误：${error instanceof Error ? error.message : String(error)}`)
     return 1
+  }
+  finally {
+    if (REPOSITORY_COMMANDS.has(command) && !rest.some(arg => arg === '-h' || arg === '--help'))
+      await recordCurrentRepository(context)
   }
 }

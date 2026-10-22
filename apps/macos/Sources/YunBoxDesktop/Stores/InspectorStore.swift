@@ -43,16 +43,21 @@ final class InspectorStore {
 
     init() {
         // Normalize like `select` does (e.g. /private/tmp → /tmp) so a stored path and a reopened one match.
-        let stored = UserDefaults.standard.stringArray(forKey: "recentRepositories") ?? []
-        recents = RecentRepositories(paths: stored.map { URL(fileURLWithPath: $0).standardizedFileURL.path })
-        if recents.paths != stored { UserDefaults.standard.set(recents.paths, forKey: "recentRepositories") }
-        cache?.prune(keeping: recents.paths)
+        let defaults = UserDefaults.standard
+        let stored = defaults.stringArray(forKey: "recentRepositories") ?? []
+        let storedPinned = defaults.stringArray(forKey: "pinnedRepositories") ?? []
+        recents = RecentRepositories(paths: stored.map { URL(fileURLWithPath: $0).standardizedFileURL.path },
+                                     pinned: storedPinned.map { URL(fileURLWithPath: $0).standardizedFileURL.path })
+        if recents.paths != stored || recents.pinned != storedPinned { saveRecents() }
         let args = ProcessInfo.processInfo.arguments
         if let index = args.firstIndex(of: "--repository"), args.indices.contains(index + 1) {
             repository = URL(fileURLWithPath: args[index + 1]).standardizedFileURL
-        } else if let first = recents.paths.first {
+        } else if let first = recents.paths.first ?? recents.pinned.first {
             repository = URL(fileURLWithPath: first)
         }
+        // After choosing the starting repository, so it stays the last one opened here.
+        importUsedRepositories()
+        cache?.prune(keeping: recents.all)
         if let repository { showCachedResult(for: repository.path) }
         refreshBlockedPushes()
         NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification, object: nil, queue: .main) { [weak self] _ in
@@ -60,7 +65,10 @@ final class InspectorStore {
         }
         // A push is usually blocked in a terminal or an editor; reread the record when coming back.
         NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refreshBlockedPushes() }
+            MainActor.assumeIsolated {
+                self?.refreshBlockedPushes()
+                self?.importUsedRepositories()
+            }
         }
     }
 
@@ -80,7 +88,27 @@ final class InspectorStore {
         blockedPushes.removeAll { $0.path == path }
     }
 
+    /// Recent repositories that are not pinned.
     var recentPaths: [String] { recents.paths }
+    var pinnedPaths: [String] { recents.pinned }
+    /// Pinned, then recent: the sidebar order and the ⌘-number shortcuts.
+    var repositoryPaths: [String] { recents.all }
+
+    /// Add repositories the CLI ran in since the last import, e.g. through the pre-push hook or `yunbox init`.
+    /// Removing one from the list sticks until the CLI uses it again.
+    func importUsedRepositories() {
+        let defaults = UserDefaults.standard
+        let since = defaults.object(forKey: "usedRepositoriesImportedAt") as? Date
+        let (paths, latest) = UsedRepositories.load(since: since)
+        if let latest, latest != since { defaults.set(latest, forKey: "usedRepositoriesImportedAt") }
+        guard !paths.isEmpty else { return }
+        let before = recents
+        var dropped = recents.merge(paths)
+        // Many new repositories at once must not push out the one on screen.
+        if let current = repository?.path, dropped.contains(current) { dropped = recents.open(current) + dropped.filter { $0 != current } }
+        for path in dropped { cache?.remove(path: path) }
+        if recents != before { saveRecents() }
+    }
 
     var visibleRows: [FileRow] {
         rows.filter { (kind == "全部" || $0.kind.rawValue == kind) && (!onlyExceeded || $0.object.exceedsFileLimit) && $0.matches(query) }
@@ -120,8 +148,24 @@ final class InspectorStore {
         for path in recents.paths where path != repository?.path { forget(path) }
     }
 
+    func pin(_ path: String) {
+        recents.pin(path)
+        saveRecents()
+    }
+
+    func unpin(_ path: String) {
+        for dropped in recents.unpin(path) { cache?.remove(path: dropped) }
+        saveRecents()
+    }
+
+    func movePinned(fromOffsets source: IndexSet, toOffset destination: Int) {
+        recents.movePinned(fromOffsets: source, toOffset: destination)
+        saveRecents()
+    }
+
     private func saveRecents() {
         UserDefaults.standard.set(recents.paths, forKey: "recentRepositories")
+        UserDefaults.standard.set(recents.pinned, forKey: "pinnedRepositories")
     }
 
     /// Show the last stored report for `path` immediately, or clear the report if there is none.
