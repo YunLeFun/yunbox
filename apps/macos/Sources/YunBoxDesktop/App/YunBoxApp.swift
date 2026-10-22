@@ -9,6 +9,7 @@ struct YunBoxApp: App {
     @State private var freeze: FreezeStore
     @State private var types: AssetTypesStore
     @State private var updater = UpdaterStore()
+    @State private var menuBarIcon = MenuBarIconAnimator()
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
 
     init() {
@@ -76,8 +77,10 @@ struct YunBoxApp: App {
         .defaultPosition(.center)
         MenuBarExtra(isInserted: $showMenuBarExtra) {
             FreezePanel(freeze: freeze)
+                .onWindowVisibilityChange { menuBarIcon.setOpen($0) }
         } label: {
-            Image(nsImage: MenuBarIcon.image(badge: freeze.isFrozen))
+            Image(nsImage: menuBarIcon.image)
+                .onChange(of: freeze.isFrozen, initial: true) { menuBarIcon.setBadge(freeze.isFrozen) }
         }
         .menuBarExtraStyle(.window)
     }

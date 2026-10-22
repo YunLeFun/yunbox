@@ -8,6 +8,7 @@ struct FreezePanel: View {
     @Bindable var freeze: FreezeStore
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openURL) private var openURL
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State var expanded: String?
 
     var body: some View {
@@ -34,8 +35,15 @@ struct FreezePanel: View {
         }
         .padding(6)
         .frame(width: 340)
-        .task { await freeze.refresh(all: true) }
+        // Opening the panel refreshes every project; ease the rows into their new state instead of jumping.
+        .animation(panelAnimation, value: freeze.statuses)
+        .animation(panelAnimation, value: freeze.errors)
+        .onWindowVisibilityChange { shown in
+            if shown { Task { await freeze.refresh(all: true) } }
+        }
     }
+
+    private var panelAnimation: Animation? { reduceMotion ? nil : .snappy(duration: 0.2) }
 
     private var header: some View {
         HStack {
@@ -91,7 +99,7 @@ struct FreezePanel: View {
                     ForEach(freeze.projectPaths, id: \.self) { path in
                         ProjectRow(freeze: freeze, path: path, isCurrent: path == freeze.inspector.repository?.path,
                                    isExpanded: expanded == path,
-                                   toggle: { withAnimation(.snappy(duration: 0.2)) { expanded = expanded == path ? nil : path } },
+                                   toggle: { withAnimation(panelAnimation) { expanded = expanded == path ? nil : path } },
                                    presets: { scope in presetMenu(scope: scope, path: path) },
                                    edit: { edit(path: path) })
                     }

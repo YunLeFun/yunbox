@@ -25,6 +25,7 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 - A new guide, “Migrating from GitHub LFS”, shows how to move every past version of your assets from GitHub LFS or another LFS service to your own COS bucket, check the result, switch collaborators over and roll back.
 - The macOS app's Recent Repositories now lists the repositories you used from the command line (for example ones you ran `git yunbox init` in, or pushed from with the pre-push check), so you no longer have to open each one in the app first.
 - Pin the repositories you use most in the macOS app: right-click → Pin moves one to the Pinned section at the top of the sidebar, where new repositories never push it out and Clear Recents leaves it alone; drag to reorder. `⌘1`–`⌘9` go to pinned repositories first.
+- The macOS app’s menu bar icon tips its lid open while the panel is showing and closes it again afterwards, and the dot pops in when a push freeze starts. With Reduce Motion on, there is no animation. Changes from the refresh when the panel opens now ease in instead of jumping.
 
 ### Changed
 
