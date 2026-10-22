@@ -1,6 +1,6 @@
 # 云匣 YunBox 方案计划
 
-> 状态：方案 v2（已合并评审结论），尚未写正式代码。更新日期：2026-10-15
+> 状态：方案与实施记录；G1 代码已完成，G2 当前优先推进直连模式，见 [goal-g2.md](./goal-g2.md)。更新日期：2026-10-22
 > 标注「未核实」的内容来自记忆或推断，实施前需要确认。
 
 ## 1. 定位
@@ -358,15 +358,16 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **源语言是简体中文**：界面文字直接写在代码里，英文放在 Xcode 字符串目录 `apps/macos/Localization/Localizable.xcstrings`。没有 Xcode 工程，所以用编译器的 `-emit-localized-strings` 提取文字、`xcstringstool sync` 合并进目录（Xcode 也是这样做的），`xcstringstool compile` 在打包时生成 `en.lproj`；`script/sync_strings.sh --check` 在 CI 里保证目录不过期、每条都有英文。字符串放在 `Bundle.main` 而不是 SwiftPM 的 `Bundle.module`，所以 SwiftUI 的文字字面量不用改写就能本地化。`CFBundleDevelopmentRegion` 是 `zh-Hans`：系统语言既不是中文也不是英文时显示中文。
 - **语言切换用系统机制**：设置里的选择写入应用自己的 `AppleLanguages`，与系统设置的「应用程序语言」是同一个值，读取时只看应用自己的域，不受系统语言列表影响；重新打开后生效。Sparkle 的界面跟着同一个设置切换。
 - **更新日志两份**：`docs/changelog.md` 和 `docs/en/changelog.md`，Keep a Changelog 的格式，顶部是「未发布」。`pnpm release` 先检查两份都写了未发布的改动，bumpp 改版本号时把它们标上版本号和日期，和版本号同一个提交（只提交这几个文件）。发布工作流用对应版本的两段说明生成 GitHub release 说明，并以 `<description xml:lang>` 写进 appcast，Sparkle 按应用语言显示；appcast 改动后用 `sign_update` 重新签名。没有从提交记录自动生成，是因为提交信息是给开发者看的英文，更新提示要的是给用户看的中英文说明。
-- **还没做**：命令行输出、官网文档（除更新日志）仍只有中文；客户端显示的 `doctor` 检查项等来自命令行的文字在英文界面里也是中文。
+- **仍待完成**：命令行输出仍只有中文，客户端显示的 `doctor` 检查项等来自命令行的文字在英文界面里也是中文。官网文档已补齐英文，见下面「公开宣传，中英双语」的记录。
 
 ### macOS 客户端 Developer ID 签名和公证（2026-10-20）
 
 - **改为签名和公证**：推翻上面「暂不做 Developer ID 签名和公证」的决定，因为宣传视频会把新用户引到下载页，第一次打开就要去「隐私与安全性」放行，体验太差。仍然不上 Mac App Store（沙盒限制不变）。证书用维护者本机已有的「Developer ID Application: Lan Yang (QT792GAY4C)」，Gatekeeper 和「关于」里显示的开发者是这个名字；以后换成以云乐坊名义注册的账号时，只要替换证书和 API 密钥。
 - **签名顺序**：按 Sparkle 文档由内到外重新签名 `Installer.xpc`、`Downloader.xpc`（按 Sparkle 文档加 `--preserve-metadata=entitlements`；这个服务只给沙盒应用用，Sparkle 2.10 的 SwiftPM 版本里没有 entitlements）、`Autoupdate`、`Updater.app`、`Sparkle.framework`，最后是应用，全部 `--options runtime --timestamp`。没有用 `codesign --deep` 签名：它会给每个组件套同样的参数，Sparkle 文档也不建议。应用本身不需要 entitlements：不用 AppleScript，调用 Node.js、git 是普通的子进程，Hardened Runtime 不限制。
-- **凭据**：CI 用 App Store Connect 团队 API 密钥（Developer 角色）公证，不用 Apple ID 加 App 专用密码，因为 API 密钥可以单独吊销，也不绑定个人账号的两步验证；本地用 `notarytool store-credentials` 存进钥匙串的 profile。证书 `.p12` 和 API 密钥放在 GitHub `sparkle` environment，工作流把证书导入临时钥匙串，任务结束时删除。任何一个 secret 缺失都直接失败，不退回 ad-hoc 签名，避免发出未公证、官网却说已公证的版本。
+- **凭据**：CI 用 App Store Connect 团队 API 密钥（Developer 角色）公证，不用 Apple ID 加 App 专用密码，因为 API 密钥可以单独吊销，也不绑定个人账号的两步验证；本地可复用已有的团队 API 密钥，或使用 `notarytool store-credentials` 存进钥匙串的 profile。证书 `.p12` 和 API 密钥放在 GitHub `sparkle` environment，工作流把证书导入临时钥匙串，任务结束时删除。任何一个 secret 缺失都直接失败，不退回 ad-hoc 签名，避免发出未公证、官网却说已公证的版本。
 - **顺序**：先公证并 staple，再生成 appcast。staple 会改动应用包，Sparkle 的 EdDSA 签名必须覆盖 staple 之后的 zip。`notarytool submit --wait` 在被拒时也返回 0，所以脚本读 JSON 里的 `status`，被拒时打印 Apple 的日志。
 - **从 ad-hoc 迁移**：0.1.5 是第一个 Developer ID 版本，签名身份和已安装的 ad-hoc 版本不同，Sparkle 只要求 EdDSA 签名有效、新应用自身签名完整，所以能直接更新过去，不需要用户重新下载。
+- **本机验收（2026-10-21）**：维护者确认接受公开版本显示当前个人证书姓名。使用本机已有的团队 API 密钥公证通用构建，Apple 返回 `Accepted`，staple、`stapler validate` 和 `codesign --verify --deep --strict` 通过，`spctl` 显示 `source=Notarized Developer ID`。随后生成的 appcast 和 zip 均通过 Sparkle EdDSA 验签，解压 zip 后再次核对应用签名和公证票据通过，中英文更新说明齐全。GitHub `sparkle` environment 的 5 个签名与公证 secret 已配置，PKCS12 在临时钥匙串中的导入、签名测试和 Apple API 认证均通过，原有 Sparkle 私钥未修改，临时导出和验证钥匙串已删除；尚未运行发布工作流。这次验收使用本地版本号为 `0.1.4` 的构建；`0.1.5` 尚未发布，正式发版仍需在版本更新后重新构建、公证和生成 appcast。
 - **风险**：证书私钥和 API 密钥泄露后，别人可以用这个名字签名并公证恶意软件；泄露时要在 Apple Developer 后台吊销证书、在 App Store Connect 吊销密钥。证书 5 年过期，过期前要续期并更新 secret（已签名的版本因为带时间戳仍然可以打开）。`.p12` 要和 Sparkle 私钥一样备份在维护者钥匙串以外的安全位置。
 
 ### 公开宣传，中英双语（2026-10-20）
@@ -435,7 +436,7 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - ETag 在单次 PUT 时是内容的 MD5。有写权限的人理论上可以用 MD5 碰撞构造同样大小、同样 ETag 的不同内容，在地址有效期内覆盖已校验对象；这种情况由客户端下载时的 SHA-256 校验兜底，第一版不做服务端哈希校验。
 - 多条路由指向不同 bucket 时，服务端的运行角色要能访问所有 bucket 的对应前缀；CAM 策略写漏一条，只有那条路由的仓库会失败。`cos check` 能发现，但要记得在服务端环境里运行。
 - `tccli auth login` 的临时密钥大约 2 小时过期，只适合用来做 `cos setup`，不能当作服务端的运行凭据。
-- 直连模式下每个协作者都持有云密钥。密钥泄露的影响范围取决于 CAM 策略写得多严。~~需要给出可直接复制的子账号策略模板~~ **已提供 `yunbox policy`**（2026-10-18），但它只输出不改动 CAM，管理员可能关联错策略或给了 `cos:*` 这类更宽的预设策略，YunBox 发现不了（子账号通常没有读取自身策略的权限）。用这份策略的真实子账号**还没在真实 bucket 上实测**，试点开始前要补上：`doctor`、push、clone 各一次。
+- 直连模式下每个协作者都持有云密钥。密钥泄露的影响范围取决于 CAM 策略写得多严。**已提供 `yunbox policy`，并于 2026-10-18 用只挂这份策略的真实子账号完成 8 项测试**：可写账号能接入、推送和 clone，不能访问前缀外的对象或列出 bucket；只读账号能检查和拉取，推送被拒绝（见 goal-g2.md 直连模式第 2 项）。它只输出不改动 CAM，管理员仍可能关联错策略或给了 `cos:*` 这类更宽的预设策略，YunBox 发现不了（子账号通常没有读取自身策略的权限）。
 - 有写权限的子账号仍然可以不带 `x-cos-forbid-overwrite` 直接覆盖已有对象（传输代理不会这样做，但泄露的密钥可以）。下载时的 SHA-256 校验能发现被替换的内容，但内容本身要靠 COS 版本控制找回。可以给 `PutObject` 加 `cos:x-cos-forbid-overwrite` 条件（**未实测**），但腾讯云文档说开启版本控制的 bucket 上这个请求头不生效，而且探测对象需要覆盖，所以暂不加进 `yunbox policy`。
 - 探测对象 `<前缀>/_yunbox/probe` 会一直留在 bucket 里（20 字节）。开启版本控制后每次 `init` / `doctor` 都会多一个历史版本，由历史版本的生命周期规则清理。
 - 钥匙串项信任 `/usr/bin/security`，读取不弹窗，因此同一用户下的任何程序都能用 `security find-generic-password -s yunbox -a cos -w` 读到密钥。钥匙串只解决「明文文件被备份、同步、误传」的问题，不防本机恶意程序；要防就得用 `-T ""` 让每次读取都弹窗，git-lfs 每次 push / pull 都会触发，不现实。
@@ -445,7 +446,7 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - ~~密钥文件是明文 JSON（权限 600）。~~ macOS 已改存钥匙串（2026-10-18）；Linux 和 Windows 仍是明文 JSON（Windows 上 600 权限位不起作用，靠 `%APPDATA%` 默认的用户目录权限）。Linux 可以用 libsecret 的 `secret-tool store`（从标准输入读密码），但很多服务器和 CI 没有 Secret Service，暂不做。
 - Windows 上 GUI Git 客户端（Fork、SourceTree、GitHub Desktop）自带或调用的 sh 和 PATH 可能找不到 `git-yunbox`；还没实测。找不到时重新运行 `git yunbox init` 会改写成绝对路径。
 - Windows 下 npm 生成的 `git-yunbox` shim（`git-yunbox.cmd`、`git-yunbox.ps1` 和无扩展名的 sh 脚本）能否被 Git for Windows 的 `git yunbox` 找到，**仍未实测**；自动测试只在 macOS / Linux 上用 sh shim 验证了 `git yunbox` 和 `yunbox` 输出一致。阶段 5 要在 Windows 上实测，不行就改用 Node SEA 或 `bun build --compile` 打成单个可执行文件。
-- 命令行目前只能从仓库 `pnpm pack` 后 `npm install -g` 安装，协作者需要 Node.js 22.18+。npm 包名和发布方式还没定；如果试点里有人没有 Node.js，就需要单文件可执行程序。
+- 命令行已以 `yunbox` 包发布到 npm（2026-10-19），可用 `npm install -g yunbox` 安装，后续由 `Release` 工作流通过 OIDC 发布并附带 provenance（见 goal-g2.md 第 5 项）。协作者仍需要 Node.js 22.18+；如果试点里有人没有 Node.js，再考虑单文件可执行程序。
 - `.gitattributes` 只生成小写扩展名的规则（`*.png`）。Linux 和 CI 上 Git 默认区分大小写，`HERO.PNG` 这类文件不会走 LFS，会作为普通文件提交进 Git 历史。macOS 和 Windows 上 `core.ignorecase=true` 时能匹配。如果试点素材里常见大写扩展名，要考虑生成 `*.[pP][nN][gG]` 这种规则，或在 `doctor` 里检查已提交的非 LFS 大文件。**2026-10-20**：`git yunbox types` 会列出这类文件并给出改用 LFS 的命令，但仍然只生成小写规则，见上面「按素材类型管理 LFS 规则」。
 - `doctor` 在 Windows 上给出的修复命令里有 `printf ... | git credential reject` 和 `curl`，在 PowerShell 和 cmd 里不能直接照做，Git Bash 里可以。Windows 实测时要决定是否按平台输出不同的命令。
 - `init` 的交互输入在 Windows 终端（尤其是 Git Bash 的 mintty）里能否进入 raw 模式、是否会回显，需要实测；不行时可以用 `--token-stdin`。

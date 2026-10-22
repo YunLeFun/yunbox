@@ -112,7 +112,7 @@ pnpm docs:build    # 输出到 docs/.vitepress/dist
 
 自定义域名在 Pages 项目中绑定；DNS 使用 `yunbox` → `yunbox.pages.dev` 的 CNAME，代理状态为「仅 DNS」，由 Pages 提供 HTTPS 和 CDN。2026-10-20 排查时，开启代理后的地址在当前网络中断开 HTTPS 连接，直接连接 Pages 则正常。遇到同类问题，先对比自定义域名与 [Pages 默认地址](https://yunbox.pages.dev/)，再检查 DNS；修改后旧解析可能缓存到 TTL 到期。
 
-`Docs` 工作流在 main 上的 `docs/` 有改动、以及每次 `Release` 结束后构建并发布到 [GitHub Pages 默认地址](https://yunlefun.github.io/yunbox/)（需要在仓库设置里把 Pages 的来源设为 GitHub Actions）。两处部署各自使用对应的网站路径，GitHub Pages 不绑定自定义域名。下载区在构建时查询最新 release 是否带 macOS 安装包，没有时改为提示从源码构建；`Release` 工作流在 npm 发布成功后创建 GitHub release，并附上通用二进制的 `YunBox-macOS.zip`（ad-hoc 签名，未公证）。
+`Docs` 工作流在 main 上的 `docs/` 有改动、以及每次 `Release` 结束后构建并发布到 [GitHub Pages 默认地址](https://yunlefun.github.io/yunbox/)（需要在仓库设置里把 Pages 的来源设为 GitHub Actions）。两处部署各自使用对应的网站路径，GitHub Pages 不绑定自定义域名。下载区在构建时查询最新 release 是否带 macOS 安装包，没有时改为提示从源码构建；`Release` 工作流在 npm 发布成功后创建 GitHub release，并附上通用二进制的 `YunBox-macOS.zip`（从 0.1.5 起使用 Developer ID 签名并经过 Apple 公证；0.1.4 及更早的发布版本为 ad-hoc 签名、未公证）。
 
 命令行的测试位于 `packages/cli/test/`：用真实的 `git` 和 `git-lfs` 在临时目录里检查 `init` 生成的配置和幂等性，并对本仓库的服务端（本地存储加 token）检查 `doctor` 在通过、缺少凭据、只读 token、无效 token 等情况下的输出和退出码。测试使用独立的 HOME 和 `credential.helper store`，不会碰到本机的钥匙串。 `s3-direct.test.ts` 用 S3 测试替身（`packages/core/test/fake-s3-server.ts`，用 AWS SDK 的签名器重新核对每个 SigV4 签名和请求体哈希）跑完整的直连 S3 流程；`s3-live.test.ts` 对真实的 R2 / S3 / MinIO 运行，默认跳过（`YUNBOX_S3_E2E=1`，变量见文件开头）。
 
