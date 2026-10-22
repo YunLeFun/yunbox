@@ -14,16 +14,16 @@
 | 1 | 直连传输代理、`yunbox login`、`git yunbox init` / `clone`、`doctor` 直连检查 | **完成**，真实 COS 已实测 |
 | 2 | CAM 子账号策略：可直接复制的模板，加一个只输出策略 JSON、不改动账号的 `yunbox policy` 命令 | **代码完成**（2026-10-18）：`yunbox policy [--read-only]` 按 `.yunboxconfig` 输出 PutObject / GetObject / HeadObject（只读去掉 PutObject）的前缀级策略，资源格式已按官方文档核对；读写探测不再需要 DeleteObject；开子账号步骤见 deploy.md「直连模式：给协作者开子账号」。**真实子账号已实测**（2026-10-18）：临时子账号只挂 `yunbox policy` 生成的策略，在测试 bucket 上 8 项全部通过（可写：接入、推送、clone，前缀外被拒绝，不能列出 bucket；只读：`doctor --read-only` 通过、推送被拒绝、拉取正常），子账号、密钥和策略已删除 |
 | 3 | 密钥改存 macOS 钥匙串 / Windows 凭据管理器，文件存储作为兜底 | **macOS 完成**（2026-10-18）：`yunbox login` 默认存进钥匙串（系统 `security` 命令，SecretKey 只经标准输入），失败时回退到 600 文件，`logout` 两处都清理；临时钥匙串上的真实测试可选运行。**Windows 暂用文件**：没有经过验证的免依赖方案，放到第 4 项 Windows 实测时再定。2026-10-19 新增 `yunbox subaccount create --save`：用管理员登录一条命令建只授权本仓库前缀的子账号，长期密钥存进钥匙串，不用再反复 tccli 登录 |
-| 4 | Windows 实测（PowerShell、Git Bash、GUI 客户端的 PATH），修复发现的问题 | **CI 实测完成**（2026-10-18）：新增 Windows 工作流，在 GitHub 的 Windows 运行环境上用 Git for Windows 自带的 git-lfs 跑 CLI 全部测试，包括直连 COS 的完整端到端流程。修复了两个真实问题：git-lfs 通过 sh 启动传输代理，sh 不认 `.cmd`，`init` 现在只在有 npm/pnpm 生成的无扩展名脚本时按命令名登记，否则写带引号的绝对路径；`yunbox hook install` 不再要求 Windows 上不存在的可执行位。还没测：GUI Git 客户端（Fork、SourceTree）的 PATH，以及 Windows 上的密钥改存凭据管理器 |
+| 4 | Windows 实测（PowerShell、Git Bash、GUI 客户端的 PATH），修复发现的问题 | **CI 实测完成**（2026-10-18）：新增 Windows 工作流，在 GitHub 的 Windows 运行环境上用 Git for Windows 自带的 git-lfs 跑 CLI 全部测试，包括直连 COS 的完整端到端流程。修复了两个真实问题：git-lfs 通过 sh 启动传输代理，sh 不认 `.cmd`，`init` 现在只在有 npm/pnpm 生成的无扩展名脚本时按命令名登记，否则写绝对路径；`yunbox hook install` 不再要求 Windows 上不存在的可执行位。还没测：GUI Git 客户端（Fork、SourceTree）的 PATH，以及 Windows 上的密钥改存凭据管理器 |
 | 5 | 命令行发布到 npm（`yunbox`），CI 自动发布 | **完成**（2026-10-19）：`yunbox@0.1.0` 已发布到 npm（首发用维护者本机登录），从 registry 安装实测可用。之后的版本由 `pnpm release` 打 tag，`Release` 工作流通过 trusted publishing（OIDC）发布并附带 provenance；npm 只信任 `YunLeFun/yunbox` 的 `release.yml` + `npm` environment，包设置为发布必须两步验证、禁止 token |
-| 6 | macOS 客户端显示直连状态、一键接入和 doctor 结果 | **完成**（2026-10-18）：标题栏显示直连状态，面板展示 `doctor --json` 的逐项结果；可以在窗口里保存密钥、选择或新建 bucket 并运行 `git yunbox init`。CLI 新增 `doctor --json` 和 `buckets --json`。在真实 bucket（life 试点）上窗口显示「直连 COS · 正常」；从窗口一键接入只在测试替身上验证过 |
+| 6 | macOS 客户端显示直连状态、一键接入和 doctor 结果 | **完成**（2026-10-18）：标题栏显示直连状态，面板展示 `doctor --json` 的逐项结果；可以在窗口里保存密钥、选择或新建 bucket 并运行 `git yunbox init`。CLI 新增 `doctor --json` 和 `buckets --json`。在真实 bucket（life 试点）上窗口显示「直连 COS · 正常」；2026-10-23 补齐真实 COS / MinIO 的窗口接入和上传克隆验收，见下方当前待办 |
 | 7 | 试点：选一个真实仓库用满 2 周，记录到 plan.md 第 12 节 | **已开始**（2026-10-19）：`YunYouJun/life` 的 main 已接入（`c4bc3fd`），模型、音频、视频走 `yunyoujun-assets-prod-1325586649`（ap-shanghai）的 `yunbox/YunYouJun/life/`，已有的 PNG 等文件不变；真实 bucket 上做过一次往返验证（测试对象已删除），macOS 窗口显示「直连 COS · 正常」。2 周后记录结论 |
 
 ## 当前待办（2026-10-23）
 
-COS / S3 存储面板已合并；官网已提供中英文文档，macOS 签名、公证和 Sparkle 验签已有本机验收记录。接下来按实际使用补齐这些验收：
+COS / S3 存储面板已完成真实窗口验收；0.1.5 已正式发布到 npm 和 GitHub，官方 macOS 通用包的下载安装、公证与 Sparkle 升级已通过。剩余验证按实际使用继续推进：
 
-- [ ] **正式发布与安装**：更新版本号和中英文更新日志后，运行 Release 工作流；重新构建、公证并生成 appcast，验证全新下载安装、客户端检查更新和更新包验签。已有本机验收使用 `0.1.4` 版本号，不能直接代替正式版本的构建与公证。
+- [x] **正式发布与安装**（2026-10-23）：[0.1.5](https://github.com/YunLeFun/yunbox/releases/tag/v0.1.5) 的 [Release 工作流](https://github.com/YunLeFun/yunbox/actions/runs/39814527805) 全部通过。npm 全新安装正常；官方 arm64 / x86_64 通用包通过下载哈希、Developer ID、公证票据、Gatekeeper、更新包和 appcast 签名校验，经 Finder 安装后启动与更新检查正常。本机已有 Sparkle 的 0.1.4 开发构建实际升级到正式 0.1.5，下载、安装、重启及安装后校验均通过。官方旧版 0.1.4 没有 Sparkle，需要手动安装一次新版。
 - [x] **macOS 存储接入窗口**（2026-10-23）：真实 COS 与本机 MinIO 的窗口接入、缺密钥引导、错误密钥拒绝、钥匙串保存和重新检查均通过；两者都完成真实 push → 全新 clone → SHA-256 一致。修复 COS 保存密钥后不刷新、受限账号接入已有 bucket 误提示新建，以及旧版 CLI 抢占应用传输代理的问题。
 - [ ] **Windows 使用体验**：检查 Fork、SourceTree 等 GUI Git 客户端的 PATH，以及 PowerShell / Git Bash 的交互输入和修复命令；验证 Windows 凭据管理器方案，目前仍用文件保存密钥。
 - [ ] **AWS S3**：接入 AWS 试点前运行真实 `s3-live.test.ts`；R2 和本机 MinIO 已有实测记录。

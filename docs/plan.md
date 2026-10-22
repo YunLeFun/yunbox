@@ -428,6 +428,16 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - Windows CI 的新增端到端回归暴露出已有的绝对路径重复转义问题：git-lfs 会自行转义可执行文件路径，配置里不能再包一层引号。所有平台统一仅转义参数，Windows 额外把路径转换为正斜杠；验证仍使用真实 git-lfs 上传和克隆。
 - 本地构建、lint、类型检查全部通过；Vitest 267 项通过，8 项需显式真实环境的测试跳过；Swift 49 项通过，427 条原生界面字符串均有英文。正式发布包的下载安装和 Sparkle 升级另行验证。
 
+### 0.1.5 正式发布与安装升级验收（2026-10-23）
+
+- 修复提交 `17c91bf` 的六项检查全部通过后，使用 `pnpm release --release 0.1.5` 生成版本提交 `a5ec14d` 和标签 `v0.1.5`。版本提交的 Linux、Windows、macOS、文档构建及部署全部通过；[Release 工作流](https://github.com/YunLeFun/yunbox/actions/runs/39814527805) 完成 npm OIDC 发布、通用包构建、Developer ID 签名、Apple 公证、Sparkle 签名和正式发布。GitHub 当时的服务降级造成队列延迟，恢复后流程成功，无需改动环境保护规则。
+- 从 npm 官方 registry 全新安装 `yunbox@0.1.5`，版本号与命令入口正常，包附有 provenance。没有替换本机原有全局 CLI。
+- 从 [GitHub Release](https://github.com/YunLeFun/yunbox/releases/tag/v0.1.5) 下载正式 zip 和 appcast，与 GitHub 公布的 SHA-256 一致。zip 为 `bfbbb517dd29aae55e360d4fec06309e562ce4afe9bc1ae148cf5d5e8a1c2504`，appcast 为 `d555de5abf3f1c70a7c9dc340b165069879346d6364c121d422a6a185427e393`；`latest/download/appcast.xml` 指向同一份文件。
+- 客户端包含 arm64 和 x86_64；`codesign --verify --deep --strict`、`stapler validate`、`spctl --assess` 均通过，Gatekeeper 来源为 `Notarized Developer ID`。更新包 EdDSA 签名与应用内置公钥匹配，appcast 签名也通过。
+- 对官方下载包启用下载隔离标记，经系统正常的「打开」确认（显示 Apple 未检测到恶意软件），通过 Finder 移入 Applications 下的独立验收目录后启动成功。原有仓库和设置可读取，界面显示 0.1.5，检查更新返回「已是最新版本」。直接在下载隔离位置尝试更新会按 Sparkle 的预期提示先移动到 Applications。
+- 使用本机原有、带 Sparkle 的 0.1.4 开发构建，实际完成「检查更新 → 下载 0.1.5 → 安装并重启」。`~/Applications/YunBox.app` 已更新到正式 0.1.5，主程序、CLI 和代码签名与官方下载包一致，安装后公证校验通过。自动检查保持开启；自动下载并安装保持原来的关闭状态，本次验证使用内置更新按钮完成安装。官方发行的 0.1.4 没有 Sparkle，仍需手动安装一次新版，不能把此次开发构建升级结果算作旧官方版自动迁移。
+- 验收用 COS 对象和测试前缀已清空；仅本轮创建的 S3 钥匙串项已删除，本机 MinIO 已停止，临时仓库从最近列表移除。原有 COS 密钥、真实仓库及用户偏好保留。AWS 实测、Windows GUI Git 客户端和两周试点仍按 goal-g2.md 继续，不把本次发布视为完整 G2 验收结束。
+
 ### 后续风险
 
 - CloudBase 云托管绑定运行角色后是否以 `TENCENTCLOUD_*` 环境变量注入临时密钥**未核实**（云函数是这样做的）。如果不是，需要在服务端增加从平台元数据接口获取密钥的代码，或者临时改用只挂最小权限策略的子账号长期密钥。
