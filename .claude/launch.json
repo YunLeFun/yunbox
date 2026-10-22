@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "docs",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@yunbox/docs", "dev", "--port", "5179"],
+      "port": 5179
+    }
+  ]
+}
