@@ -85,3 +85,5 @@ It checks git, git-lfs, the transfer agent, your key and your read/write permiss
 - Teams that need to issue and revoke tokens centrally can use [server mode](/deploy) (in Chinese) instead.
 
 For the full command reference, see the repository [README](../../../README.md).
+
+See the [FAQ](./faq) for storage destinations, Windows / Linux usage and terminal confirmation.

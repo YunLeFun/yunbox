@@ -37,7 +37,7 @@ git yunbox clone <仓库地址>    # clone 历史 + 登记传输代理 + 下载�
 | `yunbox doctor` | 检查传输代理、密钥和 COS 读写权限，给出修复命令；`--json` 供图形界面使用 |
 | `yunbox policy` | 输出子账号的最小权限 CAM 策略 |
 | `yunbox buckets` | 列出本机密钥能看到的 bucket |
-| `yunbox status` | 当前仓库 LFS 对象的数量和总大小 |
+| `yunbox status` | Git / 素材目标、传输代理登记状态，以及本地 LFS 对象数量和大小 |
 | `yunbox inspect --push` | 推送前检查 Git 和 LFS 的体积，逐个文件列出大小变化；`--confirm` 超限时弹窗确认 |
 | `yunbox hook install` | 安装 pre-push 包装层：检查通过后才执行原有钩子（包括 git-lfs 上传） |
 | `yunbox freeze set "Mo-Fr 09:00-18:00"` | 设置禁推时段（opening_hours 写法，可按星期、时区），时段内 pre-push 直接中断推送；`--shared` 写进 `.yunbox/config` 对团队生效 |
@@ -53,3 +53,5 @@ git-lfs 不允许仓库自己指定传输程序，所以 `git yunbox init` 会�
 ## License
 
 MIT
+
+终端确认支持 Windows、Linux 和 macOS；`git config yunbox.confirmUI terminal` 可固定使用纯终端，`auto` 恢复自动选择。交互终端自动突出显示重点，`NO_COLOR=1` 关闭颜色；管道、CI 和 JSON 保持纯文本。更多说明见[常见问题](https://yunbox.yunle.fun/guide/faq)。

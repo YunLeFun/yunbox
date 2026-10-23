@@ -1,9 +1,11 @@
 import type { Buffer } from 'node:buffer'
 import type { CliContext } from './context.ts'
 import type { InspectionRange } from './inspect-git.ts'
+import type { TransferSummary } from './transfer-summary.ts'
 import { formatBytes } from './commands/status.ts'
 import { inspectGit, InspectionError } from './inspect-git.ts'
 import { checkRemoteObjects } from './inspect-remote.ts'
+import { terminalStyle, terminalText } from './terminal.ts'
 
 /** Configurable local confirmation budgets, not hosting-provider quotas. */
 export interface InspectionLimits {
@@ -215,21 +217,43 @@ export function describeSizeChange(change: InspectionChange): string {
   return `${text}（${delta > 0 ? '+' : '−'}${compactBytes(Math.abs(delta))}）`
 }
 
+/** Optional local destination information and styling for a human-readable report. */
+export interface InspectionDisplay {
+  style?: ReturnType<typeof terminalStyle>
+  source?: string
+  target?: string
+  transfer?: TransferSummary
+}
+
 /** Render bounded human-readable rankings; JSON retains every change, file entry and path. */
-export function formatInspection(report: PushInspection, top = 10): string {
+export function formatInspection(report: PushInspection, top = 10, display: InspectionDisplay = {}): string {
+  const style = display.style ?? terminalStyle()
   const lines = [
-    `推送检查：${report.status === 'exceeded' ? '超过限额，需要确认' : '未超限'}`,
-    ...exceededReasons(report).map(reason => `  ! ${reason}`),
-    `Git pack 预计上传量：${report.git.packComplete ? formatBytes(report.git.packBytes) : `超过 ${formatBytes(report.git.packCapBytes)}`}；限额 ${formatBytes(report.limits.gitBytes)}`,
-    ...describeLfs(report),
-    `单文件原始大小限额：${formatBytes(report.limits.fileBytes)}`,
+    style.title('推送检查'),
+    '',
+    ...(display.source ? [style.field('来源', display.source)] : []),
+    ...(display.transfer ? [style.field('代码目标', display.target ?? '尚未配置 Git 远端', 'info')] : []),
+    ...(display.transfer?.fields.map(({ label, value, tone }) => style.field(label, value, tone)) ?? []),
+    ...(display.transfer?.warnings.map(warning => style.paint('warning', `! ${warning}`)) ?? []),
+    '',
+    style.paint(report.status === 'exceeded' ? 'warning' : 'success', report.status === 'exceeded' ? '! 超过限额，需要确认' : '✓ 未超限'),
+    ...exceededReasons(report).map(reason => style.paint('error', `  ! ${reason}`)),
+    style.field('Git 上传', `${report.git.packComplete ? compactBytes(report.git.packBytes) : `> ${compactBytes(report.git.packCapBytes)}`}（pack 估算）；预算 ${compactBytes(report.limits.gitBytes)}`, report.git.exceedsLimit ? 'error' : undefined),
+    ...describeLfs(report).map(line => style.paint(report.lfs.exceedsLimit ? 'error' : 'info', line)),
+    style.field('单文件预算', `${compactBytes(report.limits.fileBytes)}（原始大小）`),
   ]
   const changes = report.changes.filter(change => change.versions > 0)
-  lines.push(`\n变更文件（前 ${Math.min(top, changes.length)} / ${changes.length}，按本次上传原始大小）：`)
+  lines.push(`\n${style.paint('title', `变更文件（前 ${Math.min(top, changes.length)} / ${changes.length}，按本次上传原始大小）`)}`)
+  if (!changes.length)
+    lines.push(style.paint('muted', '  没有新的文件内容需要上传。'))
   for (const change of changes.slice(0, top)) {
     const versions = change.versions > 1 ? `  ${change.versions} 个版本` : ''
-    lines.push(`${change.exceedsFileLimit ? '[超限] ' : ''}${CHANGE_LABELS[change.status]}  ${compactBytes(change.pushBytes).padStart(10)}  ${change.storage === 'lfs' ? 'LFS ' : ''}${JSON.stringify(change.path)}  ${describeSizeChange(change)}${versions}`)
+    const tone = change.exceedsFileLimit ? 'error' : change.status === 'added' ? 'success' : 'info'
+    lines.push(style.paint(tone, `${change.exceedsFileLimit ? '[超限] ' : ''}${CHANGE_LABELS[change.status]}  ${change.storage === 'lfs' ? 'LFS' : 'Git'}  ${terminalText(JSON.stringify(change.path))}`))
+    lines.push(`  上传 ${compactBytes(change.pushBytes)}  ·  ${describeSizeChange(change)}${versions}`)
   }
+  if (changes.length > top)
+    lines.push(style.paint('muted', '  更多文件：yunbox inspect --push --top 100；全部明细见 --json。'))
   // Objects whose path history is unreadable still need to be visible.
   const unpathed = [...report.git.files, ...report.lfs.files].filter(file => file.paths.length === 0)
   if (unpathed.length) {
@@ -241,7 +265,7 @@ export function formatInspection(report: PushInspection, top = 10): string {
   lines.push('原始文件大小不等于压缩/增量后的 Git 上传量；同一文件的每个历史版本分别统计。')
   if (report.git.files.some(file => file.exceedsFileLimit))
     lines.push('普通 Git 中存在超限文件：请检查是否应忽略构建产物，或将素材纳入 LFS；已提交历史需单独处理。')
-  lines.push(...report.warnings.map(warning => `提示：${warning}`))
+  lines.push(...report.warnings.map(warning => style.paint('warning', `提示：${terminalText(warning)}`)))
   return `${lines.join('\n')}\n`
 }
 
@@ -254,13 +278,13 @@ export async function lfsPointerBlobs(context: CliContext, oids: string[]): Prom
 function describeLfs(report: PushInspection): string[] {
   const { lfs, limits } = report
   if (lfs.uploadBytes === null) {
-    const line = `LFS 候选上传量：${formatBytes(lfs.candidateBytes)}，${lfs.candidateCount} 个对象；限额 ${formatBytes(limits.lfsBytes)}`
-    return lfs.candidateCount ? [line, 'LFS 尚未查询远端，实际需上传字节数未知；远端已有对象可能跳过。'] : [line]
+    const line = `LFS 候选：${compactBytes(lfs.candidateBytes)} · ${lfs.candidateCount} 个对象；预算 ${compactBytes(limits.lfsBytes)}`
+    return lfs.candidateCount ? [line, 'LFS 上传：未知（尚未查询远端，已有对象可能跳过）'] : [line]
   }
   const present = lfs.files.filter(file => file.onRemote).length
   return [
-    `LFS 需上传：${formatBytes(lfs.uploadBytes)}，${lfs.candidateCount - present} 个对象；限额 ${formatBytes(limits.lfsBytes)}`,
-    `已查询 ${lfs.remoteStorage ?? 'COS'}：${lfs.candidateCount} 个 LFS 候选中 ${present} 个已存在，推送时跳过。`,
+    `LFS 上传：${compactBytes(lfs.uploadBytes)} · ${lfs.candidateCount - present} 个对象；预算 ${compactBytes(limits.lfsBytes)}`,
+    `已存在：${present} / ${lfs.candidateCount} 个对象（已查询 ${lfs.remoteStorage ?? 'COS'}），本次跳过。`,
   ]
 }
 

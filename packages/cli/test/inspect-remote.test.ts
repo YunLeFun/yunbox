@@ -68,8 +68,8 @@ describe('push inspection in direct COS mode', () => {
     expect(stdout).not.toContain(keys.secretKey)
     expect(stdout).not.toContain('q-signature')
     const text = await runYunBox(sandbox, repo, ['inspect', '--push', '--lfs-limit', '32k'])
-    expect(text.stdout).toContain('LFS 需上传：0 字节，0 个对象')
-    expect(text.stdout).toContain('3 个 LFS 候选中 3 个已存在')
+    expect(text.stdout).toContain('LFS 上传：0 B · 0 个对象')
+    expect(text.stdout).toContain('已存在：3 / 3 个对象')
     expect(text.stdout).not.toContain('尚未查询远端')
   })
 

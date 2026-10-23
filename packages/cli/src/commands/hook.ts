@@ -23,6 +23,7 @@ export const hookHelp = `用法：yunbox hook install [--confirm | --guard <abso
 原钩子保留在 pre-push.yunbox-original，uninstall 恢复它。不会修改已有 Git 提交。
 默认调用当前已构建的 YunBox CLI，超限时阻止推送。
 --confirm 超限时列出各文件的大小变化并询问是否继续（macOS 原生对话框，否则终端）。
+纯终端确认：git config yunbox.confirmUI terminal（macOS 也支持）；恢复自动选择用 auto。
 --guard 指定额外的确认程序，例如 ~/.local/libexec/git-confirm-large-push。
 有自定义 core.hooksPath 或非普通文件钩子时拒绝安装，避免改动共享配置。
 `

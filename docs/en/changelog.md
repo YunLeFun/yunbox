@@ -4,6 +4,19 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ## Unreleased
 
+### Added
+
+- Windows can confirm over-budget pushes in the console, with an optional reason for continuing or cancelling. On macOS, choose graphical or terminal confirmation per repository or globally.
+- Expandable FAQs cover asset storage, collaborator setup, cross-platform terminal confirmation and color settings.
+
+### Changed
+
+- Terminal push reports consistently show code and asset destinations, upload sizes and skipped objects. Status, diagnostics and setup steps highlight key information with color; pipes, CI and JSON remain plain, and `NO_COLOR=1` disables color.
+
+### Fixed
+
+- `yunbox status` now shows direct COS / S3 storage and agent registration correctly instead of treating a missing `lfs.url` as missing setup. New clones receive instructions when their agent has not been configured.
+
 ## 0.1.5 - 2026-10-23
 
 ### Added

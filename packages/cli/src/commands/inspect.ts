@@ -1,4 +1,4 @@
-import type { PushAnswer } from '../confirm.ts'
+import type { ConfirmUi, PushAnswer } from '../confirm.ts'
 import type { CliContext } from '../context.ts'
 import { Buffer } from 'node:buffer'
 import { parseArgs } from 'node:util'
@@ -7,6 +7,9 @@ import { askPush } from '../confirm.ts'
 import { checkFreeze, formatFreezeBlock, formatPauseEnd, readFreezeConfig, SCOPE_LABELS } from '../freeze.ts'
 import { inspectGit, InspectionError, resolveInspectionRange } from '../inspect-git.ts'
 import { exceededReasons, formatInspection, inspectPush } from '../inspect.ts'
+import { describePush } from '../push-context.ts'
+import { terminalFor } from '../terminal.ts'
+import { readTransferSummary } from '../transfer-summary.ts'
 
 export const inspectHelp = `用法：yunbox inspect --push [选项]
 
@@ -28,10 +31,13 @@ export const inspectHelp = `用法：yunbox inspect --push [选项]
   --json              输出 schemaVersion=1 的 JSON，包括错误
   --confirm           超限时询问是否继续（macOS 原生对话框，否则终端）；确认后退出码为 0
                       可附一句原因（对话框底部，或终端里写在 y / n 后面），会写进输出
+  --confirm-ui <mode> 配合 --confirm，选择 auto / dialog / terminal / none
   -h, --help          显示帮助
 
 size 支持字节及 k/m/g、KiB/MiB/GiB（1024 进制）。退出码：0 未超限，1 超限，2 检查失败。
 Git 配置：yunbox.inspectGitBytes / yunbox.inspectLfsBytes / yunbox.inspectFileBytes；命令行优先。
+确认界面：--confirm-ui > YUNBOX_CONFIRM_UI > git config yunbox.confirmUI > auto。
+macOS 可选原生对话框或纯终端；Windows / Linux 使用控制终端。NO_COLOR=1 关闭颜色。
 直连对象存储（COS 或 S3）的仓库在本机有密钥时，用 HEAD 查询 LFS 候选是否已在存储里（并发 8，共 5 秒），
 已有的不计入上传量；查询失败或超时时上传量按未知处理，不影响推送。其他情况下 LFS 候选量
 不等于实际上传量，远端已有对象可能跳过。YUNBOX_INSPECT_REMOTE_TIMEOUT_MS=0 关闭查询。
@@ -53,6 +59,7 @@ export async function runInspect(context: CliContext, args: string[]): Promise<n
       'top': { type: 'string' },
       'json': { type: 'boolean' },
       'confirm': { type: 'boolean' },
+      'confirm-ui': { type: 'string' },
       'help': { type: 'boolean', short: 'h' },
     } })
     if (values.help) {
@@ -63,6 +70,8 @@ export async function runInspect(context: CliContext, args: string[]): Promise<n
       throw new InspectionError('请指定 --push；--stdin 不能与 --base / --head 同时使用')
     if (values.confirm && json)
       throw new InspectionError('--confirm 不能与 --json 同时使用')
+    if (values['confirm-ui'] !== undefined && (!values.confirm || !['auto', 'dialog', 'terminal', 'none'].includes(values['confirm-ui'])))
+      throw new InspectionError('--confirm-ui 需配合 --confirm，且只能是 auto / dialog / terminal / none')
     if (values.remote?.startsWith('-') || values.remote === '')
       throw new InspectionError('无效的远端名称')
     const top = Number(values.top ?? '10')
@@ -98,12 +107,21 @@ export async function runInspect(context: CliContext, args: string[]): Promise<n
     const updates = values.stdin ? await readUpdates(context) : undefined
     const range = await resolveInspectionRange(repo, { updates, base: values.base, head: values.head, remote: values.remote })
     const report = await inspectPush(repo, range, limits)
-    context.stdout.write(values.json ? `${JSON.stringify(report)}\n` : formatInspection(report, top))
+    if (values.json) {
+      context.stdout.write(`${JSON.stringify(report)}\n`)
+    }
+    else {
+      const [push, transfer] = await Promise.all([
+        describePush(repo, { remote: values.remote, updates, head: values.head }),
+        readTransferSummary(repo),
+      ])
+      context.stdout.write(formatInspection(report, top, { ...push, transfer, style: terminalFor(context) }))
+    }
     if (report.status === 'ok')
       return 0
-    const reply = values.confirm ? await askPush(repo, report, { remote: values.remote, updates, head: values.head }) : undefined
+    const reply = values.confirm ? await askPush(repo, report, { remote: values.remote, updates, head: values.head, ui: values['confirm-ui'] as ConfirmUi | undefined }) : undefined
     if (values.confirm)
-      context.stderr.write(formatReply(reply))
+      context.stderr.write(terminalFor(context, 'stderr').paint(reply?.answer === 'continue' ? 'success' : 'warning', formatReply(reply)))
     if (reply?.answer === 'continue')
       return 0
     // Only a real push (from the hook) is remembered; manual checks block nothing.

@@ -1,14 +1,21 @@
 import type { CliContext } from './context.ts'
 import type { InspectionChange, PushInspection } from './inspect.ts'
+import type { PushEnds } from './push-context.ts'
 import { Buffer } from 'node:buffer'
 import { spawn } from 'node:child_process'
-import { mkdir, mkdtemp, open, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { basename, join, resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import process from 'node:process'
 import { escapeHtml, renderDiffHtml, textDiff } from './diff-page.ts'
+import { readGitConfig } from './git.ts'
 import { inspectGit } from './inspect-git.ts'
 import { CHANGE_LABELS, compactBytes, describeSizeChange, exceededReasons } from './inspect.ts'
+import { describePush } from './push-context.ts'
+import { readTerminalLine } from './terminal-input.ts'
+import { terminalFor } from './terminal.ts'
+
+export { describeRemote, describeSource, remoteWebUrl } from './push-context.ts'
 
 /** Rows rendered in the dialog; the terminal report and JSON carry the rest. */
 const DIALOG_ROWS = 300
@@ -364,84 +371,8 @@ async function addDiffPages(context: CliContext, dir: string, shown: InspectionC
   }
 }
 
-/** Both ends of a push, as the confirmation names and links them. */
-interface PushEnds {
-  /** Repository root, for Finder, the editor and the YunBox client. */
-  root: string
-  /** `本地仓库 name（branch）`. */
-  source: string
-  /** Credential-free remote name, e.g. `github.com/owner/repo`. */
-  target?: string
-  /** The remote's probable web page. */
-  web?: string
-}
-
 /** How the push confirmation is asked, from `YUNBOX_CONFIRM_UI`. */
-type ConfirmUi = 'auto' | 'dialog' | 'terminal' | 'none'
-
-/**
- * Credential-free parts of a URL or scp-style remote; undefined for remote names and
- * local paths. `web` is the forge page guessed from it (`https://host/owner/repo`).
- */
-function parseRemote(remote: string): { name: string, web?: string } | undefined {
-  let host: string
-  let path: string
-  let web: string | undefined
-  try {
-    const url = new URL(remote)
-    if (url.protocol === 'file:' || !url.host)
-      return undefined
-    host = url.host
-    path = url.pathname
-    // HTTP remotes keep their port; SSH ports are not where the forge serves pages.
-    web = url.protocol === 'http:' || url.protocol === 'https:' ? `${url.protocol}//${url.host}` : url.protocol === 'ssh:' || url.protocol === 'git:' ? `https://${url.hostname}` : undefined
-  }
-  catch {
-    // `user@host:path`; a one-letter "host" is a Windows drive.
-    const scp = /^(?:[^@/]+@)?([^:/\\]{2,}):(?!\/\/)(.+)$/.exec(remote)
-    if (!scp)
-      return undefined
-    host = scp[1]!
-    // URL paths arrive percent-encoded; encode scp paths to match.
-    path = encodeURI(scp[2]!)
-    web = `https://${host}`
-  }
-  path = path.replace(/^\/+|\/+$/g, '').replace(/\.git$/, '')
-  let name = `${host}/${path}`
-  try {
-    name = decodeURI(name)
-  }
-  catch {}
-  // The name reaches the terminal prompt: never let it carry escape sequences.
-  return { name: visible(name), web: web && path ? `${web}/${path}` : undefined }
-}
-
-/**
- * A short, credential-free name for a remote: `github.com/owner/repo` for URLs and
- * scp-style addresses, the value itself for remote names and local paths.
- */
-export function describeRemote(remote: string | undefined): string | undefined {
-  return remote ? parseRemote(remote)?.name ?? remote : undefined
-}
-
-/** The web page a remote probably has (`https://github.com/owner/repo`), if it is a URL. */
-export function remoteWebUrl(remote: string | undefined): string | undefined {
-  return remote ? parseRemote(remote)?.web : undefined
-}
-
-/**
- * Which local repository and refs a push comes from, e.g. `本地仓库 yunbox（main）`.
- * `updates` are pre-push lines; without them `branch` names what is inspected.
- */
-export function describeSource(root: string, options: { updates?: string, branch?: string } = {}): string {
-  const short = (ref: string): string => ref.startsWith('refs/heads/') ? ref.slice(11) : ref.startsWith('refs/tags/') ? `标签 ${ref.slice(10)}` : ref
-  const refs = options.updates === undefined
-    ? options.branch ? [options.branch] : []
-    : options.updates.split(/\r?\n/).map(line => line.trim().split(/\s+/)).filter(fields => fields.length === 4 && !/^0+$/.test(fields[1]!)).map(([local, , remote]) => short(local!) === short(remote!) ? short(local!) : `${short(local!)} → ${short(remote!)}`)
-  const unique = [...new Set(refs)]
-  const listed = unique.length > 3 ? `${unique.slice(0, 3).join('、')} 等 ${unique.length} 个引用` : unique.join('、')
-  return `本地仓库 ${basename(root)}${listed ? `（${visible(listed)}）` : ''}`
-}
+export type ConfirmUi = 'auto' | 'dialog' | 'terminal' | 'none'
 
 /** Self-contained report page for the confirmation dialog: no scripts, no network. */
 export function renderConfirmationHtml(report: PushInspection): string {
@@ -486,7 +417,7 @@ export function renderConfirmationHtml(report: PushInspection): string {
  * Ask whether to push despite an exceeded budget: a native dialog on macOS, else the
  * controlling terminal. Blocks (returns false) when nobody can be asked.
  */
-export async function confirmPush(context: CliContext, report: PushInspection, options: { remote?: string, updates?: string, head?: string } = {}): Promise<boolean> {
+export async function confirmPush(context: CliContext, report: PushInspection, options: { remote?: string, updates?: string, head?: string, ui?: ConfirmUi } = {}): Promise<boolean> {
   return (await askPush(context, report, options))?.answer === 'continue'
 }
 
@@ -528,8 +459,8 @@ export function parseTerminalAnswer(line: string): PushAnswer {
  * Like {@link confirmPush}, but tells a “cancel” answer apart from nobody being
  * asked (`undefined`, after explaining why on stderr).
  */
-export async function askPush(context: CliContext, report: PushInspection, options: { remote?: string, updates?: string, head?: string } = {}): Promise<PushAnswer | undefined> {
-  const ui = confirmUi(context.env)
+export async function askPush(context: CliContext, report: PushInspection, options: { remote?: string, updates?: string, head?: string, ui?: ConfirmUi } = {}): Promise<PushAnswer | undefined> {
+  const ui = options.ui ?? confirmUi(context.env.YUNBOX_CONFIRM_UI ?? await readGitConfig(context, 'yunbox.confirmUI'))
   const push = await describePush(context, options)
   const { source, target } = push
   if (ui === 'dialog' || (ui === 'auto' && process.platform === 'darwin' && !context.env.SSH_CONNECTION)) {
@@ -538,41 +469,19 @@ export async function askPush(context: CliContext, report: PushInspection, optio
       return answer
   }
   if (ui !== 'none') {
-    const answer = await askTerminal(`\n${source}${target ? ` 推送到 ${target}` : ''}：超过限额，仍要继续推送吗？[y/N]（可在后面写原因，如 n 先压缩图片）`)
+    const style = terminalFor(context, 'stderr')
+    const answer = await readTerminalLine(`\n${source}${target ? ` 推送到 ${target}` : ''}\n${style.paint('warning', '? 超过限额，继续推送？[y/N]')} 可附原因（如 n 先压缩图片）：`)
     if (answer !== undefined)
-      return answer
+      return parseTerminalAnswer(answer)
   }
-  context.stderr.write('无法请求确认：没有可用的对话框或交互式终端。可提高限额（yunbox inspect --help）后重试。\n')
+  const unavailable = ui === 'none'
+    ? '无法请求确认：确认方式设为 none，超限推送已取消。\n请先处理超限文件；需要交互确认时，检查 YUNBOX_CONFIRM_UI 和 git config yunbox.confirmUI 的设置。\n'
+    : '无法请求确认：没有可用的对话框 / 控制终端。已取消推送。\n请在交互式终端重试（Windows 可用 PowerShell / Windows Terminal）。CI 中请先处理超限文件。\n'
+  context.stderr.write(terminalFor(context, 'stderr').paint('warning', unavailable))
   return undefined
 }
 
-/**
- * Name both ends of the push. `context.cwd` is the repository root. Without `--remote`
- * (a manual check), the target is the current branch's upstream remote, if any.
- */
-async function describePush(context: CliContext, options: { remote?: string, updates?: string, head?: string }): Promise<PushEnds> {
-  const git = async (args: string[]): Promise<string | undefined> => {
-    try {
-      return (await inspectGit(context, args)).output.toString('utf8').trim() || undefined
-    }
-    catch {
-      return undefined
-    }
-  }
-  const branch = options.updates === undefined ? options.head ?? await git(['symbolic-ref', '--short', '-q', 'HEAD']) : undefined
-  let remote = options.remote
-  if (remote === undefined && options.updates === undefined && options.head === undefined && branch) {
-    const name = await git(['config', '--get', `branch.${branch}.remote`])
-    remote = name && name !== '.' ? name : undefined
-  }
-  // A remote name (`origin`) is shown as its URL so the dialog says where it really goes.
-  if (remote !== undefined && !parseRemote(remote) && /^[\w.-]+$/.test(remote))
-    remote = await git(['remote', 'get-url', '--', remote]) ?? remote
-  return { root: context.cwd, source: describeSource(context.cwd, { updates: options.updates, branch }), target: describeRemote(remote), web: remoteWebUrl(remote) }
-}
-
-function confirmUi(env: NodeJS.ProcessEnv): ConfirmUi {
-  const value = env.YUNBOX_CONFIRM_UI
+function confirmUi(value: string | undefined): ConfirmUi {
   return value === 'dialog' || value === 'terminal' || value === 'none' ? value : 'auto'
 }
 
@@ -641,37 +550,6 @@ export function parseDialogOutput(output: string): PushAnswer | undefined {
     return undefined
   const note = cleanNote(rest.join(' '))
   return note ? { answer, note } : { answer }
-}
-
-/** Ask on the controlling terminal: hook stdin carries ref updates, not the user's keyboard. */
-async function askTerminal(question: string): Promise<PushAnswer | undefined> {
-  if (process.platform === 'win32')
-    return undefined
-  let tty
-  try {
-    tty = await open('/dev/tty', 'r+')
-  }
-  catch {
-    return undefined
-  }
-  try {
-    await tty.write(question)
-    const buffer = Buffer.alloc(256)
-    let answer = ''
-    while (!answer.includes('\n')) {
-      const { bytesRead } = await tty.read(buffer, 0, buffer.length, null)
-      if (!bytesRead)
-        break
-      answer += buffer.subarray(0, bytesRead).toString('utf8')
-    }
-    return parseTerminalAnswer(answer.split('\n')[0]!)
-  }
-  catch {
-    return undefined
-  }
-  finally {
-    await tty.close()
-  }
 }
 
 function meter(label: string, value: number, limit: number, exceeded: boolean, note: string, lowerBound = false): string {

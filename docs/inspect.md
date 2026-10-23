@@ -8,10 +8,17 @@
 yunbox inspect --push
 yunbox inspect --push --base origin/main --head HEAD --json
 yunbox inspect --push --git-limit 900k --lfs-limit 100m --file-limit 10m --top 20
-yunbox inspect --push --confirm   # 超限时弹窗确认，见下文
+yunbox inspect --push --confirm   # 超限时按平台和设置选择确认方式
+yunbox inspect --push --confirm --confirm-ui terminal   # 这次只用终端
 ```
 
 默认比较 HEAD 与本地 upstream 快照；没有 upstream 时检查 HEAD 的全部历史并提示。`--stdin` 接受 Git pre-push 的四列引用更新，支持多分支和删除，不能与 `--base` / `--head` 合用。只有显式提供 `--remote <name/url>` 才会在新分支或缺少旧 tip 时查询远端 Git refs；查询失败或远端对象不在本地时保守估算。不会 fetch 或下载 LFS 内容；直连 COS 的仓库会查询 LFS 对象是否已上传，见下文。
+
+## 终端报告
+
+文本报告先显示代码目标和素材目标，再列出上传预算和变更文件。COS / S3 已接入时明确标识直连；只提交了存储配置、当前 clone 还没登记代理时会提示运行 `git yunbox init`。`yunbox status` 使用相同的目标展示，并列出本地素材用量；它不访问网络，也不检查密钥。
+
+交互终端用绿色表示通过、黄色表示提醒、红色表示失败或超限。重定向、管道、CI 和 JSON 不含颜色转义；`NO_COLOR=1` 可关闭颜色。跨平台设置与使用示例见[常见问题](./guide/faq)。
 
 ## 统计口径
 
@@ -58,12 +65,20 @@ git config yunbox.inspectFileBytes 10m
 `--confirm` 在超限时询问是否继续：确认后退出码为 `0`，取消或无人可问时为 `1`。不能与 `--json` 合用。
 
 - **macOS**：弹出原生对话框（通过 `osascript` 运行，无需安装应用）。标题写明推送目标（如 `github.com/owner/repo`，不含凭据），下面一行是本地仓库名和推送的分支。按钮行可以在 Finder 中显示仓库、用已安装的编辑器（Cursor、VS Code、Zed 或 Sublime Text）打开、在 YunBox 客户端中查看完整信息（已安装时），或在浏览器中打开远端仓库页面，每个按钮带有它所打开应用的图标；这些按钮不会关闭对话框。再往下是 Git pack、LFS 候选、最大单文件三项预算的用量条，以及逐个文件的表格：状态、目录与文件名、推送前后大小及差值、版本数和本次上传大小条，超限文件标红。点击推送后仍存在的文件，用「快速查看」预览推送的版本：修改的文件同时打开推送前和推送后两个版本，用左右方向键切换，新增的文件只显示新版本；修改过的普通 Git 文本文件（每个版本不超过 1 MiB）还多一页带两侧行号、红绿着色的逐行差异，预览先打开这一页，按左方向键回到两个版本。差异页在对话框打开前生成（最多 100 个文件），和报告页一样不含脚本；预览不会关闭对话框，点预览窗口的关闭按钮或按 Esc 关闭预览；预览打开时在对话框里按 Esc 也只关闭预览，不会取消推送。预览内容取自 Git 对象或本地 LFS 存储（`.git/lfs/objects`），而不是工作区，因为工作区可能与推送的提交不同；它们复制到仅当前用户可读的临时目录，对话框关闭时删除。本地没有的 LFS 旧版本无法预览。报告页面不含脚本，内容安全策略仍为 `default-src 'none'`。文件很多时只有表格滚动，用量条和表头保持不动。表格下方有一个「原因（可选）」输入框，对话框打开时光标就在里面：写一句为什么取消或继续推送，再点任一按钮即可，不写也行。原因会出现在推送的输出里，告诉发起推送的人或 AI 编程助手；取消时还会记进「最近被拦截」。默认按钮为「取消」，按回车即取消。对话框最多列出 300 个文件，其余见 `--json`。
-- **其他环境**：通过控制终端（`/dev/tty`）询问 `[y/N]`，终端上方是同样的文本报告。原因可以写在回答后面，例如 `n 先压缩图片` 或 `y 美术已确认`。SSH 会话直接使用终端。
-- **无法询问**（无窗口、无终端、Windows）：阻止推送并提示。
+- **Windows / Linux / 纯终端 macOS**：通过控制终端询问 `[y/N]`，Windows 使用附带的控制台，macOS / Linux 使用 `/dev/tty`，不读取 pre-push 的标准输入。原因可以写在回答后面，例如 `n 先压缩图片` 或 `y 美术已确认`。按回车取消，SSH 默认使用终端。Windows 推荐在 PowerShell / Windows Terminal 中运行；Git Bash 需要附带可用的 Windows 控制台。
+- **无法询问**（无窗口或无控制终端）：阻止推送并提示，不会自动同意。
 
 取消推送时，输出会写明原因（如果填了），并提醒不要提高限额或用 `--no-verify` 绕过检查，这样从 AI 编程助手发起的推送也能知道下一步该做什么。
 
-环境变量 `YUNBOX_CONFIRM_UI` 可指定 `dialog`、`terminal` 或 `none`（不询问，直接阻止）；默认自动选择。
+确认方式可选 `auto`、`dialog`、`terminal` 或 `none`（不询问，超限时直接阻止）。优先级为 `--confirm-ui` > `YUNBOX_CONFIRM_UI` > Git 配置 `yunbox.confirmUI` > `auto`。`--confirm-ui` 必须与 `--confirm` 一起使用。保存偏好后，带 `--confirm` 的 pre-push 包装层也会采用：
+
+```bash
+git config yunbox.confirmUI terminal          # 当前仓库纯终端
+git config --global yunbox.confirmUI terminal # 所有仓库默认纯终端
+git config yunbox.confirmUI auto              # 当前仓库恢复自动选择
+```
+
+macOS 的 `auto` 在本机使用原生窗口，可以从窗口中打开 YunBox 客户端；SSH 使用终端。显式 `dialog` 会尝试打开原生窗口，无法打开时尝试终端。
 
 ## 禁推时段
 

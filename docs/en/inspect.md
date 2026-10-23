@@ -17,6 +17,12 @@ By default, `yunbox inspect` compares HEAD with your local snapshot of the upstr
 
 Remote Git refs are only queried when you pass `--remote <name/url>` explicitly, and only for a new branch or when the old tip is missing. If that query fails, or the remote objects aren't available locally, the estimate errs on the high side. Nothing is fetched and no LFS content is downloaded. For repositories connected directly to COS, YunBox does check whether the LFS objects are already uploaded; see below.
 
+## Terminal reports
+
+Reports show code and asset destinations before upload budgets and changed files. Direct COS / S3 mode is identified explicitly; a clone without its agent receives setup instructions. `yunbox status` uses the same display and reads only local configuration and files, without checking keys or network access.
+
+Interactive terminals highlight passed checks in green, warnings in yellow, and failures or over-budget files in red. Pipes, redirected output, CI and JSON contain no color escapes. `NO_COLOR=1` disables color. See the [FAQ](./guide/faq) for cross-platform examples.
+
 ## What gets counted
 
 - **Git pack**: an estimate of the local thin pack, covering commits, trees, ordinary files and LFS pointers. Counting stops once it passes `max(10 MiB, Git limit)`, and the report then shows a lower bound instead of an exact value. Protocol handshake overhead isn't included.
@@ -80,12 +86,21 @@ With `--confirm`, an over-budget result asks whether to go on. If you confirm, t
   - The report page contains no scripts, and its content security policy stays at `default-src 'none'`. With many files, only the table scrolls; the usage bars and the table header stay in place.
   - Under the table is an optional reason field, focused when the dialog opens: type why you're cancelling or going ahead, then click either button, or leave it empty. The reason appears in the push output, so whoever started the push, or the AI coding assistant that did, can see it; a cancel also records it under Recently Blocked.
   - The default button is Cancel, so Return cancels. The dialog lists at most 300 files; use `--json` to see the rest.
-- **Other environments**: you are asked `[y/N]` on the controlling terminal (`/dev/tty`), below the same text report. A reason can follow the answer, such as `n compress the images first` or `y approved by the art team`. SSH sessions use the terminal directly.
-- **No way to ask** (no window, no terminal, or Windows): the push is blocked with a message.
+- **Windows / Linux / terminal-only macOS**: you are asked `[y/N]` on the controlling terminal: the attached console on Windows, or `/dev/tty` on macOS / Linux. This does not read pre-push standard input. A reason can follow the answer, such as `n compress the images first` or `y approved by the art team`. Return cancels; SSH uses the terminal by default. On Windows, use PowerShell / Windows Terminal; Git Bash requires an attached Windows console.
+- **No way to ask** (no window or controlling terminal): the push is blocked with a message; approval is never assumed.
 
 When a push is cancelled, the output gives the reason (if one was typed) and says not to raise the budgets or bypass the check with `--no-verify`, so an AI coding assistant that started the push knows what to do next.
 
-Set the environment variable `YUNBOX_CONFIRM_UI` to `dialog`, `terminal` or `none` (don't ask, just block) to choose the method. By default it is picked automatically.
+Choose `auto`, `dialog`, `terminal` or `none` (do not ask; block over-budget pushes). Precedence: `--confirm-ui` > `YUNBOX_CONFIRM_UI` > Git setting `yunbox.confirmUI` > `auto`. `--confirm-ui` requires `--confirm`. A saved preference also applies to pre-push wrappers installed with `--confirm`:
+
+```bash
+git config yunbox.confirmUI terminal          # This repository: terminal only
+git config --global yunbox.confirmUI terminal # Default for all repositories
+git config yunbox.confirmUI auto              # Automatic choice in this repository
+yunbox inspect --push --confirm --confirm-ui terminal # Override this check only
+```
+
+On macOS, `auto` uses the native window locally (with a button to open the YunBox app), and the terminal over SSH. Explicit `dialog` attempts the native window, then falls back to the terminal if unavailable.
 
 ## Push freeze
 

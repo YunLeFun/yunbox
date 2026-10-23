@@ -102,7 +102,8 @@ describe('push inspection', () => {
     ])
     const text = await runYunBox(sandbox, repo, ['inspect', '--push', '--base', base, '--file-limit', '4k'])
     expect(text.stdout).toContain('[超限] 修改')
-    expect(text.stdout).toContain('"edited.bin"  1000 B → 1.95 KiB（+1000 B）  2 个版本')
+    expect(text.stdout).toContain('"edited.bin"')
+    expect(text.stdout).toContain('1000 B → 1.95 KiB（+1000 B）  2 个版本')
     expect(text.stdout).toContain('临时')
     // Nothing of a deleted path is uploaded, so the ranking leaves it out.
     expect(text.stdout).not.toContain('removed.txt')

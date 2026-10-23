@@ -275,7 +275,7 @@ yunbox doctor
 ### 自检和用量
 
 - `yunbox doctor` 逐项检查 git 和 git-lfs 版本、LFS 过滤器、是否在 Git 仓库里、`lfs.url`、HTTPS、`lfs.locksverify`、凭据、服务连通性，并用 download 和 upload 各发一次 batch 请求试探读写权限（不会上传或修改任何数据）。token 无效、已过期或已吊销（401）和没有权限（403）分开报告，每个失败项都附带可以直接照做的修复命令。全部通过时退出码为 0，否则为 1。只需要拉取素材的人用 `yunbox doctor --read-only`，不要求写权限。地址是非本机的 http 时，doctor 不会发送 token。
-- `yunbox status` 根据 `git lfs ls-files` 列出当前提交引用的 LFS 对象数量、总大小和本地已下载的数量，以及当前生效的 `lfs.url`；`--all` 统计所有分支和历史。它不访问网络。
+- `yunbox status` 根据 `git lfs ls-files` 列出当前提交引用的 LFS 对象数量、总大小和本地已下载的数量，以及 Git 目标、COS / S3 直连位置和代理登记状态（服务端模式显示 `lfs.url`）；`--all` 统计所有分支和历史。它不访问网络。
 
 ### 按素材类型管理 LFS 规则
 

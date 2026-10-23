@@ -214,7 +214,7 @@ describe('yunbox status', () => {
     const { sandbox, repo } = await setup()
     const empty = await runYunBox(sandbox, repo, ['status'])
     expect(empty.code).toBe(0)
-    expect(empty.stdout).toContain('lfs.url：未配置')
+    expect(empty.stdout).toContain('Git 远端默认 LFS 服务（未接入 YunBox）')
     expect(empty.stdout).toContain('LFS 对象（当前提交）：0 个')
 
     await runYunBox(sandbox, repo, ['init', '--url', SERVICE_URL, '--skip-credential'])

@@ -27,6 +27,7 @@ import { printStep } from '../report.ts'
 import { isSecureServiceUrl, parseServiceUrl, ServiceUrlError } from '../service-url.ts'
 import { describeStorage, providerOf, readStorageLocation } from '../storage/config.ts'
 import { PROBE_OPERATIONS } from '../storage/provider.ts'
+import { terminalFor } from '../terminal.ts'
 import { installedHook } from './hook.ts'
 import { canRead } from './init-cos.ts'
 import { AGENT_NAME } from './lfs-agent.ts'
@@ -76,6 +77,11 @@ export async function runDoctor(context: CliContext, args: string[]): Promise<nu
     return 0
   }
   const steps: StepReport[] = []
+  const style = terminalFor(context)
+  if (!values.json) {
+    print(context, style.title('环境自检'))
+    print(context)
+  }
   const report = (step: StepReport): void => {
     steps.push(step)
     if (!values.json)
@@ -97,10 +103,10 @@ export async function runDoctor(context: CliContext, args: string[]): Promise<nu
   }
   print(context)
   if (failures === 0) {
-    print(context, values['read-only'] ? '全部检查通过，可以拉取素材。' : '全部检查通过，可以推送和拉取素材。')
+    print(context, style.paint('success', values['read-only'] ? '全部检查通过，可以拉取素材。' : '全部检查通过，可以推送和拉取素材。'))
     return 0
   }
-  print(context, `${failures} 项检查未通过，按上面的修复命令处理后重新运行 yunbox doctor。`)
+  print(context, style.paint('error', `${failures} 项检查未通过，按上面的修复命令处理后重新运行 yunbox doctor。`))
   return 1
 }
 

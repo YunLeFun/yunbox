@@ -81,3 +81,5 @@ yunbox doctor
 - 需要集中签发、吊销 token 的团队，可以改用[服务端模式](../deploy)。
 
 完整的命令说明见仓库 [README](../../README.md)。
+
+常见的存储位置、Windows / Linux 使用和终端确认问题见[常见问题](./faq)。

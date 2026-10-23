@@ -25,7 +25,7 @@ COS / S3 存储面板已完成真实窗口验收；0.1.5 已正式发布到 npm 
 
 - [x] **正式发布与安装**（2026-10-23）：[0.1.5](https://github.com/YunLeFun/yunbox/releases/tag/v0.1.5) 的 [Release 工作流](https://github.com/YunLeFun/yunbox/actions/runs/39814527805) 全部通过。npm 全新安装正常；官方 arm64 / x86_64 通用包通过下载哈希、Developer ID、公证票据、Gatekeeper、更新包和 appcast 签名校验，经 Finder 安装后启动与更新检查正常。本机已有 Sparkle 的 0.1.4 开发构建实际升级到正式 0.1.5，下载、安装、重启及安装后校验均通过。官方旧版 0.1.4 没有 Sparkle，需要手动安装一次新版。
 - [x] **macOS 存储接入窗口**（2026-10-23）：真实 COS 与本机 MinIO 的窗口接入、缺密钥引导、错误密钥拒绝、钥匙串保存和重新检查均通过；两者都完成真实 push → 全新 clone → SHA-256 一致。修复 COS 保存密钥后不刷新、受限账号接入已有 bucket 误提示新建，以及旧版 CLI 抢占应用传输代理的问题。
-- [ ] **Windows 使用体验**：检查 Fork、SourceTree 等 GUI Git 客户端的 PATH，以及 PowerShell / Git Bash 的交互输入和修复命令；验证 Windows 凭据管理器方案，目前仍用文件保存密钥。
+- [ ] **Windows 使用体验**：2026-10-23 已补齐通过控制台确认超限推送、统一彩色终端报告，以及 COS / S3 的 `status` 展示；确认方式可按仓库或全局保存，macOS 同时支持图形与纯终端。Windows 控制台分支已有模拟测试，macOS 真实 PTY 已验证回车取消、中文原因、继续和关闭颜色；仍需 Windows 真机验证 PowerShell / Git Bash 的交互输入、Fork / SourceTree 的 PATH 和修复命令。Windows 凭据管理器方案也待验证，目前仍用文件保存密钥。
 - [ ] **AWS S3**：接入 AWS 试点前运行真实 `s3-live.test.ts`；R2 和本机 MinIO 已有实测记录。
 - [ ] **两周试点**：`YunYouJun/life` 于 2026-10-19 开始，2026-11-02 满两周后记录恢复、流量、失败重试与日常操作情况。
 - [ ] **命令行英文输出**：官网和原生界面已有英文，CLI 的检查项及修复说明仍是中文。

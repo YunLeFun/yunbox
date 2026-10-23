@@ -83,6 +83,7 @@ export default defineConfig({
               { text: 'macOS 客户端', link: '/guide/macos' },
               { text: '禁推时段', link: '/guide/freeze' },
               { text: '用 AI 编程助手接入', link: '/guide/ai' },
+              { text: '常见问题', link: '/guide/faq' },
             ],
           },
           {
@@ -146,6 +147,7 @@ export default defineConfig({
               { text: 'macOS App', link: '/en/guide/macos' },
               { text: 'Push Freeze', link: '/en/guide/freeze' },
               { text: 'Set Up with an AI Assistant', link: '/en/guide/ai' },
+              { text: 'Frequently Asked Questions', link: '/en/guide/faq' },
             ],
           },
           {

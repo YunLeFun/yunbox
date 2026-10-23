@@ -1,12 +1,16 @@
 import type { CliContext } from '../context.ts'
 import { parseArgs } from 'node:util'
 import { CliError, print, USAGE_EXIT_CODE } from '../context.ts'
-import { findRepositoryRoot, readLfsUrl, runGitChecked } from '../git.ts'
+import { findRepositoryRoot, runGitChecked } from '../git.ts'
+import { describePush } from '../push-context.ts'
+import { terminalFor, terminalText } from '../terminal.ts'
+import { readTransferSummary } from '../transfer-summary.ts'
 
 export const statusHelp = `用法：yunbox status [选项]
 
 列出当前仓库 LFS 对象的数量和总大小（读取 git lfs ls-files，不访问网络），
-以及当前生效的 lfs.url。
+以及 Git 目标、COS / S3 直连配置或 LFS 服务端地址。
+只读取本地配置，不检查密钥或远端连通性；完整自检使用 yunbox doctor。
 
 选项：
   --all        统计所有分支、标签和历史版本，而不只是当前检出的提交
@@ -44,19 +48,30 @@ export async function runStatus(context: CliContext, args: string[]): Promise<nu
   if (root === undefined)
     throw new CliError('当前目录不在 Git 仓库里')
   const repo: CliContext = { ...context, cwd: root }
-  const configured = await readLfsUrl(repo, root)
-  const usage = await readLfsUsage(repo, values.all ?? false)
+  const [transfer, push, usage] = await Promise.all([
+    readTransferSummary(repo),
+    describePush(repo, {}),
+    readLfsUsage(repo, values.all ?? false),
+  ])
+  const style = terminalFor(context)
 
-  print(context, `仓库：${root}`)
-  print(context, `lfs.url：${configured === undefined ? '未配置（运行 git yunbox init --url ... 配置）' : `${configured.url}（来自 ${configured.source}）`}`)
+  print(context, style.title('仓库状态'))
+  print(context)
+  print(context, style.field('仓库', terminalText(root)))
+  print(context, style.field('代码目标', push.target ?? '尚未配置 Git 远端', 'info'))
+  for (const { label, value, tone } of transfer.fields)
+    print(context, style.field(label, value, tone))
+  for (const warning of transfer.warnings)
+    print(context, style.paint('warning', `! ${warning}`))
+  print(context)
   const scope = values.all ? '所有分支和历史' : '当前提交'
   if (usage.objects === 0) {
-    print(context, `LFS 对象（${scope}）：0 个`)
+    print(context, style.field(`LFS 对象（${scope}）`, '0 个'))
     return 0
   }
-  print(context, `LFS 对象（${scope}）：${usage.objects} 个，共 ${formatBytes(usage.bytes)}${values.all ? '' : `，对应 ${usage.files} 个文件`}`)
+  print(context, style.field(`LFS 对象（${scope}）`, `${usage.objects} 个，共 ${formatBytes(usage.bytes)}${values.all ? '' : `，对应 ${usage.files} 个文件`}`))
   const missing = usage.objects - usage.downloadedObjects
-  print(context, `本地已下载：${usage.downloadedObjects} 个，${formatBytes(usage.downloadedBytes)}${missing === 0 ? '' : `；还有 ${missing} 个未下载（git lfs pull 下载）`}`)
+  print(context, style.field('本地已下载', `${usage.downloadedObjects} 个，${formatBytes(usage.downloadedBytes)}${missing === 0 ? '' : `；还有 ${missing} 个未下载（git lfs pull 下载）`}`, missing ? 'warning' : 'success'))
   return 0
 }
 

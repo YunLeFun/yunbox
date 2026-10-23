@@ -1,3 +1,5 @@
+import { terminalFor } from './terminal.ts'
+
 /** Where a command runs and how it talks to the user. Injected so tests can run commands in-process. */
 export interface CliContext {
   /** Working directory the command acts on. */
@@ -17,7 +19,7 @@ export function print(context: CliContext, line = ''): void {
 
 /** Write one line to the context's stderr. */
 export function printError(context: CliContext, line: string): void {
-  context.stderr.write(`${line}\n`)
+  context.stderr.write(`${terminalFor(context, 'stderr').paint('error', line)}\n`)
 }
 
 /** An error whose message is shown to the user as-is, with an optional exit code (default 1). */
