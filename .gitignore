@@ -17,3 +17,6 @@ cache
 
 # Deployment-specific COS routes from "yunbox-server cos setup"; no credentials, but not shared by default
 yunbox.storage.json
+
+# Local video production workspaces, licensed media, renders, and private campaign notes
+/videos/
