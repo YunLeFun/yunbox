@@ -4037,6 +4037,16 @@
         }
       }
     },
+    "超过单文件预算 %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exceeds the per-file budget of %@"
+          }
+        }
+      }
+    },
     "超过预算" : {
       "localizations" : {
         "en" : {

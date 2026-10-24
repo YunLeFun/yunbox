@@ -31,23 +31,30 @@ struct FileTableView: View {
     private var table: some View {
         Table(store.visibleRows, selection: $store.selectedFile) {
             TableColumn("文件") { row in
-                HStack {
-                    Image(systemName: row.kind == .lfs ? "shippingbox" : "doc").foregroundStyle(.secondary)
-                    Text(row.path).lineLimit(1).truncationMode(.middle).help(row.object.paths.joined(separator: "\n"))
-                }
+                FilePathCell(row: row)
             }.width(min: 170, ideal: 340)
             TableColumn("变更") { row in
-                Text(store.change(for: row)?.statusLabel ?? "—").foregroundStyle(.secondary)
-            }.width(45)
+                FileChangeCell(change: store.change(for: row))
+            }.width(min: 80, ideal: 85, max: 95)
             TableColumn("类型") { row in Text(row.kind.rawValue).foregroundStyle(.secondary) }.width(45)
-            TableColumn("原始大小") { row in Text(byteLabel(row.object.bytes)).monospacedDigit().help("\(row.object.bytes) 字节") }.width(90)
+            TableColumn("原始大小") { row in
+                Text(byteLabel(row.object.bytes)).monospacedDigit()
+                    .fontWeight(row.object.exceedsFileLimit ? .semibold : .regular)
+                    .foregroundStyle(row.object.exceedsFileLimit ? AnyShapeStyle(FileTableTint(tint: .orange)) : AnyShapeStyle(.primary))
+                    .help("\(row.object.bytes) 字节")
+            }.width(90)
             TableColumn("预算") { row in
                 if row.object.onRemote == true {
                     Text("已在 \(storageName)").foregroundStyle(.secondary).help("\(storageName) 里已有这个对象，推送时跳过")
+                } else if row.object.exceedsFileLimit {
+                    Label("超限", systemImage: "exclamationmark.triangle.fill")
+                        .fontWeight(.medium)
+                        .foregroundStyle(FileTableTint(tint: .orange))
+                        .help(store.result.map { String(localized: "超过单文件预算 \(byteLabel($0.report.limits.fileBytes))") } ?? String(localized: "超限"))
                 } else {
-                    Text(row.object.exceedsFileLimit ? "超限" : "—").foregroundStyle(row.object.exceedsFileLimit ? .orange : .secondary)
+                    Text("—").foregroundStyle(.secondary)
                 }
-            }.width(60)
+            }.width(min: 100, ideal: 105, max: 125)
         }
         .overlay {
             if store.visibleRows.isEmpty {

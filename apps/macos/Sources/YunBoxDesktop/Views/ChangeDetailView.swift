@@ -154,12 +154,7 @@ private struct StatusBadge: View {
     let change: InspectionReport.Change
 
     var body: some View {
-        let tint: Color = switch change.status {
-        case "added": .green
-        case "modified": .blue
-        case "deleted": .red
-        default: .purple
-        }
+        let tint = FileChangeStyle(change.status).tint
         Text(change.statusLabel).font(.caption.bold()).foregroundStyle(tint)
             .padding(.horizontal, 6).padding(.vertical, 1)
             .background(tint.opacity(0.14), in: RoundedRectangle(cornerRadius: 4))

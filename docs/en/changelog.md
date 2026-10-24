@@ -11,6 +11,7 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ### Changed
 
+- The macOS file list distinguishes changes with colors and symbols, identifies asset types with icons, emphasizes filenames over folders, and highlights files over budget while staying readable in dark mode and selected rows.
 - The macOS app now requires macOS 26 or later. Command-line platform support is unchanged.
 - The macOS sidebar uses native icon and label layout and selection styling, showing parent folders only to distinguish repositories with the same name. Inline shortcut hints are removed; `⌘1`–`⌘9` still switch repositories and remain visible in the menu.
 - Terminal push reports consistently show code and asset destinations, upload sizes and skipped objects. Status, diagnostics and setup steps highlight key information with color; pipes, CI and JSON remain plain, and `NO_COLOR=1` disables color.
