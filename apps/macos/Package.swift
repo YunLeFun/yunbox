@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "YunBoxDesktop",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS("26.0")],
     products: [.executable(name: "YunBox", targets: ["YunBoxDesktop"])],
     dependencies: [
         // Auto-update; the release workflow signs each zip with the key whose public half is SUPublicEDKey.

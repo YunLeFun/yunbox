@@ -4,7 +4,7 @@
 
 ## 安装
 
-从[官网下载](/#download)最新的 `YunBox-macOS.zip`，解压后把 YunBox 拖进「应用程序」。需要 macOS 14 或更新，以及本机的 Node.js 22.18+。
+从[官网下载](/#download)最新的 `YunBox-macOS.zip`，解压后把 YunBox 拖进「应用程序」。本机需要 Node.js 22.18+。当前源码及下一版客户端要求 macOS 26 或更新；已发布的 0.1.5 及更早版本最低支持 macOS 14。
 
 从 0.1.5 起，安装包经过 Apple 公证，双击就能打开，不会再提示无法验证开发者。
 
@@ -18,7 +18,7 @@ xattr -dr com.apple.quarantine /Applications/YunBox.app
 0.1.4 及以前的客户端还没有自动更新，建议直接下载最新版本替换。
 :::
 
-也可以从源码构建，需要 Xcode 或包含 Swift 6 的开发工具：
+也可以从源码构建，需要 Xcode 27.1（包含 macOS 27.0 SDK），与发布版使用相同的工具链配置：
 
 ```bash
 pnpm install

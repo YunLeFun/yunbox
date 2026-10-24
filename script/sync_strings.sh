@@ -12,12 +12,13 @@ set -euo pipefail
 MODE="${1:-sync}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CATALOG="$ROOT_DIR/apps/macos/Localization/Localizable.xcstrings"
-WORK_DIR="$ROOT_DIR/apps/macos/.build/strings"
+source "$ROOT_DIR/script/macos_toolchain.sh"
+WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/yunbox-strings.XXXXXX")"
+trap 'rm -rf "$WORK_DIR"' EXIT
 
 # A clean build: an incremental one only lists strings of the files it recompiles.
-rm -rf "$WORK_DIR"
 mkdir -p "$WORK_DIR/stringsdata"
-swift build --package-path "$ROOT_DIR/apps/macos" --scratch-path "$WORK_DIR/build" \
+yunbox_swift build --package-path "$ROOT_DIR/apps/macos" --scratch-path "$WORK_DIR/build" \
   -Xswiftc -emit-localized-strings -Xswiftc -emit-localized-strings-path -Xswiftc "$WORK_DIR/stringsdata" >/dev/null
 
 TARGET="$CATALOG"

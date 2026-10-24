@@ -83,7 +83,7 @@ jobs:
   macos-app:
     name: Attach the macOS client to the GitHub release
     needs: publish
-    runs-on: macos-latest
+    runs-on: xcode-27
     timeout-minutes: 30
     environment: sparkle
     permissions:
@@ -130,7 +130,8 @@ jobs:
           YUNBOX_SWIFT_BUILD_ARGS: -c release --arch arm64 --arch x86_64
         run: |
           ./script/build_and_run.sh --build
-          lipo -archs dist/YunBox.app/Contents/MacOS/YunBox
+          lipo dist/YunBox.app/Contents/MacOS/YunBox -verify_arch arm64
+          lipo dist/YunBox.app/Contents/MacOS/YunBox -verify_arch x86_64
 
       # Before the appcast: the zip Sparkle signs must hold the stapled app.
       - name: Notarize the app

@@ -1,6 +1,6 @@
 # 云匣 YunBox · macOS 推送检查
 
-SwiftUI 原生小工具，调用应用内附带的 YunBox CLI，复用同一套 Git/LFS 检查和 JSON 接口。需要 macOS 14+ 和本机 Node.js（版本要求同根项目）。
+SwiftUI 原生小工具，调用应用内附带的 YunBox CLI，复用同一套 Git/LFS 检查和 JSON 接口。当前源码及下一版客户端需要 macOS 26+ 和本机 Node.js（版本要求同根项目）；已发布的 0.1.5 及更早版本仍支持 macOS 14+。
 
 ## 使用
 
@@ -37,7 +37,7 @@ LFS 显示**候选上传量**，实际上传量保持未知；仓库直连 COS �
 
 ## 构建、启动、安装
 
-在仓库根目录，先安装依赖；还需 Xcode 或包含 Swift 6 的开发工具：
+在仓库根目录，先安装依赖；还需 Xcode 27.1（包含 macOS 27.0 SDK）：
 
 ```bash
 pnpm install
@@ -49,9 +49,15 @@ pnpm install
 
 Codex 的 Run 按钮也调用此脚本。`--logs` / `--telemetry` 打开应用并查看进程日志；`--debug` 用 LLDB 调试 bundle 内的二进制。
 
+本地、原生测试、本地化提取和发布统一读取 [`toolchain.json`](./toolchain.json)，固定 Xcode 27.1 / macOS 27.0 SDK；最低运行版本只在 `Package.swift` 声明为 macOS 26.0，打包时同步到 `Info.plist` 和图标编译参数。脚本优先使用当前选中的 Xcode；版本不符且没有显式设置 `DEVELOPER_DIR` 时，会在本进程中选择 `/Applications/Xcode_27.1.app`。其他安装位置可通过 `DEVELOPER_DIR=/path/to/Xcode.app/Contents/Developer` 指定，不修改系统全局的 `xcode-select`。CI 和发布使用提供该版本的 `xcode-27` runner；升级工具链时更新配置并重新核验两个架构。
+
+Xcode 27.1 的 Swift Build 引擎在本机的干净构建中，会把最低运行版本误写为最终 Mach-O 的 SDK 版本；仅传 `--sdk` 也不能纠正。公共构建入口因此把实际 SDK 版本和最低运行版本明确传给链接器。打包后检查每个架构的 `LC_BUILD_VERSION`，以及 `Info.plist` 的 `LSMinimumSystemVersion` / `DTSDKName`，不匹配就停止，避免旧样式的预览或错误系统要求进入发布包。升级最低运行版本与启用新 SDK 样式是两件事。
+
+应用先在任务独占的临时目录打包，校验和签名成功后才替换 `dist/YunBox.app`；图标与本地化的临时构建结束即清理，Swift 增量缓存继续复用。
+
 构建脚本把 CLI 组件复制进 `.app`，记录构建时的 Node.js 路径，不打包整个 Node.js 运行时；路径失效时查找 PATH / Homebrew，或在设置中选择新的 node 可执行文件。Finder 启动无需交互式 shell 配置。更新 CLI 代码后需要重新构建客户端。
 
-应用图标源自 `assets/brand`，是 [YunLeFun/icons](https://github.com/YunLeFun/icons) 中 `assets/apps/yunbox/v1` 的固定副本，以 `manifest.json` 的 SHA-256 校验。Xcode 26+ 下，脚本用 `actool` 把分层的 `YunBox.icon` 编译进 `Assets.car` 并写入 `CFBundleIconName`，macOS 26 据此显示默认、深色、Clear 与着色外观；同时由 `yunbox-app-icon.svg` 渲染 `AppIcon.icns` 作为旧系统兜底。更新图标时先改中心仓库，再运行 `pnpm icons:sync --source /path/to/icons`；`pnpm icons:check` 只校验本地副本。
+应用图标源自 `assets/brand`，是 [YunLeFun/icons](https://github.com/YunLeFun/icons) 中 `assets/apps/yunbox/v1` 的固定副本，以 `manifest.json` 的 SHA-256 校验。脚本用 `actool` 把分层的 `YunBox.icon` 编译进 `Assets.car` 并写入 `CFBundleIconName`，macOS 26 据此显示默认、深色、Clear 与着色外观；同时由 `yunbox-app-icon.svg` 渲染 `AppIcon.icns` 供 Finder 等场景使用。更新图标时先改中心仓库，再运行 `pnpm icons:sync --source /path/to/icons`；`pnpm icons:check` 只校验本地副本。
 
 本地构建默认是 ad-hoc 签名。发布版本时，`Release` 工作流用 `YUNBOX_SWIFT_BUILD_ARGS="-c release --arch arm64 --arch x86_64"` 构建通用二进制，用 Developer ID 签名并公证（见下面「签名和公证」），打包成 `YunBox-macOS.zip`，连同签名的 `appcast.xml` 附在 GitHub release 上（先建草稿，两个文件都上传后才发布），官网的下载按钮指向 zip，客户端从 appcast 自动更新。`Info.plist` 的版本号（`CFBundleShortVersionString` 和 Sparkle 比较用的 `CFBundleVersion`）取自 `packages/cli/package.json`。`dist/`、Swift 构建缓存及本机运行路径均不提交。
 
@@ -96,10 +102,10 @@ apps/macos/.build/artifacts/sparkle/Sparkle/bin/generate_keys --account fun.yunl
 ## 验证
 
 ```bash
-swift build --package-path apps/macos
+./script/swift_macos.sh build
 YUNBOX_TEST_NODE="$(node -p 'process.execPath')" \
 YUNBOX_TEST_CLI="$PWD/packages/cli/dist/cli.mjs" \
-swift test --package-path apps/macos
+./script/swift_macos.sh test
 ```
 
 测试覆盖退出码与 JSON 一致性、LFS 未知上传量、历史路径、取消和超时、输出限制、参数传递、最近列表的顺序和上限、固定和合并 CLI 记录、缓存的读写和清理（包括忽略不兼容的缓存），以及真实 Git 仓库通过 CLI 返回超限报告。真实 CLI 测试需要上面的两个环境变量。CI 在 macOS 上构建 CLI、运行 Swift 测试并检查 `.app` 打包。

@@ -11,11 +11,13 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ### Changed
 
+- The macOS app now requires macOS 26 or later. Command-line platform support is unchanged.
 - The macOS sidebar uses native icon and label layout and selection styling, showing parent folders only to distinguish repositories with the same name. Inline shortcut hints are removed; `⌘1`–`⌘9` still switch repositories and remain visible in the menu.
 - Terminal push reports consistently show code and asset destinations, upload sizes and skipped objects. Status, diagnostics and setup steps highlight key information with color; pipes, CI and JSON remain plain, and `NO_COLOR=1` disables color.
 
 ### Fixed
 
+- Fixed local app builds sometimes showing older sidebar and control styling, keeping previews consistent with release builds.
 - `yunbox status` now shows direct COS / S3 storage and agent registration correctly instead of treating a missing `lfs.url` as missing setup. New clones receive instructions when their agent has not been configured.
 
 ## 0.1.5 - 2026-10-23

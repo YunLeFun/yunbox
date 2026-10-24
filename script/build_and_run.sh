@@ -3,11 +3,17 @@ set -euo pipefail
 
 MODE="${1:-run}"
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_BUNDLE="$ROOT_DIR/dist/YunBox.app"
+FINAL_APP_BUNDLE="$ROOT_DIR/dist/YunBox.app"
 case "$MODE" in
   run|--build|--install|--verify|--debug|--logs|--telemetry) ;;
   *) echo "usage: $0 [--build|--install|--verify|--debug|--logs|--telemetry]" >&2; exit 2 ;;
 esac
+
+source "$ROOT_DIR/script/macos_toolchain.sh"
+echo "Building with Xcode $YUNBOX_XCODE_VERSION, macOS SDK $YUNBOX_SDK_VERSION; requires macOS $YUNBOX_MIN_MACOS+."
+WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/yunbox-build.XXXXXX")"
+trap 'rm -rf "$WORK_DIR"' EXIT
+APP_BUNDLE="$WORK_DIR/YunBox.app"
 
 if [ "$MODE" != --build ]; then pkill -x YunBox >/dev/null 2>&1 || true; fi
 cd "$ROOT_DIR"
@@ -15,15 +21,14 @@ cd "$ROOT_DIR"
 pnpm -r --filter '!@yunbox/docs' run build
 # Release packaging passes e.g. "-c release --arch arm64 --arch x86_64" for a universal binary.
 read -r -a SWIFT_ARGS <<< "${YUNBOX_SWIFT_BUILD_ARGS:-}"
-swift build --package-path apps/macos ${SWIFT_ARGS[@]+"${SWIFT_ARGS[@]}"}
-BUILD_DIR="$(swift build --package-path apps/macos ${SWIFT_ARGS[@]+"${SWIFT_ARGS[@]}"} --show-bin-path)"
+yunbox_swift build --package-path apps/macos ${SWIFT_ARGS[@]+"${SWIFT_ARGS[@]}"}
+BUILD_DIR="$(yunbox_swift build --package-path apps/macos ${SWIFT_ARGS[@]+"${SWIFT_ARGS[@]}"} --show-bin-path)"
 APP_VERSION="$(node -p 'require("./packages/cli/package.json").version')"
 # Sparkle checks this feed and only installs archives signed with the private
 # half of SUPublicEDKey (kept in the maintainer's keychain and the release
 # workflow's SPARKLE_ED_PRIVATE_KEY secret). Releases attach appcast.xml.
 SPARKLE_FEED_URL="https://github.com/YunLeFun/yunbox/releases/latest/download/appcast.xml"
 SPARKLE_PUBLIC_KEY="25QU3ICmhEYXH+kznYXnMC/AJQGtm+IYmbExHwDB3DY="
-rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources/cli" "$APP_BUNDLE/Contents/Frameworks"
 cp "$BUILD_DIR/YunBox" "$APP_BUNDLE/Contents/MacOS/YunBox"
 # The build directory's rpaths do not exist on users' Macs; the binary finds
@@ -41,27 +46,18 @@ mkdir -p "$APP_BUNDLE/Contents/Resources/zh-Hans.lproj" "$APP_BUNDLE/Contents/Re
 printf '"CFBundleDisplayName" = "云匣 YunBox";\n' > "$APP_BUNDLE/Contents/Resources/zh-Hans.lproj/InfoPlist.strings"
 printf '"CFBundleDisplayName" = "YunBox";\n' > "$APP_BUNDLE/Contents/Resources/en.lproj/InfoPlist.strings"
 node -e 'require("node:fs").writeFileSync(process.argv[1], JSON.stringify({node: process.execPath}))' "$APP_BUNDLE/Contents/Resources/runtime.json"
-swift script/create_app_icon.swift assets/brand/yunbox-app-icon.svg "$ROOT_DIR/dist/AppIcon.iconset"
-iconutil -c icns "$ROOT_DIR/dist/AppIcon.iconset" -o "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+xcrun --sdk "$YUNBOX_SDK_NAME" swift script/create_app_icon.swift assets/brand/yunbox-app-icon.svg "$WORK_DIR/AppIcon.iconset"
+iconutil -c icns "$WORK_DIR/AppIcon.iconset" -o "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 # macOS 26 reads the layered Icon Composer icon (default, dark, clear, tinted)
-# from Assets.car via CFBundleIconName; AppIcon.icns above stays the fallback.
-# Compiling .icon files needs Xcode 26+, so older toolchains keep only the icns.
+# from Assets.car via CFBundleIconName; AppIcon.icns also supports Finder previews.
 node script/sync-app-icon.mjs --check
-ACTOOL_MAJOR="$(xcrun actool --version 2>/dev/null | sed -n '/short-bundle-version/{n;s/.*<string>\([0-9]*\).*/\1/p;}')"
-if [ "${ACTOOL_MAJOR:-0}" -ge 26 ]; then
-  ICON_BUILD_DIR="$ROOT_DIR/dist/YunBox.icon-build"
-  rm -rf "$ICON_BUILD_DIR"
-  mkdir -p "$ICON_BUILD_DIR"
-  xcrun actool "$ROOT_DIR/assets/brand/YunBox.icon" --compile "$ICON_BUILD_DIR" \
-    --platform macosx --target-device mac --minimum-deployment-target 14.0 \
-    --app-icon YunBox --output-partial-info-plist "$ICON_BUILD_DIR/partial.plist" \
-    --errors --warnings --output-format human-readable-text >/dev/null
-  cp "$ICON_BUILD_DIR/Assets.car" "$APP_BUNDLE/Contents/Resources/Assets.car"
-  ICON_NAME_KEY='<key>CFBundleIconName</key><string>YunBox</string>'
-else
-  echo "warning: actool ${ACTOOL_MAJOR:-unknown} cannot compile YunBox.icon (needs Xcode 26+); using AppIcon.icns only" >&2
-  ICON_NAME_KEY=''
-fi
+ICON_BUILD_DIR="$WORK_DIR/YunBox.icon-build"
+mkdir -p "$ICON_BUILD_DIR"
+xcrun --sdk "$YUNBOX_SDK_NAME" actool "$ROOT_DIR/assets/brand/YunBox.icon" --compile "$ICON_BUILD_DIR" \
+  --platform macosx --target-device mac --minimum-deployment-target "$YUNBOX_MIN_MACOS" \
+  --app-icon YunBox --output-partial-info-plist "$ICON_BUILD_DIR/partial.plist" \
+  --errors --warnings --output-format human-readable-text >/dev/null
+cp "$ICON_BUILD_DIR/Assets.car" "$APP_BUNDLE/Contents/Resources/Assets.car"
 cat > "$APP_BUNDLE/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -74,8 +70,9 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<PLIST
   <key>CFBundleShortVersionString</key><string>$APP_VERSION</string>
   <key>CFBundleVersion</key><string>$APP_VERSION</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
-  $ICON_NAME_KEY
-  <key>LSMinimumSystemVersion</key><string>14.0</string>
+  <key>CFBundleIconName</key><string>YunBox</string>
+  <key>LSMinimumSystemVersion</key><string>$YUNBOX_MIN_MACOS</string>
+  <key>DTSDKName</key><string>$YUNBOX_SDK_NAME</string>
   <key>NSPrincipalClass</key><string>NSApplication</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>CFBundleDevelopmentRegion</key><string>zh-Hans</string>
@@ -93,6 +90,7 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<PLIST
   </dict></array>
 </dict></plist>
 PLIST
+node "$ROOT_DIR/script/check_macos_build.mjs" "$APP_BUNDLE" "$YUNBOX_SDK_VERSION" "$YUNBOX_MIN_MACOS"
 # Releases set YUNBOX_CODESIGN_IDENTITY to the "Developer ID Application"
 # certificate, so the app can be notarized (script/notarize.sh): every Mach-O
 # is re-signed inside out with the hardened runtime and a secure timestamp,
@@ -116,6 +114,12 @@ else
   codesign --force --sign - "$APP_BUNDLE"
 fi
 codesign --verify --deep --strict "$APP_BUNDLE"
+
+# Replace the previous app only after the staged bundle passes every check.
+mkdir -p "$ROOT_DIR/dist"
+rm -rf "$FINAL_APP_BUNDLE"
+mv "$APP_BUNDLE" "$FINAL_APP_BUNDLE"
+APP_BUNDLE="$FINAL_APP_BUNDLE"
 
 if [ "$MODE" = --install ]; then
   DESTINATION="$HOME/Applications/YunBox.app"
