@@ -35,16 +35,17 @@ export function escapeHtml(text: string): string {
 /**
  * Unified diff of a modified Git file between its versions before and after the push, from
  * the first hunk on. `undefined` for other changes, LFS or large files, binary content, or
- * when either object is not available locally.
+ * when either object is not available locally. An optional signal stops a preview
+ * query when its confirmation dialog closes.
  */
-export async function textDiff(context: CliContext, change: InspectionChange): Promise<string | undefined> {
+export async function textDiff(context: CliContext, change: InspectionChange, signal?: AbortSignal): Promise<string | undefined> {
   const blob = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
   if (change.status !== 'modified' || change.storage !== 'git' || !blob.test(change.beforeOid ?? '') || !blob.test(change.afterOid ?? '')
     || change.beforeBytes === null || change.afterBytes === null || Math.max(change.beforeBytes, change.afterBytes) > DIFF_MAX_BYTES) {
     return undefined
   }
   try {
-    const output = await inspectGit(context, ['diff', '--no-color', '--no-ext-diff', '--no-textconv', '--unified=3', change.beforeOid!, change.afterOid!])
+    const output = await inspectGit(context, ['diff', '--no-color', '--no-ext-diff', '--no-textconv', '--unified=3', change.beforeOid!, change.afterOid!], '', undefined, signal)
     const text = output.output.toString('utf8')
     // Binary content has no hunks, only a "Binary files … differ" line.
     const start = text.search(/^@@/m)

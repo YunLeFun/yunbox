@@ -4,6 +4,10 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ## Unreleased
 
+### Changed
+
+- The macOS over-budget confirmation opens without waiting for every file's diff preview. Diffs are generated on demand, reused on repeated views, and cancelled when the dialog closes.
+
 ## 0.1.7 - 2026-10-25
 
 ### Added

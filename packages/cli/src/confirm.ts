@@ -97,8 +97,8 @@ tr.preview:has(a.path:focus-visible) td { background: color-mix(in srgb, var(--a
  * `yunbox-preview:<row>`, which WebKit hands to the UI delegate as a new-window request.
  * The delegate opens no window; it copies the row's versions (`preview.items[row]`) from
  * the LFS store or `git cat-file` into `preview.dir` and shows them in Quick Look, along
- * with a diff page already written there for text files. The directory is removed when
- * the alert closes.
+ * with a text diff requested from the CLI only for the selected row. The directory
+ * is removed when the alert closes.
  */
 const DIALOG_SCRIPT = `
 ObjC.import('Cocoa')
@@ -169,6 +169,7 @@ function run(argv) {
   accessory.addSubview(note)
   accessory.addSubview(web)
   let previewer
+  let previewTimer
   if (preview) {
     ObjC.import('Quartz')
     const files = $.NSFileManager.defaultManager
@@ -183,7 +184,7 @@ function run(argv) {
       const path = folder.stringByAppendingPathComponent(version.name)
       if (files.fileExistsAtPath(path))
         return path
-      // Pages written before the dialog opened (a text diff) have no object to extract.
+      // A generated text diff has no object to extract.
       if (!version.oid)
         return undefined
       if (preview.lfs) {
@@ -209,11 +210,40 @@ function run(argv) {
         return path
       files.removeItemAtPathError(path, null)
     }
+    let waiting
+    ObjC.registerSubclass({ name: 'YunBoxPreviewReady', methods: { 'check:': { types: ['void', ['id']], implementation: () => {
+      if (!waiting)
+        return
+      const data = files.contentsAtPath(waiting.stringByAppendingPathComponent('diff.json'))
+      if (data.isNil())
+        return
+      let result
+      try { result = JSON.parse(ObjC.unwrap($.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding))) }
+      catch (_) { return }
+      previewTimer.invalidate
+      if (result.name && $.QLPreviewPanel.sharedPreviewPanelExists) {
+        const panel = $.QLPreviewPanel.sharedPreviewPanel
+        const path = waiting.stringByAppendingPathComponent(result.name)
+        if (panel.isVisible && files.fileExistsAtPath(path)) {
+          const last = items.length - 1
+          const selected = Number(panel.currentPreviewItemIndex)
+          items.push($.NSURL.fileURLWithPath(path))
+          panel.reloadData
+          // Show the diff unless the user has already stepped back to the old version.
+          panel.currentPreviewItemIndex = selected === last ? items.length - 1 : selected
+        }
+      }
+      waiting = undefined
+    } } } })
+    const poller = $.YunBoxPreviewReady.alloc.init
     ObjC.registerSubclass({ name: 'YunBoxPreview', methods: {
       'webView:createWebViewWithConfiguration:forNavigationAction:windowFeatures:': { types: ['id', ['id', 'id', 'id', 'id']], implementation: (view, configuration, action) => {
         const row = /^yunbox-preview:(\\d+)$/.exec(ObjC.unwrap(action.request.URL.absoluteString))?.[1]
         const versions = row === undefined ? undefined : preview.items[Number(row)]
         if (versions) {
+          if (previewTimer)
+            previewTimer.invalidate
+          waiting = undefined
           const folder = $(preview.dir).stringByAppendingPathComponent(row)
           files.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(folder, true, $.nil, null)
           items = versions.map(version => extract(version, folder)).filter(Boolean).map(path => $.NSURL.fileURLWithPath(path))
@@ -221,9 +251,15 @@ function run(argv) {
             const panel = $.QLPreviewPanel.sharedPreviewPanel
             panel.dataSource = source
             panel.reloadData
-            // Start on the last item: the diff of a text file, else the pushed version; the left arrow steps back.
+            // The pushed version is available immediately; a requested text diff follows.
             panel.currentPreviewItemIndex = items.length - 1
             panel.makeKeyAndOrderFront($.nil)
+            if (preview.diffRows.includes(Number(row))) {
+              waiting = folder
+              previewTimer = $.NSTimer.timerWithTimeIntervalTargetSelectorUserInfoRepeats(0.05, poller, 'check:', $.nil, true)
+              $.NSRunLoop.currentRunLoop.addTimerForMode(previewTimer, $.NSRunLoopCommonModes)
+              $.NSFileHandle.fileHandleWithStandardOutput.writeData($('yunbox-preview:' + row + '\\n').dataUsingEncoding($.NSUTF8StringEncoding))
+            }
           }
           else {
             $.NSBeep()
@@ -301,6 +337,8 @@ function run(argv) {
   // Focus the note, so a reason can be typed straight away; Return still means 取消.
   alert.window.makeFirstResponder(note)
   app.run
+  if (previewTimer)
+    previewTimer.invalidate
   if (preview) {
     if ($.QLPreviewPanel.sharedPreviewPanelExists)
       $.QLPreviewPanel.sharedPreviewPanel.orderOut($.nil)
@@ -346,29 +384,17 @@ function fileName(name: string, tag?: string): string {
   return result === '' || result === '.' || result === '..' ? `file${result}` : result
 }
 
-/** A Quick Look item of a row: a version to extract, or a page already in the row's folder. */
-type PreviewItem = PreviewVersion | { name: string }
-
-/** Text files diffed before the dialog opens, at most; later rows keep their two versions. */
-const DIFF_PAGES = 100
-
-/**
- * Write a diff page for each modified text file among the listed rows into `dir/<row>/`
- * and add it after the row's versions, so Quick Look opens on the diff.
- */
-async function addDiffPages(context: CliContext, dir: string, shown: InspectionChange[], items: PreviewItem[][]): Promise<void> {
-  const rows = shown.map((change, index) => ({ change, index })).filter(({ change }) => change.status === 'modified' && change.storage === 'git').slice(0, DIFF_PAGES)
-  for (let offset = 0; offset < rows.length; offset += 8) {
-    await Promise.all(rows.slice(offset, offset + 8).map(async ({ change, index }) => {
-      const diff = await textDiff(context, change)
-      if (diff === undefined)
-        return
-      const name = fileName(`${visible(change.path.slice(change.path.lastIndexOf('/') + 1))}.html`, '差异')
-      await mkdir(join(dir, String(index)), { recursive: true })
-      await writeFile(join(dir, String(index), name), renderDiffHtml(visible(change.path), diff))
-      items[index]!.push({ name })
-    }))
-  }
+/** Prepare a requested row, publishing its ready file after the HTML is complete. */
+async function addDiffPage(context: CliContext, dir: string, change: InspectionChange, index: number, signal: AbortSignal): Promise<void> {
+  const diff = await textDiff(context, change, signal)
+  if (signal.aborted)
+    return
+  const folder = join(dir, String(index))
+  await mkdir(folder, { recursive: true })
+  const name = diff === undefined ? undefined : fileName(`${visible(change.path.slice(change.path.lastIndexOf('/') + 1))}.html`, '差异')
+  if (name)
+    await writeFile(join(folder, name), renderDiffHtml(visible(change.path), diff!))
+  await writeFile(join(folder, 'diff.json'), JSON.stringify({ name }))
 }
 
 /** How the push confirmation is asked, from `YUNBOX_CONFIRM_UI`. */
@@ -496,19 +522,32 @@ async function askDialog(context: CliContext, report: PushInspection, push: Push
   const height = Math.min(560, Math.max(300, 210 + shown.length * 29))
   const title = push.target ? `推送到 ${push.target} 超过限额` : '推送超过限额'
   const info = [push.source, ...exceededReasons(report)].join('\n')
-  const items: PreviewItem[][] = shown.map(previewVersions)
+  const items = shown.map(previewVersions)
   // Private (0700) and removed when the dialog closes; the dialog removes it too.
   const dir = items.some(versions => versions.length) ? await mkdtemp(join(tmpdir(), 'yunbox-preview-')) : undefined
+  const controller = new AbortController()
+  const requested = new Set<number>()
+  let preparing = Promise.resolve()
   try {
-    if (dir)
-      await addDiffPages(context, dir, shown, items)
-    const preview = dir && { dir, lfs: await lfsObjects(context), items }
+    const diffRows = shown.flatMap((change, index) => change.status === 'modified' && change.storage === 'git' && items[index]!.length === 2 ? [index] : [])
+    const preview = dir && { dir, lfs: await lfsObjects(context), items, diffRows }
     const links = JSON.stringify({ root: push.root, web: push.web, preview })
     const args = ['-l', 'JavaScript', '-e', DIALOG_SCRIPT, title, info, String(height), context.env.YUNBOX_CONFIRM_SNAPSHOT ?? '', links]
     // Previews read objects with `git cat-file`: never prompt or fetch for a missing one.
-    return await runDialog(args, { ...context.env, GIT_TERMINAL_PROMPT: '0', GIT_NO_LAZY_FETCH: '1', GIT_OPTIONAL_LOCKS: '0' }, context.cwd, renderConfirmationHtml(report))
+    return await runDialog(args, { ...context.env, GIT_TERMINAL_PROMPT: '0', GIT_NO_LAZY_FETCH: '1', GIT_OPTIONAL_LOCKS: '0' }, context.cwd, renderConfirmationHtml(report), (index) => {
+      if (!dir || !diffRows.includes(index) || requested.has(index))
+        return
+      requested.add(index)
+      // Serialize requests and cache repeated clicks; closing cancels in-flight Git.
+      preparing = preparing.then(async () => {
+        if (!controller.signal.aborted)
+          await addDiffPage(context, dir, shown[index]!, index, controller.signal)
+      }).catch(() => {})
+    })
   }
   finally {
+    controller.abort()
+    await preparing
     if (dir)
       await rm(dir, { recursive: true, force: true })
   }
@@ -525,14 +564,40 @@ async function lfsObjects(context: CliContext): Promise<string | undefined> {
   }
 }
 
-function runDialog(args: string[], env: NodeJS.ProcessEnv, cwd: string, html: string): Promise<PushAnswer | undefined> {
+function runDialog(args: string[], env: NodeJS.ProcessEnv, cwd: string, html: string, preview: (index: number) => void): Promise<PushAnswer | undefined> {
   return new Promise((resolve) => {
     const child = spawn('osascript', args, { cwd, env, stdio: ['pipe', 'pipe', 'ignore'] })
     const chunks: Buffer[] = []
-    child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk))
+    let pending = Buffer.alloc(0)
+    let answered = false
+    child.stdout.on('data', (chunk: Buffer) => {
+      if (answered) {
+        chunks.push(chunk)
+        return
+      }
+      pending = Buffer.concat([pending, chunk])
+      while (true) {
+        const end = pending.indexOf(10)
+        if (end < 0)
+          break
+        const line = pending.subarray(0, end + 1)
+        pending = pending.subarray(end + 1)
+        const request = /^yunbox-preview:(\d+)\n$/.exec(line.toString('utf8'))
+        if (request) {
+          preview(Number(request[1]))
+        }
+        else {
+          answered = true
+          chunks.push(line, pending)
+          pending = Buffer.alloc(0)
+          break
+        }
+      }
+    })
     child.stdin.on('error', () => {})
     child.on('error', () => resolve(undefined))
     child.on('close', (code) => {
+      chunks.push(pending)
       resolve(code === 0 ? parseDialogOutput(Buffer.concat(chunks).toString('utf8')) : undefined)
     })
     child.stdin.end(html)

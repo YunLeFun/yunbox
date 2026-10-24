@@ -9,13 +9,14 @@ const TIMEOUT_MS = 60_000
 export class InspectionError extends Error {}
 
 /** Run a bounded, non-interactive Git query, or count a pack stream up to a cap. */
-export async function inspectGit(context: CliContext, args: string[], input = '', packCap?: number): Promise<{ output: Buffer, bytes: number, complete: boolean }> {
+export async function inspectGit(context: CliContext, args: string[], input = '', packCap?: number, signal?: AbortSignal): Promise<{ output: Buffer, bytes: number, complete: boolean }> {
   return new Promise((resolve, reject) => {
     const child = spawn('git', args, {
       cwd: context.cwd,
       env: { ...context.env, GIT_TERMINAL_PROMPT: '0', GIT_NO_LAZY_FETCH: '1', GIT_OPTIONAL_LOCKS: '0' },
       stdio: ['pipe', 'pipe', 'ignore'],
       windowsHide: true,
+      signal,
     })
     let bytes = 0
     let failure: string | undefined
@@ -46,8 +47,13 @@ export async function inspectGit(context: CliContext, args: string[], input = ''
     })
     child.stdin.on('error', () => {})
     child.on('error', () => {
-      clearTimeout(timer)
-      reject(new InspectionError('无法启动 Git，请检查安装和 PATH'))
+      failure = signal?.aborted ? 'Git 检查已取消' : '无法启动 Git，请检查安装和 PATH'
+      // An aborted child can emit error before exiting. Wait for close so callers
+      // can safely remove preview files and know the subprocess has been reaped.
+      if (child.pid === undefined) {
+        clearTimeout(timer)
+        reject(new InspectionError(failure))
+      }
     })
     child.on('close', (code) => {
       clearTimeout(timer)
