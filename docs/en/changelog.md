@@ -4,6 +4,8 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ## Unreleased
 
+## 0.1.6 - 2026-10-24
+
 ### Added
 
 - The repository now has complete Chinese and English READMEs with WebP promotional banners and real app screenshots, making installation, push inspection and storage setup easier to find.
