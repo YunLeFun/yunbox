@@ -9,6 +9,8 @@ struct YunBoxApp: App {
     @State private var freeze: FreezeStore
     @State private var types: AssetTypesStore
     @State private var updater = UpdaterStore()
+    @State private var history = PushHistoryStore()
+    @Environment(\.openWindow) private var openWindow
     @State private var menuBarIcon = MenuBarIconAnimator()
     @AppStorage("showMenuBarExtra") private var showMenuBarExtra = true
 
@@ -21,7 +23,7 @@ struct YunBoxApp: App {
 
     var body: some Scene {
         Window("云匣 YunBox", id: "main") {
-            ContentView(store: store, types: types)
+            ContentView(store: store, types: types, history: history)
                 .frame(minWidth: 880, minHeight: 600)
                 .onOpenURL { store.select($0) }
                 .task { if store.repository != nil { store.inspect(); store.checkStorage() } }
@@ -63,6 +65,11 @@ struct YunBoxApp: App {
                 Link("GitHub 仓库", destination: DocsPage.repository)
             }
             CommandMenu("检查") {
+                Button("推送保护历史…") {
+                    history.selectedProject = store.repository?.path
+                    openWindow(id: "push-history")
+                }
+                Divider()
                 Button("重新检查") { store.inspect() }.keyboardShortcut("r").disabled(store.isInspecting)
                 Button("取消检查") { store.cancel() }.keyboardShortcut(".").disabled(!store.isInspecting)
                 Divider()
@@ -71,6 +78,10 @@ struct YunBoxApp: App {
                 Button("素材类型…") { types.showing = true }.disabled(store.repository == nil)
             }
         }
+        Window("推送保护历史", id: "push-history") {
+            PushHistoryView(history: history, inspector: store)
+        }
+        .defaultSize(width: 1080, height: 600)
         Settings { SettingsView(updater: updater, inspector: store) }
         Window("禁推时段", id: "freeze") {
             FreezeEditorView(freeze: freeze)

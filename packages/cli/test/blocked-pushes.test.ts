@@ -5,7 +5,8 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
 import { afterEach, describe, expect, it } from 'vitest'
-import { BLOCKED_PUSH_LIMIT, blockedPushesPath, readBlockedPushes, recordBlockedPush } from '../src/blocked-pushes.ts'
+import { BLOCKED_PUSH_LIMIT, readBlockedPushes, recordBlockedPush } from '../src/blocked-pushes.ts'
+import { pushHistoryPath as blockedPushesPath, clearPushHistory } from '../src/push-history.ts'
 import { createRepository, createSandbox, git, runYunBox } from './helpers.ts'
 
 const sandboxes: Sandbox[] = []
@@ -29,10 +30,10 @@ describe('blocked push record', () => {
   it('lives in the YunBox config directory, never in the repository', async () => {
     const { sandbox } = await fixture()
     expect(blockedPushesPath(sandbox.env)).toBe(process.platform === 'win32'
-      ? join(sandbox.env.APPDATA!, 'yunbox', 'blocked-pushes.json')
-      : join(sandbox.env.XDG_CONFIG_HOME!, 'yunbox', 'blocked-pushes.json'))
+      ? join(sandbox.env.APPDATA!, 'yunbox', 'push-history.json')
+      : join(sandbox.env.XDG_CONFIG_HOME!, 'yunbox', 'push-history.json'))
     const env = { ...sandbox.env, YUNBOX_CONFIG_DIR: join(sandbox.root, 'custom') }
-    expect(blockedPushesPath(env)).toBe(join(sandbox.root, 'custom', 'blocked-pushes.json'))
+    expect(blockedPushesPath(env)).toBe(join(sandbox.root, 'custom', 'push-history.json'))
     await recordBlockedPush(env, entry('/work/a', '2026-10-20T01:00:00.000Z'))
     expect(await readBlockedPushes(env)).toEqual([entry('/work/a', '2026-10-20T01:00:00.000Z')])
     if (process.platform !== 'win32')
@@ -60,6 +61,7 @@ describe('blocked push record', () => {
     expect(long!.summary.startsWith('第一行 超')).toBe(true)
     await writeFile(blockedPushesPath(sandbox.env), '{ not json')
     expect(await readBlockedPushes(sandbox.env)).toEqual([])
+    await clearPushHistory(sandbox.env)
     await recordBlockedPush(sandbox.env, entry('/work/b', '2026-10-20T02:00:00.000Z'))
     expect((await readBlockedPushes(sandbox.env)).map(item => item.root)).toEqual(['/work/b'])
     // A file where the directory should be: the write fails quietly.

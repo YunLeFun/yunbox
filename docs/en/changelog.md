@@ -4,6 +4,10 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ## Unreleased
 
+### Added
+
+- Push protection keeps a per-project history of timestamps, reasons, cancellations and confirmed continuations, including user notes. Browse by project in the app and clear one project or all local history. Records are retained for 90 days, up to 200 per project.
+
 ## 0.1.6 - 2026-10-24
 
 ### Added

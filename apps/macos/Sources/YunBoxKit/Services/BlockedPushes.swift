@@ -70,6 +70,18 @@ public enum BlockedPushes {
 
     /// Read the record at `url`; a missing or unreadable file reads as empty.
     public static func load(from url: URL = fileURL()) -> [BlockedPush] {
+        let historyURL = url.deletingLastPathComponent().appending(path: "push-history.json")
+        if FileManager.default.fileExists(atPath: historyURL.path) {
+            guard let data = try? Data(contentsOf: historyURL) else { return [] }
+            var seen = Set<String>()
+            return PushHistoryReport.decodeEntries(data).filter { $0.outcome != .continued }.compactMap { entry in
+                let path = URL(fileURLWithPath: entry.root).standardizedFileURL.path
+                guard seen.insert(path).inserted else { return nil }
+                let reason: BlockedPush.Reason = entry.outcome == .cancelled ? .cancelled : entry.reason == .freeze ? .freeze : .exceeded
+                return BlockedPush(path: path, blockedAt: entry.at, reason: reason,
+                                   summary: [entry.note, entry.summary].compactMap { $0 }.joined(separator: "；"))
+            }
+        }
         guard let data = try? Data(contentsOf: url) else { return [] }
         return decode(data)
     }

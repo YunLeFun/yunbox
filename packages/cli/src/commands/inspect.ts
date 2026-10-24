@@ -8,6 +8,7 @@ import { checkFreeze, formatFreezeBlock, formatPauseEnd, readFreezeConfig, SCOPE
 import { inspectGit, InspectionError, resolveInspectionRange } from '../inspect-git.ts'
 import { exceededReasons, formatInspection, inspectPush } from '../inspect.ts'
 import { describePush } from '../push-context.ts'
+import { recordPushHistory } from '../push-history.ts'
 import { terminalFor } from '../terminal.ts'
 import { readTransferSummary } from '../transfer-summary.ts'
 
@@ -22,7 +23,7 @@ export const inspectHelp = `用法：yunbox inspect --push [选项]
   --head <ref>        指定待推送引用（默认 HEAD）
   --stdin             从 stdin 读取 Git pre-push 的引用更新，支持多个分支和删除；
                       处在禁推时段（yunbox freeze）时直接中断，退出码 1；
-                      拦下的推送记入本机配置目录的 blocked-pushes.json
+                      保护决定（含确认继续）记入本机配置目录的 push-history.json
   --remote <name/url>  新分支或旧 tip 缺失时，查询远端 Git refs 以改进 pack 估算
   --git-limit <size>  Git pack 限额（默认 900k）
   --lfs-limit <size>  LFS 候选总量限额（默认 100m）
@@ -122,12 +123,15 @@ export async function runInspect(context: CliContext, args: string[]): Promise<n
     const reply = values.confirm ? await askPush(repo, report, { remote: values.remote, updates, head: values.head, ui: values['confirm-ui'] as ConfirmUi | undefined }) : undefined
     if (values.confirm)
       context.stderr.write(terminalFor(context, 'stderr').paint(reply?.answer === 'continue' ? 'success' : 'warning', formatReply(reply)))
-    if (reply?.answer === 'continue')
+    if (reply?.answer === 'continue') {
+      if (values.stdin)
+        await recordPushHistory(context.env, { root: repo.cwd, at: new Date().toISOString(), reason: 'exceeded', outcome: 'continued', summary: exceededReasons(report).join('；'), note: reply.note })
       return 0
+    }
     // Only a real push (from the hook) is remembered; manual checks block nothing.
     if (values.stdin) {
-      const summary = [reply?.note && `原因：${reply.note}`, ...exceededReasons(report)].filter(Boolean).join('；')
-      await recordBlockedPush(context.env, { root: repo.cwd, at: new Date().toISOString(), reason: reply ? 'cancelled' : 'exceeded', summary })
+      const summary = exceededReasons(report).join('；')
+      await recordBlockedPush(context.env, { root: repo.cwd, at: new Date().toISOString(), reason: reply ? 'cancelled' : 'exceeded', summary, note: reply?.note })
     }
     return 1
   }

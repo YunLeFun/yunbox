@@ -756,6 +756,16 @@
     "—" : {
       "shouldTranslate" : false
     },
+    "“已确认继续”表示推送检查已放行，实际上传结果请查看 Git 输出。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“Confirmed to Continue” means the protection check allowed the push. See Git output for the upload result."
+          }
+        }
+      }
+    },
     "−%lld" : {
       "shouldTranslate" : false
     },
@@ -1225,6 +1235,16 @@
         }
       }
     },
+    "全部项目" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All Projects"
+          }
+        }
+      }
+    },
     "关闭" : {
       "localizations" : {
         "en" : {
@@ -1385,6 +1405,16 @@
         }
       }
     },
+    "刷新" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Refresh"
+          }
+        }
+      }
+    },
     "刷新全部项目" : {
       "localizations" : {
         "en" : {
@@ -1461,6 +1491,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Estimated upload after compression"
+          }
+        }
+      }
+    },
+    "原因" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reason"
           }
         }
       }
@@ -1841,6 +1881,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Enter the service address (without the bucket), such as https://minio.example.com."
+          }
+        }
+      }
+    },
+    "处理结果" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Decision"
           }
         }
       }
@@ -2281,6 +2331,26 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "已直连 %1$@（%2$@），需要处理：%3$@"
+          }
+        }
+      }
+    },
+    "已确认继续" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirmed to Continue"
+          }
+        }
+      }
+    },
+    "已阻止" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Blocked"
           }
         }
       }
@@ -2771,6 +2841,26 @@
         }
       }
     },
+    "推送保护历史" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push Protection History"
+          }
+        }
+      }
+    },
+    "推送保护历史…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push Protection History…"
+          }
+        }
+      }
+    },
     "推送前" : {
       "localizations" : {
         "en" : {
@@ -2797,6 +2887,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "The version before the push is not on this Mac, so only the pushed version is shown."
+          }
+        }
+      }
+    },
+    "推送历史格式不受支持，请更新云匣。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This history format is not supported. Update YunBox."
           }
         }
       }
@@ -2997,6 +3097,16 @@
         }
       }
     },
+    "无法读取本机推送历史，请刷新后重试。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unable to read local push history. Refresh and try again."
+          }
+        }
+      }
+    },
     "无法读取检查报告。请重新构建 YunBox 客户端，确认 CLI 接口版本兼容。" : {
       "localizations" : {
         "en" : {
@@ -3067,6 +3177,16 @@
         }
       }
     },
+    "时间" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Time"
+          }
+        }
+      }
+    },
     "明天" : {
       "localizations" : {
         "en" : {
@@ -3093,6 +3213,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Continue Without Protection"
+          }
+        }
+      }
+    },
+    "暂无推送保护历史" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Push Protection History"
           }
         }
       }
@@ -3353,6 +3483,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Other rule"
+          }
+        }
+      }
+    },
+    "查看推送保护历史…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View Push Protection History…"
           }
         }
       }
@@ -3743,6 +3883,66 @@
         }
       }
     },
+    "清理全部历史…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear All History…"
+          }
+        }
+      }
+    },
+    "清理全部本机推送历史？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear All Local Push History?"
+          }
+        }
+      }
+    },
+    "清理历史" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear History"
+          }
+        }
+      }
+    },
+    "清理后无法恢复历史记录。推送保护、Git 配置、素材和密钥不会被修改。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cleared history cannot be recovered. Push protection, Git settings, assets and keys will stay intact."
+          }
+        }
+      }
+    },
+    "清理当前项目历史…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear History for This Project…"
+          }
+        }
+      }
+    },
+    "清理当前项目的推送历史？" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear Push History for This Project?"
+          }
+        }
+      }
+    },
     "清除%@规则" : {
       "localizations" : {
         "en" : {
@@ -3859,6 +4059,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Open the pushed version in Quick Look"
+          }
+        }
+      }
+    },
+    "用户取消" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelled by User"
+          }
+        }
+      }
+    },
+    "用户说明：%@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "User note: %@"
           }
         }
       }
@@ -4253,6 +4473,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Video"
+          }
+        }
+      }
+    },
+    "记录仅保存在本机，保留最近 90 天，每个项目最多 200 条，全部最多 5000 条。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stored only on this computer for 90 days, up to 200 decisions per project and 5,000 overall."
           }
         }
       }
@@ -4745,6 +4975,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Retry"
+          }
+        }
+      }
+    },
+    "钩子阻止、取消或确认继续推送后，记录会显示在这里。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Decisions appear here when the hook blocks a push or the user cancels or confirms continuing."
           }
         }
       }

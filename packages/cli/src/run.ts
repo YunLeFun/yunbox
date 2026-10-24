@@ -4,6 +4,7 @@ import { runBuckets } from './commands/buckets.ts'
 import { runClone } from './commands/clone.ts'
 import { runDoctor } from './commands/doctor.ts'
 import { runFreeze } from './commands/freeze.ts'
+import { runHistory } from './commands/history.ts'
 import { runHook } from './commands/hook.ts'
 import { runInit } from './commands/init.ts'
 import { runInspect } from './commands/inspect.ts'
@@ -36,6 +37,7 @@ export const mainHelp = `云匣 YunBox 命令行（版本 ${CLI_VERSION}）
   doctor   检查配置、连通性和读写权限，并给出修复命令
   status   列出当前仓库 LFS 对象的数量和总大小
   inspect  推送前分别检查 Git/LFS 大小、超限文件和 JSON 明细
+  history  按项目查看或清理本机推送保护历史，包括确认继续
   hook     安装/撤销检查通过后才执行原钩子的 pre-push 包装层
   freeze   设置禁推时段（如工作时间 Mo-Fr 09:00-18:00），时段内 pre-push 直接中断推送
   help     显示帮助；help <命令> 显示该命令的帮助
@@ -59,6 +61,7 @@ const COMMANDS: Record<string, (context: CliContext, args: string[]) => Promise<
   'status': runStatus,
   'inspect': runInspect,
   'hook': runHook,
+  'history': runHistory,
   'freeze': runFreeze,
 }
 

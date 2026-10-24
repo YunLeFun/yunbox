@@ -84,7 +84,7 @@ With `--confirm`, an over-budget result asks whether to go on. If you confirm, t
   - Click a file that still exists after the push to preview the pushed version in Quick Look. For a modified file, both the before and after versions open, and the Left and Right arrow keys switch between them; an added file shows only the new version. Modified ordinary Git text files (up to 1 MiB per version) get an extra page: a line-by-line diff with line numbers on both sides and red/green highlighting. The preview opens on this page; press the Left arrow to get back to the two versions. Diff pages are generated before the dialog opens (for up to 100 files) and, like the report page, contain no scripts. Previewing doesn't close the dialog. Close the preview with its close button or Esc; while a preview is open, Esc in the dialog also closes the preview rather than cancelling the push.
   - Previews come from Git objects or local LFS storage (`.git/lfs/objects`), not from the working tree, because the working tree may differ from the pushed commits. They are copied to a temporary directory that only the current user can read, and deleted when the dialog closes. Old LFS versions that aren't available locally can't be previewed.
   - The report page contains no scripts, and its content security policy stays at `default-src 'none'`. With many files, only the table scrolls; the usage bars and the table header stay in place.
-  - Under the table is an optional reason field, focused when the dialog opens: type why you're cancelling or going ahead, then click either button, or leave it empty. The reason appears in the push output, so whoever started the push, or the AI coding assistant that did, can see it; a cancel also records it under Recently Blocked.
+  - Under the table is an optional reason field, focused when the dialog opens: type why you're cancelling or going ahead, then click either button, or leave it empty. The reason appears in the push output, so whoever started the push, or the AI coding assistant that did, can see it; both cancelling and continuing record the decision in local Push Protection History.
   - The default button is Cancel, so Return cancels. The dialog lists at most 300 files; use `--json` to see the rest.
 - **Windows / Linux / terminal-only macOS**: you are asked `[y/N]` on the controlling terminal: the attached console on Windows, or `/dev/tty` on macOS / Linux. This does not read pre-push standard input. A reason can follow the answer, such as `n compress the images first` or `y approved by the art team`. Return cancels; SSH uses the terminal by default. On Windows, use PowerShell / Windows Terminal; Git Bash requires an attached Windows console.
 - **No way to ask** (no window or controlling terminal): the push is blocked with a message; approval is never assumed.
@@ -101,6 +101,21 @@ yunbox inspect --push --confirm --confirm-ui terminal # Override this check only
 ```
 
 On macOS, `auto` uses the native window locally (with a button to open the YunBox app), and the terminal over SSH. Explicit `dialog` attempts the native window, then falls back to the terminal if unavailable.
+
+## Local push protection history
+
+The hook appends a project-scoped decision for freezes, budget blocks, user cancellations and confirmed continuations, with a timestamp, reason, outcome and optional user note. Manual inspections do not record history. A continuation means the check allowed the push; Git reports the subsequent upload result.
+
+History stays in `~/.config/yunbox/push-history.json` on the user’s computer, with `YUNBOX_CONFIG_DIR` or `XDG_CONFIG_HOME` overrides. It is not committed. Retention is 90 days, 200 decisions per project and 5,000 overall. Existing latest entries from the old format are imported. In the macOS app, use Push Protection History to filter by project, view decisions and clear them.
+
+```bash
+yunbox history                      # Current project
+yunbox history --all --json         # All local projects
+yunbox history clear --yes          # Clear current project
+yunbox history clear --all --yes    # Clear all local history
+```
+
+Clearing also removes the corresponding legacy blocked snapshot so it does not reappear. It leaves hooks, Git settings, assets and keys intact. Cleared history cannot be recovered.
 
 ## Push freeze
 

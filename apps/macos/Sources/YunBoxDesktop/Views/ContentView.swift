@@ -6,6 +6,8 @@ struct ContentView: View {
     @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @Bindable var store: InspectorStore
     @Bindable var types: AssetTypesStore
+    let history: PushHistoryStore
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         let parentLabels = RepositoryRow.parentLabels(for: store.repositoryPaths)
@@ -29,7 +31,7 @@ struct ContentView: View {
                         ForEach(store.pinnedPaths, id: \.self) { path in
                             RepositoryRow(path: path, pinned: true, parentLabel: parentLabels[path])
                                 .tag(path)
-                                .contextMenu { RepositoryMenu(store: store, path: path) }
+                                .contextMenu { RepositoryMenu(store: store, history: history, path: path) }
                         }
                         .onMove { store.movePinned(fromOffsets: $0, toOffset: $1) }
                     }
@@ -38,7 +40,7 @@ struct ContentView: View {
                     ForEach(store.recentPaths, id: \.self) { path in
                         RepositoryRow(path: path, pinned: false, parentLabel: parentLabels[path])
                             .tag(path)
-                            .contextMenu { RepositoryMenu(store: store, path: path) }
+                            .contextMenu { RepositoryMenu(store: store, history: history, path: path) }
                     }
                 }
             }
@@ -111,6 +113,10 @@ struct ContentView: View {
             .toolbar {
                 ToolbarItemGroup {
                     Button { store.choosingRepository = true } label: { Label("选择仓库", systemImage: "folder.badge.plus") }
+                    Button {
+                        history.selectedProject = store.repository?.path
+                        openWindow(id: "push-history")
+                    } label: { Label("推送保护历史", systemImage: "clock.arrow.circlepath") }
                     Button { store.copyJSON() } label: { Label(store.copiedJSON ? "已复制 JSON" : "复制 JSON", systemImage: store.copiedJSON ? "checkmark" : "doc.on.doc") }.disabled(store.result == nil)
                     Button { store.inspect() } label: { Label("检查", systemImage: "arrow.clockwise") }.disabled(store.isInspecting)
                 }
@@ -217,9 +223,16 @@ private struct RepositoryRow: View {
 /// Context menu of a pinned or recent repository.
 private struct RepositoryMenu: View {
     let store: InspectorStore
+    let history: PushHistoryStore
     let path: String
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
+        Button("查看推送保护历史…") {
+            history.selectedProject = path
+            openWindow(id: "push-history")
+        }
+        Divider()
         if store.pinnedPaths.contains(path) {
             Button("取消固定") { store.unpin(path) }
         } else {

@@ -127,6 +127,27 @@ public struct InspectionClient: Sendable {
         try await text(arguments: [cli.path, "hook", "uninstall", "--global"], directory: directory, timeout: 30)
     }
 
+    /// Read all local protection decisions, including user-confirmed continuations.
+    public func pushHistory() async throws -> PushHistoryReport {
+        let output = try await ProcessRunner.run(
+            executable: node, arguments: [cli.path, "history", "--all", "--json"],
+            directory: FileManager.default.homeDirectoryForCurrentUser, environment: environment(), timeout: 15
+        )
+        return try PushHistoryReport.decode(output.data, exitCode: output.exitCode)
+    }
+
+    /// The UI confirms the chosen scope before this command is called. Deleted project directories work too.
+    public func clearPushHistory(project: String?) async throws -> PushHistoryReport {
+        let scope = project.map { ["--project", $0] } ?? ["--all"]
+        let output = try await ProcessRunner.run(
+            executable: node, arguments: [cli.path, "history", "clear", "--yes", "--json"] + scope,
+            directory: FileManager.default.homeDirectoryForCurrentUser, environment: environment(), timeout: 15
+        )
+        // Return all projects, so clearing one project does not remove other projects from the picker.
+        _ = try PushHistoryReport.decode(output.data, exitCode: output.exitCode)
+        return try await pushHistory()
+    }
+
     private func text(arguments: [String], directory: URL, timeout: TimeInterval, input: Data? = nil) async throws -> CommandOutput {
         let output = try await ProcessRunner.run(
             executable: node, arguments: arguments, directory: directory, environment: environment(),
