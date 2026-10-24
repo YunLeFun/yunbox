@@ -222,7 +222,33 @@ The configuration file contains routes, with no keys. Runtime COS credentials an
 
 ### Releases (maintainers)
 
-Update both changelogs, then run `pnpm release`: it changes the version, commits, tags and pushes. The Release workflow runs checks, publishes the CLI through npm trusted publishing, and builds and signs macOS updates. See the [workflows](./.github/workflows/) and [app README](./apps/macos/README.md) (Chinese) for website deployment and update notes.
+Release notes come from [`docs/changelog.md`](./docs/changelog.md) and [`docs/en/changelog.md`](./docs/en/changelog.md). The website, GitHub Release and app update prompt share these two sources.
+
+1. Describe user-visible changes under both “未发布 / Unreleased” sections, grouped into Added, Changed and Fixed. Include compatibility changes and upgrade steps.
+2. Preview and check the changes, then commit them and leave a clean working tree:
+
+   ```bash
+   pnpm release:notes
+   pnpm build && pnpm lint && pnpm typecheck && pnpm test
+   git status --short
+   ```
+
+3. Run `pnpm release` and select a version. It moves the pending notes into that version, updates the CLI version, commits, tags and pushes.
+4. Watch the Release workflow. Its summary shows the bilingual notes. After validation it publishes to npm, then builds, signs and notarizes the macOS update. The Release remains a draft until both assets are uploaded. Rerunning the workflow also refreshes an existing Release's notes.
+5. Verify the GitHub body, npm version, and both assets: `YunBox-macOS.zip` and `appcast.xml`. Use `pnpm release:notes 0.1.5` to preview a historical version's expected body, or `gh release view v0.1.5 --repo YunLeFun/yunbox` to inspect the published result (replace the version as needed).
+
+If an older Release only needs its notes restored, preview that version and edit the body without rerunning npm publishing or recreating a tag:
+
+```bash
+(
+  notes_dir=$(mktemp -d)
+  trap 'rm -rf "$notes_dir"' EXIT
+  node script/changelog.mjs github 0.1.4 > "$notes_dir/notes.md" &&
+    gh release edit v0.1.4 --repo YunLeFun/yunbox --notes-file "$notes_dir/notes.md"
+)
+```
+
+The old `--generate-notes` approach mainly lists merged PRs, so releases made through direct commits may only get a comparison link ([GitHub documentation](https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes)). [changelogithub](https://github.com/antfu-collective/changelogithub) can draft notes from Conventional Commits to help find omissions; published notes use the reviewed bilingual changelogs. See the [workflows](./.github/workflows/) and [app README](./apps/macos/README.md) (Chinese) for website deployment and app signing configuration.
 
 </details>
 

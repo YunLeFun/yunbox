@@ -22,6 +22,7 @@
     "icons:sync": "node script/sync-app-icon.mjs",
     "lint": "eslint --cache .",
     "release": "node script/changelog.mjs check --unreleased && bumpp",
+    "release:notes": "node script/changelog.mjs github",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit && pnpm --filter @yunbox/docs typecheck"

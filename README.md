@@ -222,7 +222,33 @@ pnpm --filter @yunbox/server start --storage cos --storage-config yunbox.storage
 
 ### 发布（维护者）
 
-先同步两种语言的更新日志，再运行 `pnpm release`：它会修改版本、提交、打 tag 并推送。Release 工作流执行检查、通过 npm trusted publishing 发布 CLI，并构建和签名 macOS 更新包。官网部署与更新说明见[工作流](./.github/workflows/)和[客户端 README](./apps/macos/README.md)。
+发布说明来自 [`docs/changelog.md`](./docs/changelog.md) 和 [`docs/en/changelog.md`](./docs/en/changelog.md)，官网、GitHub Release 和客户端更新提示共用这两份内容。
+
+1. 把用户能感知的变化写入两种语言的「未发布 / Unreleased」，按新增、变更、修复分组，确认兼容性变化和升级步骤已说明。
+2. 预览并检查，确认条目完整后提交本轮改动，保持工作区干净：
+
+   ```bash
+   pnpm release:notes
+   pnpm build && pnpm lint && pnpm typecheck && pnpm test
+   git status --short
+   ```
+
+3. 运行 `pnpm release`，选择版本号。它会把待发布条目归入该版本，同时修改 CLI 版本、提交、打 tag 并推送。
+4. 查看 Release 工作流：摘要展示本次双语说明；检查通过后发布 npm，再构建、签名、公证 macOS 更新包；Release 先建为草稿，两个附件上传后才公开。流程重跑时也会刷新已有 Release 的说明。
+5. 发布后核对 GitHub 正文、npm 版本，以及 `YunBox-macOS.zip`、`appcast.xml` 两个附件。可用 `pnpm release:notes 0.1.5` 预览某个历史版本的预期正文，或 `gh release view v0.1.5 --repo YunLeFun/yunbox` 查看线上结果（版本号按实际替换）。
+
+历史版本只缺正文时，先预览对应版本，然后单独补录，不必重跑 npm 发布或重新打 tag：
+
+```bash
+(
+  notes_dir=$(mktemp -d)
+  trap 'rm -rf "$notes_dir"' EXIT
+  node script/changelog.mjs github 0.1.4 > "$notes_dir/notes.md" &&
+    gh release edit v0.1.4 --repo YunLeFun/yunbox --notes-file "$notes_dir/notes.md"
+)
+```
+
+旧版的 `--generate-notes` 主要按已合并 PR 汇总，直接提交较多时可能只剩版本对比链接（[GitHub 说明](https://docs.github.com/en/repositories/releasing-projects-on-github/automatically-generated-release-notes)）。[changelogithub](https://github.com/antfu-collective/changelogithub) 可以从 Conventional Commits 生成草稿，适合辅助查漏；正式发布采用审校后的双语日志。官网部署与客户端签名配置见[工作流](./.github/workflows/)和[客户端 README](./apps/macos/README.md)。
 
 </details>
 

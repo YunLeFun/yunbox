@@ -39,11 +39,11 @@ jobs:
           test "v$version" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME does not match packages/cli version $version"; exit 1; }
 
       # The GitHub release and the app's update prompt quote this version's notes.
-      - name: The changelog must describe this version
+      - name: Validate and preview the release notes
         run: |
           version=$(node -p "require('./packages/cli/package.json').version")
-          node script/changelog.mjs notes "$version" zh >/dev/null
-          node script/changelog.mjs notes "$version" en >/dev/null
+          node script/changelog.mjs github "$version" > "$RUNNER_TEMP/release-notes.md"
+          cat "$RUNNER_TEMP/release-notes.md" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Install git-lfs
         run: |
@@ -146,13 +146,18 @@ jobs:
 
       # A draft until both files are attached: releases/latest must never point
       # at a release without appcast.xml, or every client's check fails.
-      - name: Create the draft release
+      - name: Create or refresh the release notes
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           node script/changelog.mjs github "${GITHUB_REF_NAME#v}" > "$RUNNER_TEMP/release-notes.md"
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 \
-            || gh release create "$GITHUB_REF_NAME" --draft --verify-tag --notes-file "$RUNNER_TEMP/release-notes.md" --title "$GITHUB_REF_NAME"
+          # Retries must also refresh an existing release's body. Editing only
+          # the notes preserves its draft/published state until assets are ready.
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md"
+          else
+            gh release create "$GITHUB_REF_NAME" --draft --verify-tag --notes-file "$RUNNER_TEMP/release-notes.md" --title "$GITHUB_REF_NAME"
+          fi
 
       - name: Sign the update and generate the appcast
         env:

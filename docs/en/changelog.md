@@ -23,6 +23,7 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ### Fixed
 
+- GitHub release notes refresh when the release workflow is rerun, with Chinese and English descriptions and a full version comparison link.
 - Reinitializing a protected repository or adding Git LFS afterward preserves its upload hooks.
 - Fixed local app builds sometimes showing older sidebar and control styling, keeping previews consistent with release builds.
 - `yunbox status` now shows direct COS / S3 storage and agent registration correctly instead of treating a missing `lfs.url` as missing setup. New clones receive instructions when their agent has not been configured.

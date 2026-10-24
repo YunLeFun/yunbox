@@ -7,7 +7,7 @@
 //   node script/changelog.mjs check [--unreleased]   validate; --unreleased also requires pending notes
 //   node script/changelog.mjs release <version> [date]   turn the unreleased notes into <version>
 //   node script/changelog.mjs notes <version|unreleased> <zh|en>   print one section
-//   node script/changelog.mjs github <version>   the GitHub release body
+//   node script/changelog.mjs github [version|unreleased]   the GitHub release body; pending notes by default
 //   node script/changelog.mjs appcast <appcast.xml> <version|unreleased>   embed both languages in a Sparkle appcast
 import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -165,6 +165,26 @@ export function notes(changelogs, version, language) {
 }
 
 /**
+ * Render the bilingual GitHub release body from the same notes used by the site and app.
+ *
+ * @param {Record<string, ReturnType<typeof parse>>} changelogs Changelogs by language
+ * @param {string} [version] A released version, or "unreleased" for a local preview
+ * @returns {string} Markdown with documentation and version comparison links
+ */
+export function githubNotes(changelogs, version = 'unreleased') {
+  check(changelogs, { unreleased: version === 'unreleased' })
+  const zh = notes(changelogs, version, 'zh-Hans')
+  const en = notes(changelogs, version, 'en')
+  const releases = changelogs.en.releases
+  const index = releases.findIndex(entry => entry.version === version)
+  const previous = index >= 0 ? releases[index + 1] : undefined
+  const comparison = previous
+    ? `\n\n[完整变更 / Full Changelog](https://github.com/YunLeFun/yunbox/compare/v${previous.version}...v${version})`
+    : ''
+  return `## 简体中文\n\n${zh}\n\n## English\n\n${en}\n\n[更新日志](https://yunbox.yunle.fun/changelog) · [Changelog](https://yunbox.yunle.fun/en/changelog)${comparison}\n`
+}
+
+/**
  * Put the notes of every language into the single update item of a Sparkle appcast as
  * `<description xml:lang="…" sparkle:format="markdown">`; Sparkle shows the one matching the
  * app's language. Removes the feed signature, which no longer matches: sign the file again.
@@ -213,10 +233,7 @@ function main([command, ...args]) {
       process.stdout.write(`${notes(changelogs, args[0], ALIASES[args[1]] ?? args[1])}\n`)
       break
     case 'github': {
-      const version = args[0]
-      const zh = notes(changelogs, version, 'zh-Hans')
-      const en = notes(changelogs, version, 'en')
-      process.stdout.write(`${zh}\n\n---\n\n${en}\n\n[更新日志 / Changelog](https://yunlefun.github.io/yunbox/changelog)\n`)
+      process.stdout.write(githubNotes(changelogs, args[0]))
       break
     }
     case 'appcast': {

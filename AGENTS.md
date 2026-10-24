@@ -27,6 +27,7 @@
 ## 日常约定
 
 - 用户能感知的改动（新功能、行为变化、修复），在 [`docs/changelog.md`](./docs/changelog.md) 和 [`docs/en/changelog.md`](./docs/en/changelog.md) 的「未发布 / Unreleased」下各写一条，按「新增 / 变更 / 修复」（Added / Changed / Fixed）分组，写给用户看，不写实现细节。两份要列出同样的版本，`pnpm test` 会检查；`pnpm release` 会把它们标上版本号。
+- 发布说明以这两份 changelog 为唯一来源，官网、GitHub Release 和 Sparkle 共用。发布前运行 `pnpm release:notes` 预览，发布后核验 Release 正文包含该版本的中英文条目；重跑流程也必须刷新已有 Release 的正文。GitHub 的 `--generate-notes` 按 PR 汇总，不作为本仓库的日志来源；`changelogithub` 可用于从 Conventional Commits 整理草稿，正式发布仍使用审校后的双语条目。具体步骤见 [README 的发布说明](./README.md#发布维护者)。
 - 官网是中英双语：中文在根路径，英文在 `docs/en/` 下同样的路径（`docs/guide/x.md` 对应 `docs/en/guide/x.md`）。改了使用指南、`inspect.md` 或首页组件里的文案，两种语言一起改；首页组件的文案用 `docs/.vitepress/theme/i18n.ts` 的 `useCopy` 按语言切换。macOS 客户端链接的英文锚点在 `DocsLinks.swift` 的 `englishFragment` 里，改英文标题时一起改。
 - 直连模式的存储提供方只做内置实现，不加载第三方插件（插件会经手用户密钥）。新增或修改提供方按 [`packages/cli/src/storage/README.md`](./packages/cli/src/storage/README.md)：签名手写、用官方测试向量测试，传输逻辑复用 `HttpObjectStore`，命令按能力判断而不是按提供方判断。
 - 改了 macOS 客户端的界面文字，运行 `./script/sync_strings.sh` 并在 `apps/macos/Localization/Localizable.xcstrings` 补上英文；传给 `String` 的文字写成 `String(localized: "…")`。

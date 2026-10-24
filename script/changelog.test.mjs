@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { check, embedInAppcast, format, LANGUAGES, load, notes, parse, release } from './changelog.mjs'
+import { check, embedInAppcast, format, githubNotes, LANGUAGES, load, notes, parse, release } from './changelog.mjs'
 
 const zh = `# 更新日志
 
@@ -78,6 +78,38 @@ describe('changelog', () => {
     expect(() => check(changelogs)).not.toThrow()
     expect(() => check(changelogs, { unreleased: true })).toThrow('docs/en/changelog.md: write the changes under "## Unreleased"')
     expect(() => notes(changelogs, 'unreleased', 'en')).toThrow('has no notes for unreleased')
+  })
+
+  it('renders only the selected release in both languages with its comparison link', () => {
+    const changelogs = release(both(), '0.2.0', '2026-10-21')
+    changelogs.en.unreleased = '- Not released yet'
+    const body = githubNotes(changelogs, '0.2.0')
+    expect(body).toContain('## 简体中文\n\n### 新增\n\n- 新功能')
+    expect(body).toContain('## English\n\n### Added\n\n- A new feature')
+    expect(body).toContain('https://yunbox.yunle.fun/en/changelog')
+    expect(body).toContain('/compare/v0.1.0...v0.2.0')
+    expect(body).not.toContain('First release')
+    expect(body).not.toContain('Not released yet')
+    expect(githubNotes(changelogs, '0.1.0')).not.toContain('/compare/')
+  })
+
+  it('previews pending notes without a release or an invented comparison', () => {
+    const changelogs = both()
+    const before = structuredClone(changelogs)
+    const body = githubNotes(changelogs)
+    expect(body).toContain('- 新功能')
+    expect(body).toContain('- A new feature')
+    expect(body).not.toContain('/compare/')
+    expect(changelogs).toEqual(before)
+    changelogs.en.unreleased = ''
+    expect(() => githubNotes(changelogs)).toThrow('before releasing')
+  })
+
+  it('refuses to publish notes for missing versions or mismatched translations', () => {
+    expect(() => githubNotes(both(), '0.9.0')).toThrow('has no notes for 0.9.0')
+    const changelogs = both()
+    changelogs.en.releases = []
+    expect(() => githubNotes(changelogs, '0.1.0')).toThrow('lists no releases')
   })
 
   it('embeds the notes of every language in the appcast and drops the old signature', () => {
