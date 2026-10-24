@@ -4,7 +4,7 @@ A small native SwiftUI app. It runs the YunBox command line bundled inside it, s
 
 ## Install
 
-Download the latest `YunBox-macOS.zip` from [the website](/en/#download), unzip it and drag YunBox into Applications. You need Node.js 22.18+ on your Mac. The current source and the next app release require macOS 26 or later; published versions up to 0.1.5 still support macOS 14 or later.
+Download the latest `YunBox-macOS.zip` from [the website](/en/#download), unzip it and drag YunBox into Applications. You need Node.js 22.18+ on your Mac. Starting with 0.1.6, the app requires macOS 26 or later; versions up to 0.1.5 still support macOS 14 or later.
 
 From 0.1.5 on, the app is notarized by Apple, so it opens with a double-click and macOS no longer says the developer can't be verified.
 
@@ -24,6 +24,16 @@ You can also build it from source with Xcode 27.1 (including the macOS 27.0 SDK)
 pnpm install
 ./script/build_and_run.sh --install   # installs to ~/Applications/YunBox.app and opens it
 ```
+
+## Setup assistant
+
+On first launch, the app checks Node.js, Git and Git LFS, helps you choose a Git repository and configure push protection, then offers optional asset storage. You can defer setup and reopen it from Help → Setup Assistant… or Settings → Push Protection.
+
+Protection applies to the selected repository by default and asks before an over-budget push. Checks and confirmation dialogs work with the app closed; without an answer, the push is cancelled. Freeze windows always block pushes. You can use protection without connecting cloud storage.
+
+“Apply to all repositories on this Mac” is optional. It preserves repository hooks and runs uploads only after the check passes. A repository's custom hooks directory overrides the global setting; the assistant shows whether protection actually applies. Existing global hook managers are never overwritten. You can remove global protection in the assistant. Existing repository wrappers take precedence to avoid checking twice.
+
+Storage initialization also installs repository protection, preserving existing hooks and confirmation choices. See [Push inspection](../inspect) for commands and limitations.
 
 ## Updates
 

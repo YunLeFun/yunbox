@@ -30,6 +30,33 @@ async function snapshot(repo: string): Promise<Record<string, string>> {
 }
 
 describe('git yunbox init', () => {
+  it('installs confirmation by default, can opt out, and can explicitly opt into global protection', async () => {
+    const { sandbox, repo } = await setup()
+    const args = ['init', '--url', SERVICE_URL, '--skip-credential']
+    expect((await runYunBox(sandbox, repo, [...args, '--no-hook'])).code).toBe(0)
+    expect(await readFile(join(repo, '.git/hooks/pre-push'), 'utf8')).not.toContain('yunbox-pre-push')
+    expect((await runYunBox(sandbox, repo, args)).code).toBe(0)
+    expect(await readFile(join(repo, '.git/hooks/pre-push'), 'utf8')).toContain(' --confirm')
+    expect(await readFile(join(repo, '.git/hooks/pre-push.yunbox-original'), 'utf8')).toContain('git lfs pre-push')
+    expect((await runYunBox(sandbox, repo, args)).code).toBe(0)
+    expect((await runYunBox(sandbox, repo, ['hook', 'uninstall'])).code).toBe(0)
+    expect((await runYunBox(sandbox, repo, [...args, '--global-hook'])).code).toBe(0)
+    const status = JSON.parse((await runYunBox(sandbox, repo, ['hook', 'status', '--json'])).stdout)
+    expect(status).toMatchObject({ scope: 'global', confirm: true, globalInstalled: true })
+    // LFS initialization must keep the global dispatcher and the local upload hook intact.
+    expect((await runYunBox(sandbox, repo, args)).code).toBe(0)
+    expect(await readFile(join(repo, '.git/hooks/pre-push'), 'utf8')).toContain('git lfs pre-push')
+  })
+
+  it('adds LFS to a repository protected before storage setup', async () => {
+    const { sandbox, repo } = await setup()
+    expect((await runYunBox(sandbox, repo, ['hook', 'install'])).code).toBe(0)
+    expect((await runYunBox(sandbox, repo, ['init', '--url', SERVICE_URL, '--skip-credential'])).code).toBe(0)
+    expect(await readFile(join(repo, '.git/hooks/pre-push.yunbox-original'), 'utf8')).toContain('git lfs pre-push')
+    expect((await runYunBox(sandbox, repo, ['hook', 'uninstall'])).code).toBe(0)
+    expect(await readFile(join(repo, '.git/hooks/pre-push'), 'utf8')).toContain('git lfs pre-push')
+  })
+
   it('configures LFS, .lfsconfig, locksverify and the credential, and is idempotent', async () => {
     const { sandbox, repo } = await setup()
     const token = fakeToken()

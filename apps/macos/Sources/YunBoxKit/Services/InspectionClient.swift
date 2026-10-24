@@ -109,8 +109,22 @@ public struct InspectionClient: Sendable {
     }
 
     /// `yunbox hook install`: the pre-push wrapper that enforces freeze windows and size limits.
-    public func installHook(repository: URL) async throws -> CommandOutput {
-        try await text(arguments: [cli.path, "hook", "install"], directory: repository, timeout: 30)
+    public func installHook(repository: URL, globally: Bool = false, confirm: Bool = true) async throws -> CommandOutput {
+        try await text(arguments: [cli.path, "hook", "install", confirm ? "--confirm" : "--no-confirm"] + (globally ? ["--global"] : []), directory: repository, timeout: 30)
+    }
+
+    /// Read prerequisites and whether this repository is protected, without modifying Git configuration.
+    public func hookStatus(directory: URL) async throws -> HookStatus {
+        let output = try await ProcessRunner.run(
+            executable: node, arguments: [cli.path, "hook", "status", "--json"],
+            directory: directory, environment: environment(), timeout: 30
+        )
+        return try HookStatus.decode(output.data, exitCode: output.exitCode)
+    }
+
+    /// Remove only YunBox's managed global dispatcher; repository hooks are kept.
+    public func uninstallGlobalHook(directory: URL) async throws -> CommandOutput {
+        try await text(arguments: [cli.path, "hook", "uninstall", "--global"], directory: directory, timeout: 30)
     }
 
     private func text(arguments: [String], directory: URL, timeout: TimeInterval, input: Data? = nil) async throws -> CommandOutput {

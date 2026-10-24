@@ -30,6 +30,8 @@ final class InspectorStore {
     var isCheckingStorage = false
     var storageError: String?
     var showingStorage = false
+    var showingOnboarding = false
+    var openStorageAfterOnboarding = false
     @ObservationIgnored private var storageTask: Task<Void, Never>?
     @ObservationIgnored private var storageRequestID = UUID()
     @ObservationIgnored private var task: Task<Void, Never>?

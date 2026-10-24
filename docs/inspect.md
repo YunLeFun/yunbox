@@ -90,14 +90,26 @@ macOS 的 `auto` 在本机使用原生窗口，可以从窗口中打开 YunBox �
 
 ```bash
 yunbox hook install
-# 超限时弹出确认框，而非直接阻止：
-yunbox hook install --confirm
+# 默认超限询问；如需超限直接阻止：
+yunbox hook install --no-confirm
 # 使用 Workstation 的 macOS 对话框/终端确认，而非直接阻止超限推送：
 yunbox hook install --guard ~/.local/libexec/git-confirm-large-push
 # 恢复原钩子：
 yunbox hook uninstall
 ```
 
-默认包装层调用当前安装的 YunBox CLI，检查未通过便退出。`--guard` 接受绝对路径可执行文件，以它的退出码决定是否执行原钩子；Workstation 适配器仅检查 GitHub remote。原钩子保留为 `pre-push.yunbox-original`，参数和 stdin 原样传递；重复安装不会重复套娃，卸载恢复原文件。发现用户修改过包装层、自定义 `core.hooksPath`、符号链接或未登记的备份时拒绝覆盖。自定义钩子管理器需自行串行接入。移动/卸载 CLI 或 guard 后需重新安装包装层。
+默认包装层调用当前安装的 YunBox CLI，超限时询问是否继续；取消或无人确认时退出。关闭 App 后仍然生效，`--confirm` 是默认行为的显式写法。`--guard` 接受绝对路径可执行文件，以它的退出码决定是否执行原钩子；Workstation 适配器仅检查 GitHub remote。原钩子保留为 `pre-push.yunbox-original`，参数和 stdin 原样传递；重复安装不会重复套娃，卸载恢复原文件。发现用户修改过包装层、自定义 `core.hooksPath`、符号链接或未登记的备份时拒绝覆盖。自定义钩子管理器需自行串行接入。移动/卸载 CLI 或 guard 后需重新安装包装层。
 
 包装层只控制它保存的仓库钩子；其他独立 configured hooks 若也上传素材，仍需由它们自己的管理器串联。安装后再次执行 `git lfs install` 可能提示已有钩子；需要更新 LFS 钩子时先卸载包装层，更新后再安装。`git push --no-verify` 会绕过 pre-push 检查。
+
+## 可选的全局保护
+
+```bash
+yunbox hook install --global       # 所有未自定义钩子目录的仓库，默认超限询问
+yunbox hook status --json          # 当前仓库实际生效的范围、确认方式和环境状态
+yunbox hook uninstall --global     # 恢复使用各仓库原有的钩子
+```
+
+全局模式设置 Git 的 `core.hooksPath`，串行执行检查及仓库原有的 pre-push，并转发其他标准 Git 钩子（包括 LFS checkout 钩子）。已有全局或系统级钩子目录时拒绝覆盖；仓库的自定义目录优先于全局设置。已有 YunBox 仓库包装层会优先执行，避免重复检查，保留原来的确认方式。独立配置的上传钩子仍需由其管理器保证顺序。
+
+`git yunbox init` 默认安装本仓库的保护，交互终端会询问是否启用；`--yes` 或非交互运行采用默认值。`init --no-hook` 只配置存储，`init --global-hook` 显式选择全局保护；这两个选项不能合用。重复初始化会保留已安装的保护和原有 LFS 钩子。使用全局模式后，请通过 `yunbox init` 配置 LFS；直接运行 `git lfs install` 可能因共享目录中已有包装层而报错。

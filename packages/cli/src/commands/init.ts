@@ -16,11 +16,11 @@ import {
   MIN_GIT_LFS_VERSION,
   MIN_GIT_VERSION,
   readGitConfig,
-  runGit,
   runGitChecked,
   shellQuote,
 } from '../git.ts'
 import { ASSET_CATEGORIES, ASSET_PRESETS, categoryOfExtension, mergeGitAttributes, selectCategories } from '../gitattributes.ts'
+import { installInitHook, installLfsWithHooks } from '../init-hooks.ts'
 import { lfsPointerBlobs } from '../inspect.ts'
 import { gitInstallHints, gitLfsInstallHints } from '../install-hints.ts'
 import { printStep } from '../report.ts'
@@ -38,8 +38,9 @@ MinIO 等），都不需要任何服务端：
   4. 按素材类型生成或合并 .gitattributes（已有规则不会重复添加）
   5. 在本仓库的 .git/config 登记传输代理：git-lfs 用 git-yunbox lfs-agent 直接上传下载
   6. 设置 lfs.locksverify=false（直连模式没有文件锁服务）
+  7. 安装本仓库的推送保护，默认超限询问（关闭 App 后仍生效）
 
-.yunbox/config（或旧版的 .yunboxconfig）已存在时（例如别人已经接入、你刚 clone 下来）不会再提问，只做第 3、5、6 步。
+.yunbox/config（或旧版的 .yunboxconfig）已存在时（例如别人已经接入、你刚 clone 下来）沿用存储设置，并检查权限、登记代理及推送保护。
 可以重复执行，不会破坏已有配置。密钥用 yunbox login 保存在本机，不会写进仓库。
 
 直连 COS 的选项：
@@ -66,6 +67,8 @@ MinIO 等），都不需要任何服务端：
   --skip-credential  不配置 token
 
 通用选项：
+  --no-hook          跳过 YunBox 推送保护，只配置 Git LFS 和存储
+  --global-hook      可选：为本机所有未自定义钩子目录的仓库启用推送保护
   --types <类型>     只跟踪这些素材类型，逗号分隔（默认全部）：
                      ${ASSET_CATEGORIES.map(category => `${category.id}（${category.label}）`).join('、')}
                      也可以写预置组合：${ASSET_PRESETS.map(preset => `${preset.id}（${preset.label}）`).join('、')}
@@ -82,6 +85,8 @@ export async function runInit(context: CliContext, args: string[]): Promise<numb
     context.stdout.write(initHelp)
     return 0
   }
+  if (values['no-hook'] && values['global-hook'])
+    throw new CliError('--no-hook 和 --global-hook 只能选一个', USAGE_EXIT_CODE)
 
   await assertTools(context)
   const root = await findRepositoryRoot(context)
@@ -102,7 +107,10 @@ export async function runInit(context: CliContext, args: string[]): Promise<numb
   if (values.cos === true || cosOptions || (values.url === undefined && (hasCosLocation || currentUrl === undefined))) {
     if (values.url !== undefined)
       throw new CliError('--url（服务端模式）和 --cos（直连 COS）只能选一个；--provider、--bucket 等直连存储的选项也不能和 --url 一起用', USAGE_EXIT_CODE)
-    return await runInitCos(context, repo, root, values, parseCategories(values.types), installLfsAndAttributes)
+    const code = await runInitCos(context, repo, root, values, parseCategories(values.types), installLfsAndAttributes)
+    if (code === 0)
+      await installInitHook(repo, values)
+    return code
   }
   const service = resolveService(values.url ?? currentUrl)
   if (currentUrl !== undefined && currentUrl !== service.url && !values.force) {
@@ -139,6 +147,7 @@ export async function runInit(context: CliContext, args: string[]): Promise<numb
   printStep(context, { status: 'pass', title: 'lfs.locksverify=false', detail: LOCKS_REASON })
 
   const credentialStored = await configureCredential(repo, service, token, values['skip-credential'])
+  await installInitHook(repo, values)
 
   print(context)
   print(context, '下一步：')
@@ -162,7 +171,7 @@ export interface AssetRuleOptions {
 
 /** `git lfs install` plus merging the asset rules into `.gitattributes`; shared by both modes and `yunbox types add`. */
 export async function installLfsAndAttributes(context: CliContext, repo: CliContext, root: string, categories: ReturnType<typeof selectCategories> | undefined, options: AssetRuleOptions = {}): Promise<void> {
-  const install = await runGit(repo, ['lfs', 'install'])
+  const install = await installLfsWithHooks(repo)
   if (install.code !== 0) {
     const reason = firstLine(install.stderr) || firstLine(install.stdout)
     const hint = /hook already exists/i.test(`${install.stdout}${install.stderr}`)
@@ -365,6 +374,8 @@ function assertToken(token: string): void {
 
 /** Parsed `git yunbox init` options. */
 export interface InitOptions {
+  'no-hook'?: boolean
+  'global-hook'?: boolean
   'url'?: string
   'cos'?: boolean
   'provider'?: string
@@ -392,6 +403,8 @@ function parseInitArgs(args: string[]): InitOptions {
     return parseArgs({
       args,
       options: {
+        'no-hook': { type: 'boolean' },
+        'global-hook': { type: 'boolean' },
         'url': { type: 'string' },
         'cos': { type: 'boolean' },
         'provider': { type: 'string' },

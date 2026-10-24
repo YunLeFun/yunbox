@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 import YunBoxKit
 
 struct ContentView: View {
+    @AppStorage("hasSeenOnboarding") private var hasSeenOnboarding = false
     @Bindable var store: InspectorStore
     @Bindable var types: AssetTypesStore
 
@@ -115,6 +116,18 @@ struct ContentView: View {
                 }
             }
         }
+        .task {
+            if !hasSeenOnboarding {
+                hasSeenOnboarding = true
+                store.showingOnboarding = true
+            }
+        }
+        .sheet(isPresented: $store.showingOnboarding, onDismiss: {
+            if store.openStorageAfterOnboarding {
+                store.openStorageAfterOnboarding = false
+                store.showingStorage = true
+            }
+        }) { OnboardingView(inspector: store) }
         .sheet(isPresented: $store.showingStorage) { StorageSheet(store: store) }
         .sheet(isPresented: $types.showing) { AssetTypesSheet(types: types) }
         .fileImporter(isPresented: $store.choosingRepository, allowedContentTypes: [.folder]) { result in

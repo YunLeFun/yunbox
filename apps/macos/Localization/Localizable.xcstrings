@@ -332,6 +332,16 @@
         }
       }
     },
+    "%lld / 4" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld / 4"
+          }
+        }
+      }
+    },
     "%lld 个素材对象" : {
       "localizations" : {
         "en" : {
@@ -720,6 +730,16 @@
         }
       }
     },
+    "macOS 弹出确认框；终端环境在终端询问。无人确认时取消推送，禁推时段始终阻止推送。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS shows a dialog; terminal sessions ask in the terminal. Without an answer, the push is cancelled. Freeze windows always block pushes."
+          }
+        }
+      }
+    },
     "opening_hours 写法，每行一组规则，例如 Mo-Fr 09:00-12:00,14:00-18:00; We off。各行同时生效；同一行里后面的规则覆盖前面同一天的设置。" : {
       "localizations" : {
         "en" : {
@@ -761,6 +781,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Off until switched back on"
+          }
+        }
+      }
+    },
+    "上一步" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back"
+          }
+        }
+      }
+    },
+    "下一步" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next"
           }
         }
       }
@@ -875,6 +915,16 @@
         }
       }
     },
+    "云匣内置命令行组件，需要本机的 Node.js、Git 和 Git LFS。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YunBox includes its CLI and uses Node.js, Git and Git LFS installed on this Mac."
+          }
+        }
+      }
+    },
     "云匣：处于禁推时段" : {
       "localizations" : {
         "en" : {
@@ -943,16 +993,6 @@
         }
       }
     },
-    "从列表隐藏" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Hide from List"
-          }
-        }
-      }
-    },
     "从列表移除" : {
       "localizations" : {
         "en" : {
@@ -963,42 +1003,12 @@
         }
       }
     },
-    "取消固定" : {
+    "从列表隐藏" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Unpin"
-          }
-        }
-      }
-    },
-    "固定" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pin"
-          }
-        }
-      }
-    },
-    "在访达中显示" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show in Finder"
-          }
-        }
-      }
-    },
-    "已固定" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Pinned"
+            "value" : "Hide from List"
           }
         }
       }
@@ -1131,6 +1141,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Modified"
+          }
+        }
+      }
+    },
+    "先检查现有项目。推送保护可以单独使用，无需配置云存储。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start with an existing project. Push protection works on its own, without cloud storage."
           }
         }
       }
@@ -1465,6 +1485,16 @@
         }
       }
     },
+    "取消固定" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unpin"
+          }
+        }
+      }
+    },
     "取消检查" : {
       "localizations" : {
         "en" : {
@@ -1525,6 +1555,16 @@
         }
       }
     },
+    "可以随时从「帮助 → 新手引导…」重新打开这些步骤。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reopen these steps anytime from Help → Setup Assistant…."
+          }
+        }
+      }
+    },
     "可执行文件路径" : {
       "localizations" : {
         "en" : {
@@ -1541,6 +1581,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Each Mac's own time zone"
+          }
+        }
+      }
+    },
+    "启用推送保护" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enable Push Protection"
           }
         }
       }
@@ -1675,6 +1725,16 @@
         }
       }
     },
+    "固定" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pin"
+          }
+        }
+      }
+    },
     "图标显示当前仓库现在能否推送，点开可以查看和快捷设置禁推时段（yunbox freeze）。" : {
       "localizations" : {
         "en" : {
@@ -1725,6 +1785,16 @@
         }
       }
     },
+    "在访达中显示" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show in Finder"
+          }
+        }
+      }
+    },
     "地域（默认 us-east-1）" : {
       "localizations" : {
         "en" : {
@@ -1751,6 +1821,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Enter the name of a bucket you've already created in the service's console."
+          }
+        }
+      }
+    },
+    "填写已有 bucket…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter an existing bucket…"
           }
         }
       }
@@ -1901,6 +1981,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Install Hook"
+          }
+        }
+      }
+    },
+    "安装说明" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Installation Guide"
           }
         }
       }
@@ -2083,6 +2173,16 @@
         }
       }
     },
+    "已固定" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pinned"
+          }
+        }
+      }
+    },
     "已在 %@" : {
       "localizations" : {
         "en" : {
@@ -2215,6 +2315,16 @@
         }
       }
     },
+    "应用保护设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apply Protection Settings"
+          }
+        }
+      }
+    },
     "应用内缺少检查组件，请使用构建脚本重新安装 YunBox。" : {
       "localizations" : {
         "en" : {
@@ -2235,6 +2345,16 @@
         }
       }
     },
+    "应用到本机所有仓库（可选）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apply to all repositories on this Mac (optional)"
+          }
+        }
+      }
+    },
     "开发版本" : {
       "localizations" : {
         "en" : {
@@ -2245,12 +2365,62 @@
         }
       }
     },
+    "开始使用" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Get Started"
+          }
+        }
+      }
+    },
+    "开始使用云匣" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Welcome to YunBox"
+          }
+        }
+      }
+    },
     "当前" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Current"
+          }
+        }
+      }
+    },
+    "当前仓库尚未启用 YunBox 推送保护" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "YunBox push protection is not enabled for this repository"
+          }
+        }
+      }
+    },
+    "当前仓库已受全局保护" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Global protection applies to this repository"
+          }
+        }
+      }
+    },
+    "当前仓库已启用推送保护" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push protection is enabled for this repository"
           }
         }
       }
@@ -2287,6 +2457,26 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "当前版本 %1$@，上次检查于 %2$@。更新包经过签名校验，安装时会重新打开应用。"
+          }
+        }
+      }
+    },
+    "当前行为：超限直接阻止" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current behavior: block over-budget pushes"
+          }
+        }
+      }
+    },
+    "当前行为：超限询问" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current behavior: ask before over-budget pushes"
           }
         }
       }
@@ -2391,6 +2581,16 @@
         }
       }
     },
+    "打开新手引导…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Setup Assistant…"
+          }
+        }
+      }
+    },
     "打开设置" : {
       "localizations" : {
         "en" : {
@@ -2417,6 +2617,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "This repository cannot be found; it may have been moved or deleted."
+          }
+        }
+      }
+    },
+    "把 Git LFS 素材存入自己的 COS、R2 或 S3 兼容存储。也可以稍后从仓库右上角的「存储」入口配置。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Store Git LFS assets in your own COS, R2 or S3-compatible storage. You can also configure this later using Storage in the repository header."
           }
         }
       }
@@ -2511,6 +2721,16 @@
         }
       }
     },
+    "接入素材存储（可选）" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect Asset Storage (Optional)"
+          }
+        }
+      }
+    },
     "接入说明" : {
       "localizations" : {
         "en" : {
@@ -2537,6 +2757,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Push Size Check"
+          }
+        }
+      }
+    },
+    "推送保护" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push Protection"
           }
         }
       }
@@ -2597,6 +2827,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Push Check"
+          }
+        }
+      }
+    },
+    "推送检查说明" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push Inspection Guide"
           }
         }
       }
@@ -2727,6 +2967,16 @@
         }
       }
     },
+    "新手引导…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Setup Assistant…"
+          }
+        }
+      }
+    },
     "无" : {
       "localizations" : {
         "en" : {
@@ -2833,6 +3083,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Pushing opens tomorrow at %@"
+          }
+        }
+      }
+    },
+    "暂不启用，继续" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Continue Without Protection"
           }
         }
       }
@@ -3167,6 +3427,16 @@
         }
       }
     },
+    "检查推送体积，让素材上传更安心。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check push sizes before uploading your assets."
+          }
+        }
+      }
+    },
     "检查更新…" : {
       "localizations" : {
         "en" : {
@@ -3227,12 +3497,42 @@
         }
       }
     },
+    "检查运行环境" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check Local Tools"
+          }
+        }
+      }
+    },
+    "检查运行环境，选择仓库，并管理当前仓库或全局的推送保护。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check local tools, choose a repository, and manage repository or global push protection."
+          }
+        }
+      }
+    },
     "检查预算" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Budgets"
+          }
+        }
+      }
+    },
+    "检测到自定义钩子目录，请按推送检查说明接入。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A custom hooks directory is configured. Follow the push inspection guide to integrate YunBox."
           }
         }
       }
@@ -3323,6 +3623,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Set per project"
+          }
+        }
+      }
+    },
+    "每次推送先检查体积和禁推时段，通过后才上传。关闭云匣后仍然生效。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check sizes and freeze windows before each push, then upload only when allowed. Protection works with YunBox closed."
           }
         }
       }
@@ -3683,12 +3993,32 @@
         }
       }
     },
+    "移除全局保护" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove Global Protection"
+          }
+        }
+      }
+    },
     "移除规则" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Remove Rules"
+          }
+        }
+      }
+    },
+    "稍后设置" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set Up Later"
           }
         }
       }
@@ -3997,6 +4327,16 @@
         }
       }
     },
+    "请选择 Git 仓库文件夹。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a Git repository folder."
+          }
+        }
+      }
+    },
     "请选择本机的 Git 仓库文件夹。" : {
       "localizations" : {
         "en" : {
@@ -4063,6 +4403,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Over"
+          }
+        }
+      }
+    },
+    "超限时询问是否继续" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ask before continuing over budget"
           }
         }
       }
@@ -4279,6 +4629,16 @@
         }
       }
     },
+    "选择一个 Git 仓库" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a Git Repository"
+          }
+        }
+      }
+    },
     "选择仓库" : {
       "localizations" : {
         "en" : {
@@ -4315,6 +4675,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Follows the repository's and global YunBox Git config; without it, 900 KiB / 100 MiB / 10 MiB."
+          }
+        }
+      }
+    },
+    "配置素材存储…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configure Asset Storage…"
           }
         }
       }
@@ -4375,6 +4745,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Retry"
+          }
+        }
+      }
+    },
+    "需要 Node.js 22.18+、24.11+ 或 26+，Git 2.30+ 和 Git LFS 3.2+。安装或更新后，请重新检查。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Node.js 22.18+, 24.11+ or 26+, Git 2.30+ and Git LFS 3.2+ are required. Install or update them, then check again."
           }
         }
       }
@@ -4459,12 +4839,12 @@
         }
       }
     },
-    "填写已有 bucket…" : {
+    "默认只保护当前仓库。全局模式保留仓库原有钩子；仓库自定义钩子目录会覆盖全局设置。" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Enter an existing bucket…"
+            "value" : "Only the current repository is protected by default. Global mode preserves repository hooks; a repository’s custom hooks directory overrides the global setting."
           }
         }
       }

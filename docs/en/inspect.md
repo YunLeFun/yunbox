@@ -112,16 +112,28 @@ Registering several independent `pre-push` hooks doesn't guarantee that a failur
 
 ```bash
 yunbox hook install
-# Show a confirmation dialog when over budget instead of blocking right away:
-yunbox hook install --confirm
+# Confirmation is the default; to block immediately instead:
+yunbox hook install --no-confirm
 # Use Workstation's macOS dialog/terminal confirmation instead of blocking over-budget pushes outright:
 yunbox hook install --guard ~/.local/libexec/git-confirm-large-push
 # Restore the original hook:
 yunbox hook uninstall
 ```
 
-By default, the wrapper calls the YunBox CLI you have installed and exits if the check doesn't pass. `--guard` takes the absolute path of an executable; its exit code decides whether the original hook runs. The Workstation adapter only checks GitHub remotes.
+By default, the wrapper calls the installed YunBox CLI and asks before an over-budget push. Cancelling or having nobody available to answer blocks the push. It works with the app closed; `--confirm` explicitly selects this default. `--guard` takes the absolute path of an executable; its exit code decides whether the original hook runs. The Workstation adapter only checks GitHub remotes.
 
 The original hook is kept as `pre-push.yunbox-original`, and its arguments and stdin are passed through unchanged. Installing again doesn't wrap the wrapper, and uninstalling restores the original file. The wrapper refuses to overwrite anything if it finds that you edited the wrapper, set a custom `core.hooksPath`, used a symbolic link, or have a backup it didn't record. If you use a custom hook manager, chain YunBox into it in sequence yourself. After moving or uninstalling the CLI or the guard, install the wrapper again.
 
 The wrapper only controls the repository hook it saved. If other independently configured hooks also upload assets, their own managers have to put them in sequence. Running `git lfs install` after installing the wrapper may report that a hook already exists. To update the LFS hook, uninstall the wrapper, update the hook, then install the wrapper again. `git push --no-verify` skips the pre-push check entirely.
+
+## Optional global protection
+
+```bash
+yunbox hook install --global       # Repositories without a custom hooks directory; ask when over budget
+yunbox hook status --json          # Effective scope, confirmation mode and local prerequisites
+yunbox hook uninstall --global     # Restore each repository's original hooks
+```
+
+Global mode sets Git's `core.hooksPath`, runs the check before the repository's original pre-push, and forwards the other standard Git hooks, including LFS checkout hooks. It refuses to overwrite an existing global or system hooks directory. Repository-specific directories override the global setting. Existing YunBox repository wrappers take precedence to avoid duplicate checks and retain their confirmation mode. Independently configured upload hooks still need their own manager to guarantee ordering.
+
+`git yunbox init` installs repository protection by default and asks in an interactive terminal; `--yes` or non-interactive runs accept the default. Use `init --no-hook` for storage only or `init --global-hook` to explicitly opt into global protection. These flags cannot be combined. Reinitialization preserves existing protection and LFS hooks. With global mode enabled, configure LFS through `yunbox init`; running `git lfs install` directly may report a wrapper conflict in the shared directory.

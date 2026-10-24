@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 import YunBoxKit
 
 struct SettingsView: View {
+    @Environment(\.openWindow) private var openWindow
     @Bindable var updater: UpdaterStore
     let inspector: InspectorStore
     @AppStorage("overrideLimits") private var overrideLimits = false
@@ -18,6 +19,14 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section("推送保护") {
+                Button("打开新手引导…") {
+                    openWindow(id: "main")
+                    inspector.showingOnboarding = true
+                }
+                Text("检查运行环境，选择仓库，并管理当前仓库或全局的推送保护。")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section("语言") {
                 Picker("界面语言", selection: $language) {
                     Text("跟随系统").tag(AppLanguage.system)

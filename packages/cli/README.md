@@ -39,7 +39,7 @@ git yunbox clone <仓库地址>    # clone 历史 + 登记传输代理 + 下载�
 | `yunbox buckets` | 列出本机密钥能看到的 bucket |
 | `yunbox status` | Git / 素材目标、传输代理登记状态，以及本地 LFS 对象数量和大小 |
 | `yunbox inspect --push` | 推送前检查 Git 和 LFS 的体积，逐个文件列出大小变化；`--confirm` 超限时弹窗确认 |
-| `yunbox hook install` | 安装 pre-push 包装层：检查通过后才执行原有钩子（包括 git-lfs 上传） |
+| `yunbox hook install` | 默认超限询问，通过后才执行原有钩子；`--global` 可选全局保护，`--no-confirm` 直接阻止超限 |
 | `yunbox freeze set "Mo-Fr 09:00-18:00"` | 设置禁推时段（opening_hours 写法，可按星期、时区），时段内 pre-push 直接中断推送；`--shared` 写进 `.yunbox/config` 对团队生效 |
 
 `git yunbox --help` 会被 Git 改写成 `git help yunbox`，查看帮助请用 `git yunbox help` 或 `yunbox --help`。
@@ -55,3 +55,5 @@ git-lfs 不允许仓库自己指定传输程序，所以 `git yunbox init` 会�
 MIT
 
 终端确认支持 Windows、Linux 和 macOS；`git config yunbox.confirmUI terminal` 可固定使用纯终端，`auto` 恢复自动选择。交互终端自动突出显示重点，`NO_COLOR=1` 关闭颜色；管道、CI 和 JSON 保持纯文本。更多说明见[常见问题](https://yunbox.yunle.fun/guide/faq)。
+
+`init` 默认安装本仓库的推送保护，交互时询问、`--yes` 或非交互时采用默认值。`--no-hook` 跳过，`--global-hook` 显式启用全局保护；`yunbox hook status --json` 查看实际状态，`yunbox hook uninstall --global` 移除全局保护。关闭 App 后检查仍生效。

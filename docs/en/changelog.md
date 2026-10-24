@@ -6,12 +6,15 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ### Added
 
+- The macOS app now guides first-time setup: check tools, choose a repository, enable push protection, and optionally connect asset storage. Reopen the guide from Help or Settings.
+- Push protection supports optional global installation and removal, preserves repository hooks, and reports which protection is effective.
 - The homepage now features the promo video: click the airport cover to play P1, or watch all three versions on Bilibili.
 - Windows can confirm over-budget pushes in the console, with an optional reason for continuing or cancelling. On macOS, choose graphical or terminal confirmation per repository or globally.
 - Expandable FAQs cover asset storage, collaborator setup, cross-platform terminal confirmation and color settings.
 
 ### Changed
 
+- Repository initialization now offers push protection. Newly installed hooks ask before an over-budget push and work with the app closed; setup can skip protection or use immediate blocking.
 - The macOS file list distinguishes changes with colors and symbols, identifies asset types with icons, emphasizes filenames over folders, and highlights files over budget while staying readable in dark mode and selected rows.
 - The macOS app now requires macOS 26 or later. Command-line platform support is unchanged.
 - The macOS sidebar uses native icon and label layout and selection styling, showing parent folders only to distinguish repositories with the same name. Inline shortcut hints are removed; `⌘1`–`⌘9` still switch repositories and remain visible in the menu.
@@ -19,6 +22,7 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ### Fixed
 
+- Reinitializing a protected repository or adding Git LFS afterward preserves its upload hooks.
 - Fixed local app builds sometimes showing older sidebar and control styling, keeping previews consistent with release builds.
 - `yunbox status` now shows direct COS / S3 storage and agent registration correctly instead of treating a missing `lfs.url` as missing setup. New clones receive instructions when their agent has not been configured.
 

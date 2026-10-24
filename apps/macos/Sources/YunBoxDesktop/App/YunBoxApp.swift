@@ -53,6 +53,8 @@ struct YunBoxApp: App {
                 }
             }
             CommandGroup(replacing: .help) {
+                Button("新手引导…") { store.showingOnboarding = true }
+                Divider()
                 ForEach([DocsPage.quickStart, .macOS, .r2, .freeze, .inspect, .ai]) { page in
                     Link(page == .quickStart ? String(localized: "云匣使用说明") : page.title, destination: page.url)
                 }
