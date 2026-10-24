@@ -40,6 +40,8 @@ describe('composed pre-push hook', () => {
     await rm(join(repo, '.git', 'hooks'), { recursive: true, force: true })
     expect((await runYunBox(sandbox, repo, ['hook', 'install', '--guard', guard])).code).toBe(0)
     expect(await readFile(hook, 'utf8')).toContain('# yunbox-pre-push-v1')
+    await writeFile(join(repo, 'allow'), '')
+    await git(sandbox, repo, 'hook', 'run', 'pre-push', '--', 'origin', 'https://example.com/repo.git')
     expect((await runYunBox(sandbox, repo, ['hook', 'uninstall'])).code).toBe(0)
     await expect(readFile(hook)).rejects.toThrow()
   })

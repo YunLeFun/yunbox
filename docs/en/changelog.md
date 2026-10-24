@@ -25,6 +25,7 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ### Fixed
 
+- On Windows, push protection now continues after a successful check when the repository had no pre-push hook, instead of trying to run a missing original hook.
 - GitHub release notes refresh when the release workflow is rerun, with Chinese and English descriptions and a full version comparison link.
 - Reinitializing a protected repository or adding Git LFS afterward preserves its upload hooks.
 - Fixed local app builds sometimes showing older sidebar and control styling, keeping previews consistent with release builds.

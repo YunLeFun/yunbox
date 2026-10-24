@@ -85,7 +85,8 @@ export async function runHook(context: CliContext, args: string[]): Promise<numb
     return 0
   }
   const hadOriginal = state?.hadOriginal ?? Boolean(hookFile)
-  const originalExecutable = isExecutableMode((state ? backupFile : hookFile)?.mode ?? 0)
+  const originalFile = state ? backupFile : hookFile
+  const originalExecutable = originalFile !== undefined && isExecutableMode(originalFile.mode)
   const wrapper = `#!/bin/sh
 ${MARKER}
 set -eu
