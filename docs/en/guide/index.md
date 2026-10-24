@@ -14,6 +14,8 @@ This page walks through Tencent Cloud COS. Want Cloudflare R2 (no egress fees), 
 The command line prints its messages in Chinese for now; the commands, options and JSON output are the same in any language.
 :::
 
+Initialization also installs push protection for the current repository, asking before over-budget pushes and preserving existing protection. Use `--no-hook` to skip or `--global-hook` to explicitly enable global protection. See [Push inspection](../inspect).
+
 ## Install
 
 ```bash
@@ -84,6 +86,6 @@ It checks git, git-lfs, the transfer agent, your key and your read/write permiss
 - Without a server there are no file locks, so `lfs.locksverify` is set to `false`. Make sure only one person edits a given asset at a time.
 - Teams that need to issue and revoke tokens centrally can use [server mode](/deploy) (in Chinese) instead.
 
-For the full command reference, see the repository [README](../../../README.md).
+For common commands and development instructions, see the repository [English README](../../../README.en.md).
 
 See the [FAQ](./faq) for storage destinations, Windows / Linux usage and terminal confirmation.

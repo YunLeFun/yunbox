@@ -6,6 +6,7 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ### Added
 
+- The repository now has complete Chinese and English READMEs with WebP promotional banners and real app screenshots, making installation, push inspection and storage setup easier to find.
 - The macOS app now guides first-time setup: check tools, choose a repository, enable push protection, and optionally connect asset storage. Reopen the guide from Help or Settings.
 - Push protection supports optional global installation and removal, preserves repository hooks, and reports which protection is effective.
 - The homepage now features the promo video: click the airport cover to play P1, or watch all three versions on Bilibili.

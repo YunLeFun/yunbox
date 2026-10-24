@@ -14,5 +14,7 @@ git-lfs ──HTTPS──▶ yunbox-server ──▶ presigned PUT / GET ──�
 - You can switch a repository from server mode to direct COS later; see [Migrating from GitHub LFS](./guide/migrate), which covers moving off any LFS server.
 
 ::: warning Only in Chinese for now
-The full deployment guide targets Tencent CloudBase Run and is written in Chinese: image, configuration, least-privilege CAM policies, TLS and a launch checklist. Read it at [Deploying to CloudBase Run](/deploy) (in Chinese). Running the server locally and managing tokens are covered in the repository [README](../../README.md) (also in Chinese).
+The full deployment guide targets Tencent CloudBase Run and is written in Chinese: image, configuration, least-privilege CAM policies, TLS and a launch checklist. Read it at [Deploying to CloudBase Run](/deploy) (in Chinese).
 :::
+
+Running the server locally and managing tokens are covered in the [English README](../../README.en.md#run-a-local-server).

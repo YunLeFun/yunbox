@@ -289,7 +289,7 @@ docker run --rm -e YUNBOX_STORAGE -e YUNBOX_COS_BUCKET -e YUNBOX_COS_REGION -e Y
 - 权限按用户授予：`--read` / `--write` 会加到这个用户（`--user`，默认等于 token 名称）的授权里；`grant set <用户>` 整体替换，`grant list` 查看。
 - `list` 显示 id、名称、用户、创建时间、过期时间和最后使用时间（每个 token 最多每小时更新一次）；`revoke <id 或名称>` 吊销后最迟 5 分钟完全生效（服务端缓存 30 秒，COS 预签名地址最长 5 分钟有效）。
 - 每个 token 是数据库里单独的一个文档，授权修改带条件重试，**多个管理员可以同时操作**，不会互相覆盖。
-- 成员接入：`.lfsconfig` 写 `lfs.url=https://lfs.example.com/<owner>/<repo>`，`git config lfs.locksverify false`，第一次 push 时用户名随意、密码填 token，详见 [README](../README.md#配置测试仓库)。
+- 成员接入：`.lfsconfig` 写 `lfs.url=https://lfs.example.com/<owner>/<repo>`，`git config lfs.locksverify false`，第一次 push 时用户名随意、密码填 token，详见 [README](../README.md#启动本地服务)。
 
 **从 G1 的 `tokens.json` 迁移**：已经按 G1 部署过、token 存在 `<prefix>/_yunbox/tokens.json` 的，在新版本上线前执行一次（需要能读这个 COS 对象的密钥，以及数据库读写权限）：
 

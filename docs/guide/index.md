@@ -10,6 +10,8 @@ git push / clone ──▶ git-lfs ──▶ git-yunbox lfs-agent ──▶ 腾�
 
 想用 Cloudflare R2（下载流量免费）、AWS S3 或 MinIO？见[接入 R2 和 S3 兼容存储](./r2)。
 
+初始化也会为当前仓库安装推送保护，默认超限询问；已有保护会保留。可用 `--no-hook` 跳过，或用 `--global-hook` 显式启用全局保护。详见[推送检查](../inspect)。
+
 ## 安装
 
 ```bash
@@ -80,6 +82,6 @@ yunbox doctor
 - 没有服务端就没有文件锁，`lfs.locksverify` 设为 `false`。同一个素材同一时间请只由一个人编辑。
 - 需要集中签发、吊销 token 的团队，可以改用[服务端模式](../deploy)。
 
-完整的命令说明见仓库 [README](../../README.md)。
+常用命令和开发说明见仓库 [README](../../README.md)。
 
 常见的存储位置、Windows / Linux 使用和终端确认问题见[常见问题](./faq)。
