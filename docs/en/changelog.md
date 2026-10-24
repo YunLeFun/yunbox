@@ -6,6 +6,7 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ### Added
 
+- The homepage now features the promo video: click the airport cover to play P1, or watch all three versions on Bilibili.
 - Windows can confirm over-budget pushes in the console, with an optional reason for continuing or cancelling. On macOS, choose graphical or terminal confirmation per repository or globally.
 - Expandable FAQs cover asset storage, collaborator setup, cross-platform terminal confirmation and color settings.
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** The landing page: hero, how a push travels, setup, push check, freeze windows and AI, keys, downloads. */
+/** The landing page: hero, video, how a push travels, setup, push check, freeze windows and AI, keys, downloads. */
 import { useCopy, useLocalePath } from '../i18n'
 import ConfirmDialogMock from './ConfirmDialogMock.vue'
 import CopyCommand from './CopyCommand.vue'
@@ -8,6 +8,7 @@ import FreezePanelMock from './FreezePanelMock.vue'
 import HeroBox from './HeroBox.vue'
 import InspectorMock from './InspectorMock.vue'
 import KeyBoundary from './KeyBoundary.vue'
+import PromoVideo from './PromoVideo.vue'
 import PushFlow from './PushFlow.vue'
 import SymbolIcon from './SymbolIcon.vue'
 import TerminalDemo from './TerminalDemo.vue'
@@ -114,6 +115,8 @@ const t = useCopy({
         <HeroBox />
       </div>
     </section>
+
+    <PromoVideo />
 
     <section class="section section-alt">
       <div class="wrap">
