@@ -7,6 +7,7 @@ struct ContentView: View {
     @Bindable var types: AssetTypesStore
 
     var body: some View {
+        let parentLabels = RepositoryRow.parentLabels(for: store.repositoryPaths)
         NavigationSplitView {
             List(selection: Binding(get: { store.repository?.path }, set: { tag in
                 // Blocked rows carry a prefixed tag, so only the recent-list row shows the selection.
@@ -25,7 +26,7 @@ struct ContentView: View {
                 if !store.pinnedPaths.isEmpty {
                     Section("已固定") {
                         ForEach(store.pinnedPaths, id: \.self) { path in
-                            RepositoryRow(path: path, index: store.repositoryPaths.firstIndex(of: path), pinned: true)
+                            RepositoryRow(path: path, pinned: true, parentLabel: parentLabels[path])
                                 .tag(path)
                                 .contextMenu { RepositoryMenu(store: store, path: path) }
                         }
@@ -34,7 +35,7 @@ struct ContentView: View {
                 }
                 Section("最近的仓库") {
                     ForEach(store.recentPaths, id: \.self) { path in
-                        RepositoryRow(path: path, index: store.repositoryPaths.firstIndex(of: path), pinned: false)
+                        RepositoryRow(path: path, pinned: false, parentLabel: parentLabels[path])
                             .tag(path)
                             .contextMenu { RepositoryMenu(store: store, path: path) }
                     }
@@ -163,25 +164,36 @@ private struct StatusBanner: View {
 
 private let blockedTagPrefix = "blocked:"
 
-/// One pinned or recent repository: its name, parent folder and ⌘-number shortcut; the full path on hover.
+/// One pinned or recent repository; only ambiguous names need a parent label. The full path stays on hover.
 private struct RepositoryRow: View {
     let path: String
-    /// Position among pinned and recent repositories, for the ⌘-number shortcut.
-    let index: Int?
     let pinned: Bool
+    let parentLabel: String?
+
+    /// Distinguish names across both sections, expanding the parent path if its name is also shared.
+    static func parentLabels(for paths: [String]) -> [String: String] {
+        let groups = Dictionary(grouping: Set(paths).map { URL(fileURLWithPath: $0) }, by: \.lastPathComponent)
+        var labels: [String: String] = [:]
+        for repositories in groups.values where repositories.count > 1 {
+            let parents = repositories.map { $0.deletingLastPathComponent() }
+            let parentGroups = Dictionary(grouping: parents, by: \.lastPathComponent)
+            for (repository, parent) in zip(repositories, parents) {
+                labels[repository.path] = parentGroups[parent.lastPathComponent, default: []].count > 1
+                    ? (parent.path as NSString).abbreviatingWithTildeInPath
+                    : parent.lastPathComponent
+            }
+        }
+        return labels
+    }
 
     var body: some View {
         let url = URL(fileURLWithPath: path)
         Label {
-            HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(url.lastPathComponent).lineLimit(1)
-                    Text(url.deletingLastPathComponent().lastPathComponent)
-                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                }
-                Spacer(minLength: 4)
-                if let index, index < RecentRepositories.shortcutCount {
-                    Text("⌘\(index + 1)").font(.caption.monospacedDigit()).foregroundStyle(.tertiary)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(url.lastPathComponent).lineLimit(1)
+                if let parentLabel {
+                    Text(parentLabel)
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
                 }
             }
         } icon: { Image(systemName: pinned ? "pin" : "folder") }

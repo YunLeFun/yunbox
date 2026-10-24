@@ -739,9 +739,6 @@
     "−%lld" : {
       "shouldTranslate" : false
     },
-    "⌘%lld" : {
-      "shouldTranslate" : false
-    },
     "「%@」上次检查使用 %@ / %@ / %@。" : {
       "localizations" : {
         "en" : {

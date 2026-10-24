@@ -11,6 +11,7 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ### Changed
 
+- The macOS sidebar uses native icon and label layout and selection styling, showing parent folders only to distinguish repositories with the same name. Inline shortcut hints are removed; `⌘1`–`⌘9` still switch repositories and remain visible in the menu.
 - Terminal push reports consistently show code and asset destinations, upload sizes and skipped objects. Status, diagnostics and setup steps highlight key information with color; pipes, CI and JSON remain plain, and `NO_COLOR=1` disables color.
 
 ### Fixed
