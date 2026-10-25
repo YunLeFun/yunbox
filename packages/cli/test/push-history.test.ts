@@ -41,9 +41,10 @@ describe('local project push history', () => {
     const { sandbox, repo } = await fixture()
     const path = blockedPushesPath(sandbox.env)
     await mkdir(join(path, '..'), { recursive: true })
+    const at = new Date().toISOString()
     await writeFile(path, JSON.stringify({ version: 1, entries: [
-      { root: repo, at: new Date().toISOString(), reason: 'cancelled', summary: '旧版取消说明' },
-      { root: join(repo, 'other'), at: new Date().toISOString(), reason: 'freeze', summary: '禁推时段' },
+      { root: repo, at, reason: 'cancelled', summary: '旧版取消说明' },
+      { root: join(repo, 'other'), at, reason: 'freeze', summary: '禁推时段' },
     ] }))
     expect((await readPushHistory(sandbox.env)).map(entry => entry.outcome)).toEqual(['cancelled', 'blocked'])
     await clearPushHistory(sandbox.env, repo)
