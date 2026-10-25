@@ -113,7 +113,7 @@ yunbox hook install --guard ~/.local/libexec/git-confirm-large-push
 yunbox hook uninstall
 ```
 
-默认包装层调用当前安装的 YunBox CLI，超限时询问是否继续；取消或无人确认时退出。关闭 App 后仍然生效，`--confirm` 是默认行为的显式写法。`--guard` 接受绝对路径可执行文件，以它的退出码决定是否执行原钩子；Workstation 适配器仅检查 GitHub remote。原钩子保留为 `pre-push.yunbox-original`，参数和 stdin 原样传递；重复安装不会重复套娃，卸载恢复原文件。发现用户修改过包装层、自定义 `core.hooksPath`、符号链接或未登记的备份时拒绝覆盖。自定义钩子管理器需自行串行接入。移动/卸载 CLI 或 guard 后需重新安装包装层。
+默认包装层调用当前安装的 YunBox CLI，超限时询问是否继续；取消或无人确认时退出。关闭 App 后仍然生效，`--confirm` 是默认行为的显式写法。`--guard` 接受绝对路径可执行文件，以它的退出码决定是否执行原钩子；Workstation 适配器仅检查 GitHub remote。原钩子保留为 `pre-push.yunbox-original`，参数和 stdin 原样传递；重复安装不会重复套娃，卸载恢复原文件。发现用户修改过包装层、符号链接或未登记的备份时拒绝覆盖。自定义 `core.hooksPath` 可使用下面的本机兼容接入，也可在原管理器中手动串联。移动/卸载 CLI 或 guard 后需重新安装包装层。
 
 包装层只控制它保存的仓库钩子；其他独立 configured hooks 若也上传素材，仍需由它们自己的管理器串联。安装后再次执行 `git lfs install` 可能提示已有钩子；需要更新 LFS 钩子时先卸载包装层，更新后再安装。`git push --no-verify` 会绕过 pre-push 检查。
 
@@ -128,3 +128,38 @@ yunbox hook uninstall --global     # 恢复使用各仓库原有的钩子
 全局模式设置 Git 的 `core.hooksPath`，串行执行检查及仓库原有的 pre-push，并转发其他标准 Git 钩子（包括 LFS checkout 钩子）。已有全局或系统级钩子目录时拒绝覆盖；仓库的自定义目录优先于全局设置。已有 YunBox 仓库包装层会优先执行，避免重复检查，保留原来的确认方式。独立配置的上传钩子仍需由其管理器保证顺序。
 
 `git yunbox init` 默认安装本仓库的保护，交互终端会询问是否启用；`--yes` 或非交互运行采用默认值。`init --no-hook` 只配置存储，`init --global-hook` 显式选择全局保护；这两个选项不能合用。重复初始化会保留已安装的保护和原有 LFS 钩子。使用全局模式后，请通过 `yunbox init` 配置 LFS；直接运行 `git lfs install` 可能因共享目录中已有包装层而报错。
+
+
+## 本机兼容接入
+
+仓库已经使用 Husky、`scripts/git-hooks` 或部署工具的钩子目录时，选择兼容接入可以保留团队配置：
+
+```bash
+yunbox hook install --compatible             # 超限询问；检查通过后运行原 pre-push
+yunbox hook install --compatible --no-confirm # 超限直接阻止
+yunbox hook status --json                    # 核对实际覆盖状态
+yunbox hook repair                           # 路径被其他工具重设后，接入当前目录
+yunbox hook uninstall                        # 恢复原本机配置；保留后来做的修改
+```
+
+调度器放在 Git 元数据目录的 `yunbox-hooks` 中，只修改本机 `core.hooksPath`，不改 `.husky`、项目脚本或 `node_modules` 文件。推送数据暂存一次，Git 的参数和完整标准输入分别传给 YunBox 检查及原 `pre-push`；检查取消、失败或超限拒绝时，原检查和上传均不运行。其他标准 Git 钩子直接转发，保留参数、标准输入、退出码和执行目录；原脚本后续更新即时生效。原目录已有 YunBox 仓库包装层时保留其检查及确认方式，避免重复检查。
+
+| 场景 | 处理方式 |
+| --- | --- |
+| 普通 `.git/hooks` | 继续使用仓库包装层或可选的全局模式 |
+| Husky | 转发到原配置目录（如 `.husky/_`），保留 `.husky` 脚本；安装依赖后重新检查状态 |
+| 项目钩子目录 | 保存原路径及本机配置，卸载恢复；相对路径仍相对于 Git 的钩子工作目录 |
+| 工具生成的目录 | 有官方扩展入口时优先按工具说明串联；通用兼容接入只转发，不修改生成文件 |
+| 原目录缺失 | 停止执行，恢复目录后重试；`.husky` / `node_modules` 路径提示可能尚未安装依赖，不据此自动删除配置 |
+
+确认目录已废弃后，可先卸载兼容接入，再运行 `yunbox hook clear-missing` 清理本机失效路径。命令只接受一条直接保存在当前本机配置范围中的失效路径；继承配置、多条配置或仍存在的目录需要在来源中自行处理。清理后运行 `hook status`，因为后续保护取决于恢复生效的配置。
+
+`hook status --json` 的 `globalInstalled` 仅表示全局调度器开启；`hook` 和 `scope` 才表示当前仓库实际生效的保护。兼容模式的 `scope` 为 `compatible`，`compatibility.state` 包含 `active`（正常）、`pending`（待兼容）、`overridden`（保护被覆盖）、`missing`（原目录缺失）和 `modified`（调度器被改动）。Husky 或其他工具重设路径后，普通重复安装会提示修复；`hook repair` 显式把当前目录设为新的转发目标。卸载时如果路径已由用户改成别的值，会保留该值。
+
+共享配置的 linked worktree 共用调度器，相对路径在各自工作树中解析。已启用 `extensions.worktreeConfig` 时，新接入只写当前 worktree 的配置。后置 Git `include` 或命令级配置仍可能覆盖安装，YunBox 会校验实际生效路径，失败时回滚并提示在配置来源处理。修改调度器或登记文件后不会自动覆盖或删除，请先检查并恢复。
+
+macOS 的「帮助 → 新手引导 → 启用推送保护」提供兼容接入、修复、恢复原配置及清理失效配置入口，并分别展示全局开关和已知仓库的覆盖统计。统计只包含客户端已知仓库，读取失败单独列出；打开引导、应用重新成为前台或点击「重新检查」时刷新。安装依赖后应重新检查，不能把“全局开关开启”当作“所有仓库都已保护”。
+
+使用兼容接入的仓库运行 `yunbox init` 时只配置 LFS 过滤器，不写团队钩子。如果无法在原 `pre-push`（或 Husky 用户脚本）中识别到 `git lfs pre-push`，会提示按 `git lfs update --manual` 先在原管理器中接入。间接调用 LFS 的复杂脚本需要维护者检查并显式接入；不会自动把上传放到独立钩子中。
+
+与普通包装层相同，独立配置的上传钩子仍需其管理器保证顺序，`--no-verify` 仍会跳过 Git 的推送检查。[Git 钩子语义](https://git-scm.com/docs/githooks)与 [Husky 使用说明](https://typicode.github.io/husky/how-to.html)可用于核对项目的扩展方式。

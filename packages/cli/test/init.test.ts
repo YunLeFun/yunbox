@@ -57,6 +57,31 @@ describe('git yunbox init', () => {
     expect(await readFile(join(repo, '.git/hooks/pre-push'), 'utf8')).toContain('git lfs pre-push')
   })
 
+  it('initializes through compatible Husky hooks without changing team scripts or the dispatcher', async () => {
+    const { sandbox, repo } = await setup()
+    await mkdir(join(repo, '.husky/_'), { recursive: true })
+    await git(sandbox, repo, 'config', 'core.hooksPath', '.husky/_')
+    const dispatcher = '#!/bin/sh\nexec sh "$(dirname "$(dirname "$0")")/pre-push" "$@"\n'
+    const teamHook = '#!/bin/sh\ngit lfs pre-push "$@"\n'
+    await writeFile(join(repo, '.husky/_/pre-push'), dispatcher, { mode: 0o755 })
+    await writeFile(join(repo, '.husky/pre-push'), teamHook)
+    expect((await runYunBox(sandbox, repo, ['hook', 'install', '--compatible'])).code).toBe(0)
+    const managedPath = await git(sandbox, repo, 'config', 'core.hooksPath')
+    const managed = await readFile(join(managedPath, 'pre-push'), 'utf8')
+    const args = ['init', '--url', SERVICE_URL, '--skip-credential']
+    expect((await runYunBox(sandbox, repo, args)).code).toBe(0)
+    expect((await runYunBox(sandbox, repo, args)).code).toBe(0)
+    expect(await readFile(join(managedPath, 'pre-push'), 'utf8')).toBe(managed)
+    expect(await readFile(join(repo, '.husky/_/pre-push'), 'utf8')).toBe(dispatcher)
+    expect(await readFile(join(repo, '.husky/pre-push'), 'utf8')).toBe(teamHook)
+    await writeFile(join(repo, '.husky/pre-push'), '#!/bin/sh\necho checks\n')
+    const result = await runYunBox(sandbox, repo, args)
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('git lfs update --manual')
+    expect(await readFile(join(repo, '.husky/pre-push'), 'utf8')).toBe('#!/bin/sh\necho checks\n')
+    expect(await readFile(join(managedPath, 'pre-push'), 'utf8')).toBe(managed)
+  })
+
   it('configures LFS, .lfsconfig, locksverify and the credential, and is idempotent', async () => {
     const { sandbox, repo } = await setup()
     const token = fakeToken()

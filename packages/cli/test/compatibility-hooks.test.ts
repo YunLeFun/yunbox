@@ -1,0 +1,255 @@
+import type { Sandbox } from './helpers.ts'
+import { Buffer } from 'node:buffer'
+import { execFile } from 'node:child_process'
+import { chmod, mkdir, readdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import process from 'node:process'
+import { promisify } from 'node:util'
+import { afterEach, describe, expect, it } from 'vitest'
+import { createRepository, createSandbox, git, runYunBox } from './helpers.ts'
+
+const execute = promisify(execFile)
+const sandboxes: Sandbox[] = []
+afterEach(async () => Promise.all(sandboxes.splice(0).map(sandbox => sandbox.cleanup())))
+
+async function fixture(path = 'scripts/team\'s hooks') {
+  const sandbox = await createSandbox()
+  sandboxes.push(sandbox)
+  const repo = await createRepository(sandbox)
+  const hooks = join(repo, path)
+  await mkdir(hooks, { recursive: true })
+  await git(sandbox, repo, 'config', 'core.hooksPath', path)
+  const guard = join(sandbox.root, 'guard')
+  await writeFile(guard, '#!/bin/sh\nprintf "check\\n" >> order\ncat > guard-input\nprintf "%s\\n" "$@" > guard-args\n[ -f allow ]\n', { mode: 0o755 })
+  const original = '#!/bin/sh\nprintf "upload\\n" >> order\ncat > original-input\nprintf "%s\\n" "$@" > original-args\nexit 0\n'
+  await writeFile(join(hooks, 'pre-push'), original, { mode: 0o755 })
+  const updates = `refs/heads/main ${'a'.repeat(40)} refs/heads/main ${'0'.repeat(40)}\nrefs/heads/delete ${'0'.repeat(40)} refs/heads/delete ${'b'.repeat(40)}\n`
+  const input = join(sandbox.root, 'updates')
+  await writeFile(input, updates)
+  const args = ['hook', 'run', '--to-stdin', input, 'pre-push', '--', 'remote name', 'https://example.invalid/a b.git']
+  const install = () => runYunBox(sandbox, repo, ['hook', 'install', '--compatible', '--guard', guard])
+  const status = async (cwd = repo) => JSON.parse((await runYunBox(sandbox, cwd, ['hook', 'status', '--json'])).stdout)
+  const push = (cwd = repo) => execute('git', args, { cwd, env: sandbox.env })
+  return { sandbox, repo, hooks, path, original, guard, updates, args, install, status, push }
+}
+
+describe('local compatibility dispatcher', () => {
+  it('serializes rejection and upload, preserves arguments/stdin/exit codes, and reinstalls once', async () => {
+    const f = await fixture()
+    expect((await f.install()).code).toBe(0)
+    expect((await f.install()).code).toBe(0)
+    expect(await f.status()).toMatchObject({ hook: 'guard', scope: 'compatible', compatibility: { state: 'active', originalPath: f.path } })
+    await expect(f.push()).rejects.toThrow()
+    await expect(readFile(join(f.repo, 'original-input'))).rejects.toThrow()
+    await writeFile(join(f.repo, 'allow'), '')
+    await f.push()
+    expect(await readFile(join(f.repo, 'order'), 'utf8')).toBe('check\ncheck\nupload\n')
+    expect(await readFile(join(f.repo, 'guard-input'), 'utf8')).toBe(f.updates)
+    expect(await readFile(join(f.repo, 'original-input'), 'utf8')).toBe(f.updates)
+    expect(await readFile(join(f.repo, 'original-args'), 'utf8')).toBe(await readFile(join(f.repo, 'guard-args'), 'utf8'))
+    // Source hooks remain live; edits and newly added hooks are never frozen in a backup.
+    await writeFile(join(f.hooks, 'pre-push'), '#!/bin/sh\nexit 37\n')
+    await expect(f.push()).rejects.toMatchObject({ code: 37 })
+    await writeFile(join(f.hooks, 'commit-msg'), '#!/bin/sh\nprintf "%s" "$1" > forwarded-arg\ncat > forwarded-input\nexit 21\n', { mode: 0o755 })
+    const message = join(f.repo, 'commit message')
+    await expect(execute('git', ['hook', 'run', '--to-stdin', join(f.sandbox.root, 'updates'), 'commit-msg', '--', message], { cwd: f.repo, env: f.sandbox.env })).rejects.toMatchObject({ code: 21 })
+    expect(await readFile(join(f.repo, 'forwarded-arg'), 'utf8')).toBe(message)
+    expect(await readFile(join(f.repo, 'forwarded-input'), 'utf8')).toBe(f.updates)
+    expect((await runYunBox(f.sandbox, f.repo, ['hook', 'uninstall'])).code).toBe(0)
+    expect(await git(f.sandbox, f.repo, 'config', '--local', '--get', 'core.hooksPath')).toBe(f.path)
+    expect(await readFile(join(f.hooks, 'pre-push'), 'utf8')).toContain('exit 37')
+  })
+
+  it('detects Husky resets, repairs the live directory, and preserves subsequent configuration', async () => {
+    const f = await fixture('.husky/_')
+    // Model Husky's dispatcher: $0 remains in .husky/_, while user scripts live in .husky.
+    await writeFile(join(f.repo, '.husky/pre-push'), f.original)
+    await writeFile(join(f.hooks, 'pre-push'), '#!/bin/sh\ns="$(dirname "$(dirname "$0")")/pre-push"\nexec sh "$s" "$@"\n')
+    expect((await f.install()).code).toBe(0)
+    await writeFile(join(f.repo, 'allow'), '')
+    await f.push()
+    await git(f.sandbox, f.repo, 'config', 'core.hooksPath', '.husky/_')
+    expect(await f.status()).toMatchObject({ hook: 'none', compatibility: { registered: true, state: 'overridden' } })
+    expect((await f.install()).code).toBe(1)
+    expect((await runYunBox(f.sandbox, f.repo, ['hook', 'repair', '--guard', f.guard])).code).toBe(0)
+    await f.push()
+    expect(await readFile(join(f.repo, 'order'), 'utf8')).toBe('check\nupload\ncheck\nupload\n')
+    await git(f.sandbox, f.repo, 'config', 'core.hooksPath', 'new/team-hooks')
+    expect((await runYunBox(f.sandbox, f.repo, ['hook', 'uninstall'])).code).toBe(0)
+    expect(await git(f.sandbox, f.repo, 'config', 'core.hooksPath')).toBe('new/team-hooks')
+    expect(await readFile(join(f.repo, '.husky/pre-push'), 'utf8')).toBe(f.original)
+  })
+
+  it('repairs to a different manager and restores its configuration on uninstall', async () => {
+    const f = await fixture()
+    expect((await f.install()).code).toBe(0)
+    await mkdir(join(f.repo, 'new-hooks'))
+    await git(f.sandbox, f.repo, 'config', 'core.hooksPath', 'new-hooks')
+    expect((await runYunBox(f.sandbox, f.repo, ['hook', 'repair', '--guard', f.guard])).code).toBe(0)
+    expect(await f.status()).toMatchObject({ compatibility: { state: 'active', originalPath: 'new-hooks' } })
+    expect((await runYunBox(f.sandbox, f.repo, ['hook', 'uninstall'])).code).toBe(0)
+    expect(await git(f.sandbox, f.repo, 'config', 'core.hooksPath')).toBe('new-hooks')
+  })
+
+  it('keeps global enablement separate from effective protection and restores inherited paths', async () => {
+    const f = await fixture()
+    expect((await runYunBox(f.sandbox, f.repo, ['hook', 'install', '--global'])).code).toBe(0)
+    expect(await f.status()).toMatchObject({ hook: 'none', globalInstalled: true, compatibility: { state: 'pending' } })
+    expect((await f.install()).code).toBe(0)
+    expect(await f.status()).toMatchObject({ hook: 'guard', globalInstalled: true, scope: 'compatible' })
+    expect((await runYunBox(f.sandbox, f.repo, ['hook', 'uninstall'])).code).toBe(0)
+    await git(f.sandbox, f.repo, 'config', '--local', '--unset-all', 'core.hooksPath')
+    await git(f.sandbox, f.repo, 'config', '--global', 'core.hooksPath', f.hooks)
+    expect((await f.install()).code).toBe(0)
+    await git(f.sandbox, f.repo, 'config', '--global', 'core.hooksPath', '/new-global')
+    expect((await runYunBox(f.sandbox, f.repo, ['hook', 'uninstall'])).code).toBe(0)
+    expect(await git(f.sandbox, f.repo, 'config', 'core.hooksPath')).toBe('/new-global')
+    await expect(git(f.sandbox, f.repo, 'config', '--local', '--get', 'core.hooksPath')).rejects.toThrow()
+  })
+
+  it('distinguishes missing dependencies, blocks missing originals and only clears explicit stale config', async () => {
+    const f = await fixture('node_modules/tool/hooks')
+    expect((await f.install()).code).toBe(0)
+    await rm(f.hooks, { recursive: true })
+    expect(await f.status()).toMatchObject({ hook: 'none', compatibility: { state: 'missing', missing: 'dependencies', registered: true } })
+    await writeFile(join(f.repo, 'allow'), '')
+    await expect(f.push()).rejects.toThrow()
+    await expect(readFile(join(f.repo, 'order'))).rejects.toThrow()
+    expect((await runYunBox(f.sandbox, f.repo, ['hook', 'clear-missing'])).code).toBe(1)
+    expect((await runYunBox(f.sandbox, f.repo, ['hook', 'uninstall'])).code).toBe(0)
+    expect(await f.status()).toMatchObject({ compatibility: { state: 'missing', registered: false } })
+    expect((await f.install()).code).toBe(1)
+    expect((await runYunBox(f.sandbox, f.repo, ['hook', 'clear-missing'])).code).toBe(0)
+    await git(f.sandbox, f.repo, 'config', 'core.hooksPath', 'old/hooks')
+    expect(await f.status()).toMatchObject({ compatibility: { state: 'missing', missing: 'directory' } })
+    expect((await runYunBox(f.sandbox, f.repo, ['hook', 'clear-missing'])).code).toBe(0)
+    await git(f.sandbox, f.repo, 'config', '--global', 'core.hooksPath', '/missing-inherited')
+    expect((await runYunBox(f.sandbox, f.repo, ['hook', 'clear-missing'])).code).toBe(1)
+    expect(await git(f.sandbox, f.repo, 'config', 'core.hooksPath')).toBe('/missing-inherited')
+  })
+
+  it('restores multi-valued config and rolls back when a later include overrides installation', async () => {
+    const f = await fixture()
+    await git(f.sandbox, f.repo, 'config', '--add', 'core.hooksPath', f.path)
+    expect((await f.install()).code).toBe(0)
+    expect((await runYunBox(f.sandbox, f.repo, ['hook', 'uninstall'])).code).toBe(0)
+    expect(await git(f.sandbox, f.repo, 'config', '--get-all', 'core.hooksPath')).toBe(`${f.path}\n${f.path}`)
+    await git(f.sandbox, f.repo, 'config', '--unset-all', 'core.hooksPath')
+    const include = join(f.sandbox.root, 'included-config')
+    await writeFile(include, `[core]\n hooksPath = "${f.path}"\n`)
+    await git(f.sandbox, f.repo, 'config', 'include.path', include)
+    expect((await f.install()).code).toBe(1)
+    await expect(git(f.sandbox, f.repo, 'config', '--local', '--no-includes', '--get', 'core.hooksPath')).rejects.toThrow()
+    await expect(readFile(join(f.repo, '.git/yunbox-hooks/yunbox-hooks.json'))).rejects.toThrow()
+    expect(await git(f.sandbox, f.repo, 'config', 'core.hooksPath')).toBe(f.path)
+    expect(await readFile(include, 'utf8')).toContain(f.path)
+  })
+
+  it('resolves relative hooks from each worktree and status from repository subdirectories', async () => {
+    const f = await fixture('team-hooks')
+    await git(f.sandbox, f.repo, 'add', 'team-hooks')
+    await git(f.sandbox, f.repo, 'commit', '-m', 'test: add hooks')
+    expect((await f.install()).code).toBe(0)
+    const worktree = join(f.sandbox.root, 'linked tree')
+    await git(f.sandbox, f.repo, 'worktree', 'add', '-b', 'linked', worktree)
+    await writeFile(join(worktree, 'allow'), '')
+    await f.push(worktree)
+    expect(await readFile(join(worktree, 'original-input'), 'utf8')).toBe(f.updates)
+    await expect(readFile(join(f.repo, 'original-input'))).rejects.toThrow()
+    expect(await f.status(join(worktree, 'team-hooks'))).toMatchObject({ hook: 'guard', compatibility: { state: 'active' } })
+    expect((await runYunBox(f.sandbox, worktree, ['hook', 'uninstall'])).code).toBe(0)
+    expect(await git(f.sandbox, f.repo, 'config', 'core.hooksPath')).toBe('team-hooks')
+    await git(f.sandbox, f.repo, 'config', 'extensions.worktreeConfig', 'true')
+    expect((await runYunBox(f.sandbox, worktree, ['hook', 'install', '--compatible', '--guard', f.guard])).code).toBe(0)
+    expect(await f.status()).toMatchObject({ compatibility: { state: 'pending' } })
+    expect(await f.status(worktree)).toMatchObject({ compatibility: { state: 'active' } })
+    expect((await runYunBox(f.sandbox, worktree, ['hook', 'uninstall'])).code).toBe(0)
+    await expect(git(f.sandbox, worktree, 'config', '--worktree', '--get', 'core.hooksPath')).rejects.toThrow()
+  })
+
+  it('restores the previous dispatcher when Git cannot write its config', async () => {
+    const f = await fixture()
+    expect((await f.install()).code).toBe(0)
+    const directory = await git(f.sandbox, f.repo, 'config', 'core.hooksPath')
+    const before = await readFile(join(directory, 'pre-push'), 'utf8')
+    await writeFile(join(f.repo, '.git/config.lock'), 'another Git process')
+    expect((await runYunBox(f.sandbox, f.repo, ['hook', 'install', '--compatible', '--no-confirm'])).code).toBe(1)
+    expect(await readFile(join(directory, 'pre-push'), 'utf8')).toBe(before)
+    expect(await f.status()).toMatchObject({ hook: 'guard', compatibility: { state: 'active' } })
+    expect(await readFile(join(f.hooks, 'pre-push'), 'utf8')).toBe(f.original)
+  })
+
+  it('keeps the registration discoverable when per-worktree config is enabled later', async () => {
+    const f = await fixture()
+    expect((await f.install()).code).toBe(0)
+    await git(f.sandbox, f.repo, 'config', 'extensions.worktreeConfig', 'true')
+    expect(await f.status()).toMatchObject({ scope: 'compatible', compatibility: { state: 'active' } })
+    expect((await runYunBox(f.sandbox, f.repo, ['hook', 'uninstall'])).code).toBe(0)
+    expect(await git(f.sandbox, f.repo, 'config', '--local', 'core.hooksPath')).toBe(f.path)
+  })
+
+  it('refuses altered dispatchers and recursive aliases without overwriting user files', async () => {
+    const f = await fixture()
+    expect((await f.install()).code).toBe(0)
+    const directory = await git(f.sandbox, f.repo, 'config', 'core.hooksPath')
+    if (process.platform !== 'win32') {
+      const alias = join(f.repo, 'alias')
+      await symlink(directory, alias)
+      await git(f.sandbox, f.repo, 'config', 'core.hooksPath', alias)
+      expect((await runYunBox(f.sandbox, f.repo, ['hook', 'repair', '--guard', f.guard])).code).toBe(1)
+      await git(f.sandbox, f.repo, 'config', 'core.hooksPath', directory)
+    }
+    await writeFile(join(directory, 'post-commit'), '#!/bin/sh\n# user edit\n')
+    expect(await f.status()).toMatchObject({ hook: 'none', compatibility: { state: 'modified' } })
+    expect((await f.install()).code).toBe(1)
+    expect((await runYunBox(f.sandbox, f.repo, ['hook', 'uninstall'])).code).toBe(1)
+    expect(await readFile(join(directory, 'post-commit'), 'utf8')).toContain('user edit')
+  })
+
+  it('runs a pre-existing YunBox check once and respects non-executable original hooks', async () => {
+    const f = await fixture()
+    await git(f.sandbox, f.repo, 'config', '--unset', 'core.hooksPath')
+    expect((await runYunBox(f.sandbox, f.repo, ['hook', 'install', '--guard', f.guard])).code).toBe(0)
+    await git(f.sandbox, f.repo, 'config', 'core.hooksPath', '.git/hooks')
+    expect((await f.install()).code).toBe(0)
+    await writeFile(join(f.repo, 'allow'), '')
+    await f.push()
+    expect(await readFile(join(f.repo, 'order'), 'utf8')).toBe('check\n')
+    // Status reflects the delegated guard even if the outer layer requests built-in inspection.
+    expect((await runYunBox(f.sandbox, f.repo, ['hook', 'install', '--compatible'])).code).toBe(0)
+    expect(await f.status()).toMatchObject({ hook: 'guard', scope: 'compatible' })
+    expect((await runYunBox(f.sandbox, f.repo, ['hook', 'uninstall'])).code).toBe(0)
+    await git(f.sandbox, f.repo, 'config', 'core.hooksPath', f.path)
+    if (process.platform !== 'win32') {
+      await chmod(join(f.hooks, 'pre-push'), 0o644)
+      expect((await f.install()).code).toBe(0)
+      await f.push()
+      await expect(readFile(join(f.repo, 'original-input'))).rejects.toThrow()
+    }
+  })
+
+  it('prevents real LFS upload on rejection and supports push/clone after the budget passes', async () => {
+    const f = await fixture('team-hooks')
+    await rm(join(f.hooks, 'pre-push'))
+    await git(f.sandbox, f.repo, 'lfs', 'install', '--local')
+    await git(f.sandbox, f.repo, 'lfs', 'track', '*.bin')
+    const asset = Buffer.alloc(4096, 42)
+    await writeFile(join(f.repo, 'asset.bin'), asset)
+    await git(f.sandbox, f.repo, 'add', '.gitattributes', 'asset.bin')
+    await git(f.sandbox, f.repo, 'commit', '-m', 'test: add LFS asset')
+    const remote = join(f.sandbox.root, 'remote.git')
+    await git(f.sandbox, f.repo, 'init', '--bare', remote)
+    await git(f.sandbox, f.repo, 'remote', 'add', 'origin', remote)
+    expect((await runYunBox(f.sandbox, f.repo, ['hook', 'install', '--compatible', '--no-confirm'])).code).toBe(0)
+    await git(f.sandbox, f.repo, 'config', 'yunbox.inspectFileBytes', '1')
+    await expect(git(f.sandbox, f.repo, 'push', 'origin', 'HEAD:main')).rejects.toThrow()
+    expect(await readdir(join(remote, 'lfs/objects')).catch(() => [])).toEqual([])
+    expect(await git(f.sandbox, remote, 'for-each-ref', '--format=%(refname)')).toBe('')
+    await git(f.sandbox, f.repo, 'config', 'yunbox.inspectFileBytes', '8192')
+    await git(f.sandbox, f.repo, 'push', 'origin', 'HEAD:main')
+    await git(f.sandbox, f.sandbox.root, 'lfs', 'install', '--skip-repo')
+    const clone = join(f.sandbox.root, 'clone')
+    await git(f.sandbox, f.sandbox.root, 'clone', remote, clone)
+    expect((await readFile(join(clone, 'asset.bin'))).equals(asset)).toBe(true)
+  }, 30_000)
+})

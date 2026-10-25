@@ -8,7 +8,7 @@ const REPOSITORY = 'https://github.com/YunLeFun/yunbox'
 
 // Planning notes stay next to the user docs (AGENTS.md links to them) but are
 // not part of the site; links to them go to GitHub instead.
-const INTERNAL_PAGES = ['plan.md', 'goal.md', 'goal-g2.md']
+const INTERNAL_PAGES = ['plan.md', 'plan-hook-compatibility.md', 'goal.md', 'goal-g2.md']
 
 /**
  * Rewrite relative links that leave the site (the repository README, the

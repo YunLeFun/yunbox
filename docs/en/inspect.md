@@ -137,7 +137,7 @@ yunbox hook uninstall
 
 By default, the wrapper calls the installed YunBox CLI and asks before an over-budget push. Cancelling or having nobody available to answer blocks the push. It works with the app closed; `--confirm` explicitly selects this default. `--guard` takes the absolute path of an executable; its exit code decides whether the original hook runs. The Workstation adapter only checks GitHub remotes.
 
-The original hook is kept as `pre-push.yunbox-original`, and its arguments and stdin are passed through unchanged. Installing again doesn't wrap the wrapper, and uninstalling restores the original file. The wrapper refuses to overwrite anything if it finds that you edited the wrapper, set a custom `core.hooksPath`, used a symbolic link, or have a backup it didn't record. If you use a custom hook manager, chain YunBox into it in sequence yourself. After moving or uninstalling the CLI or the guard, install the wrapper again.
+The original hook is kept as `pre-push.yunbox-original`, and its arguments and stdin are passed through unchanged. Installing again doesn't wrap the wrapper, and uninstalling restores the original file. The wrapper refuses to overwrite modified wrappers, symbolic links, or unregistered backups. For a custom `core.hooksPath`, use local compatibility mode below or chain YunBox through the original manager. After moving or uninstalling the CLI or the guard, install the wrapper again.
 
 The wrapper only controls the repository hook it saved. If other independently configured hooks also upload assets, their own managers have to put them in sequence. Running `git lfs install` after installing the wrapper may report that a hook already exists. To update the LFS hook, uninstall the wrapper, update the hook, then install the wrapper again. `git push --no-verify` skips the pre-push check entirely.
 
@@ -152,3 +152,38 @@ yunbox hook uninstall --global     # Restore each repository's original hooks
 Global mode sets Git's `core.hooksPath`, runs the check before the repository's original pre-push, and forwards the other standard Git hooks, including LFS checkout hooks. It refuses to overwrite an existing global or system hooks directory. Repository-specific directories override the global setting. Existing YunBox repository wrappers take precedence to avoid duplicate checks and retain their confirmation mode. Independently configured upload hooks still need their own manager to guarantee ordering.
 
 `git yunbox init` installs repository protection by default and asks in an interactive terminal; `--yes` or non-interactive runs accept the default. Use `init --no-hook` for storage only or `init --global-hook` to explicitly opt into global protection. These flags cannot be combined. Reinitialization preserves existing protection and LFS hooks. With global mode enabled, configure LFS through `yunbox init`; running `git lfs install` directly may report a wrapper conflict in the shared directory.
+
+
+## Local compatibility mode
+
+For repositories using Husky, `scripts/git-hooks`, or a deployment tool's hooks directory, compatibility mode preserves team hooks:
+
+```bash
+yunbox hook install --compatible             # Ask when over budget; then run the original pre-push
+yunbox hook install --compatible --no-confirm # Block over-budget pushes
+yunbox hook status --json                    # Check effective coverage
+yunbox hook repair                           # Reconnect after another tool resets the path
+yunbox hook uninstall                        # Restore the original local setting; keep later edits
+```
+
+The dispatcher lives in `yunbox-hooks` under Git's metadata directory. It changes only the local `core.hooksPath`, leaving `.husky`, project scripts, and `node_modules` untouched. Push input is captured once; Git's arguments and complete stdin reach both YunBox and the original `pre-push`. Rejection, cancellation, or a failed check prevents the original checks and uploads. Other standard Git hooks are forwarded with their arguments, stdin, exit codes, and working directory intact. Updates to original scripts take effect immediately. An existing YunBox repository wrapper remains authoritative, including its confirmation mode, to avoid duplicate checks.
+
+| Scenario | Behavior |
+| --- | --- |
+| Standard `.git/hooks` | Keep the repository wrapper or optional global mode |
+| Husky | Forward to its configured directory, such as `.husky/_`, preserving user scripts; recheck after installing dependencies |
+| Project hooks directory | Save the original path and local setting for restoration; relative paths retain Git's hook working-directory semantics |
+| Generated directory | Prefer the tool's documented extension point when available; the generic dispatcher only forwards and never edits generated files |
+| Missing original directory | Stop execution until restored; `.husky` / `node_modules` paths suggest missing dependencies, without automatically clearing settings |
+
+If a directory is obsolete, uninstall compatibility mode first, then run `yunbox hook clear-missing`. This only removes a single missing path stored directly in the current local configuration scope. Inherited settings, multiple values, and existing directories must be handled at their source. Check `hook status` afterwards: protection depends on the configuration that becomes effective.
+
+In `hook status --json`, `globalInstalled` only indicates global enablement; `hook` and `scope` describe effective repository protection. Compatibility mode uses `scope: compatible`. Its `compatibility.state` is `active`, `pending`, `overridden`, `missing`, or `modified`. If Husky or another tool resets the path, repeated installation reports that protection was overridden. `hook repair` explicitly adopts the currently configured directory as the new forwarding target. Uninstall preserves a path subsequently changed by the user.
+
+Linked worktrees with shared configuration share the dispatcher, resolving relative paths in their own working trees. When `extensions.worktreeConfig` is enabled, new installations change only the current worktree's configuration. A later Git `include` or command-level setting can still override installation; YunBox verifies the effective path and rolls back if it did not take effect. Modified dispatchers or manifests are retained for inspection.
+
+On macOS, **Help → Setup Assistant → Enable push protection** provides connect, repair, restore, and obsolete-setting cleanup actions. It shows global enablement separately from coverage of known repositories, with unreadable repositories counted separately. It refreshes when opened, when the app becomes active, or when you choose **Check again**. Recheck after installing dependencies: global enablement does not mean every repository is protected.
+
+For compatible repositories, `yunbox init` configures LFS filters without writing team hooks. If it cannot recognize `git lfs pre-push` in the original hook or Husky user script, it asks you to integrate LFS through the original manager using `git lfs update --manual`. Complex scripts invoking LFS indirectly require maintainer review and explicit integration. Upload is never registered as a separate independent hook.
+
+As with the standard wrapper, independently configured upload hooks still require ordering in their own manager, and `--no-verify` retains its Git behavior. Consult the [Git hook reference](https://git-scm.com/docs/githooks) and [Husky documentation](https://typicode.github.io/husky/how-to.html) for project-specific extension points.

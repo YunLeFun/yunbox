@@ -8,6 +8,7 @@ struct OnboardingView: View {
     @State private var setup = OnboardingStore()
     @State private var step = 0
     @State private var choosingRepository = false
+    @State private var clearingMissing = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -55,6 +56,14 @@ struct OnboardingView: View {
         .padding(28)
         .frame(width: 620, height: 540)
         .task(id: inspector.repository?.path) { await setup.refresh(inspector: inspector) }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            if !setup.busy && !setup.scanning { Task { await setup.refresh(inspector: inspector, updateOptions: false) } }
+        }
+        .confirmationDialog("清理失效的本机钩子配置？", isPresented: $clearingMissing) {
+            Button("清理失效配置", role: .destructive) { Task { await setup.install(inspector: inspector, action: .clearMissing) } }
+        } message: {
+            Text("仅在确认项目已不再使用这个钩子目录时清理。若尚未安装依赖，请先恢复依赖，再重新检查。")
+        }
         .fileImporter(isPresented: $choosingRepository, allowedContentTypes: [.folder]) { result in
             if case .success(let url) = result, !inspector.select(url) {
                 setup.error = String(localized: "请选择 Git 仓库文件夹。")
@@ -110,12 +119,33 @@ struct OnboardingView: View {
             Toggle("超限时询问是否继续", isOn: $setup.confirm)
             Text("macOS 弹出确认框；终端环境在终端询问。无人确认时取消推送，禁推时段始终阻止推送。")
                 .font(.caption).foregroundStyle(.secondary)
-            Toggle("应用到本机所有仓库（可选）", isOn: $setup.globally)
+            Toggle("启用全局保护（普通仓库）", isOn: $setup.globally)
             Text("默认只保护当前仓库。全局模式保留仓库原有钩子；仓库自定义钩子目录会覆盖全局设置。")
                 .font(.caption).foregroundStyle(.secondary)
-            if setup.status?.customPath == true {
-                Label("检测到自定义钩子目录，请按推送检查说明接入。", systemImage: "exclamationmark.triangle")
-                    .font(.callout).foregroundStyle(.orange)
+            Label(setup.status?.globalInstalled == true ? "全局开关已开启" : "全局开关未开启", systemImage: "globe")
+                .font(.callout)
+            if let compatibility = setup.status?.compatibility {
+                switch compatibility.state {
+                case "overridden":
+                    Label("保护已被覆盖，请修复兼容接入。", systemImage: "exclamationmark.shield")
+                        .foregroundStyle(.orange)
+                case "modified":
+                    Label("本机调度器已被修改，请检查后再接入。", systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.orange)
+                case "pending":
+                    Text("兼容接入会保留团队钩子，检查通过后才运行原 pre-push；其他钩子继续转发。")
+                        .font(.callout)
+                case "active":
+                    Label("已兼容接入，团队钩子保持生效", systemImage: "link")
+                default: EmptyView()
+                }
+                if let missing = compatibility.missing {
+                    Text(missing == "dependencies" ? "原钩子目录不存在，可能尚未安装依赖。请恢复依赖后重新检查。" : "原钩子目录不存在。请恢复目录；确认是遗留配置后才清理。")
+                        .font(.callout).foregroundStyle(.orange)
+                }
+                if let original = compatibility.originalPath {
+                    Text(verbatim: original).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                }
             }
             if let status = setup.status, status.isProtected {
                 Label(status.scope == "global" ? "当前仓库已受全局保护" : "当前仓库已启用推送保护", systemImage: "checkmark.shield")
@@ -125,13 +155,48 @@ struct OnboardingView: View {
                 Label("当前仓库尚未启用 YunBox 推送保护", systemImage: "shield.slash").font(.callout)
             }
             HStack {
-                Button("应用保护设置") { Task { await setup.install(inspector: inspector) } }
-                    .buttonStyle(.borderedProminent).disabled(setup.busy || setup.status?.repository != true || setup.status?.customPath == true)
+                if setup.status?.isOverridden == true {
+                    Button("修复兼容接入") { Task { await setup.install(inspector: inspector, action: .repair) } }
+                        .buttonStyle(.borderedProminent)
+                } else {
+                    Button(setup.status?.needsCompatibility == true ? "兼容接入当前仓库" : "应用保护设置") {
+                        Task { await setup.install(inspector: inspector) }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(setup.status?.repository != true || setup.status?.compatibility?.missing != nil || setup.status?.compatibility?.state == "modified")
+                }
+                if setup.status?.compatibility?.registered == true {
+                    Button("恢复原钩子配置") { Task { await setup.install(inspector: inspector, action: .restore) } }
+                } else if setup.status?.compatibility?.missing != nil {
+                    Button("清理失效配置…") { clearingMissing = true }
+                }
+                Button("重新检查") { Task { await setup.refresh(inspector: inspector, updateOptions: false) } }
+                    .disabled(setup.scanning)
+            }
+            HStack {
                 if setup.status?.globalInstalled == true {
-                    Button("移除全局保护") { Task { await setup.install(inspector: inspector, removeGlobal: true) } }.disabled(setup.busy)
+                    Button("移除全局保护") { Task { await setup.install(inspector: inspector, action: .removeGlobal) } }
                 }
                 Link("推送检查说明", destination: DocsPage.inspect.url)
             }
+            Divider()
+            Text("已知仓库：已保护 \(setup.coverage.protected) 个，\(setup.coverage.pending) 个待兼容接入")
+                .font(.callout)
+            Text("被覆盖 \(setup.coverage.overridden) 个，未启用 \(setup.coverage.unprotected) 个，无法读取 \(setup.coverage.unavailable) 个")
+                .font(.caption).foregroundStyle(.secondary)
+            Text("仅统计客户端已知仓库；全局开关开启不代表所有仓库都已受保护。安装依赖后请重新检查。")
+                .font(.caption).foregroundStyle(.secondary)
+            if setup.scanning { ProgressView("正在检查已知仓库…") }
+            if !setup.attentionPaths.isEmpty {
+                DisclosureGroup("查看需要处理的仓库") {
+                    ForEach(setup.attentionPaths, id: \.self) { path in
+                        Button { _ = inspector.select(URL(fileURLWithPath: path)) } label: {
+                            Text(verbatim: path).font(.caption).lineLimit(1).truncationMode(.middle)
+                        }.help(path)
+                    }
+                }
+            }
+
         }
         .disabled(setup.busy)
     }

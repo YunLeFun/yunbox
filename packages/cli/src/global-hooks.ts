@@ -6,8 +6,8 @@ import { CliError, print } from './context.ts'
 import { configDirectory } from './cos/secret-store.ts'
 import { readGitConfig, runGit, runGitChecked } from './git.ts'
 
-// Forward the standard Git hooks to the repository, including LFS checkout hooks.
-const EVENTS = ['applypatch-msg', 'pre-applypatch', 'post-applypatch', 'pre-commit', 'pre-merge-commit', 'prepare-commit-msg', 'commit-msg', 'post-commit', 'pre-rebase', 'post-checkout', 'post-merge', 'pre-push', 'pre-receive', 'update', 'proc-receive', 'post-receive', 'post-update', 'reference-transaction', 'push-to-checkout', 'pre-auto-gc', 'post-rewrite', 'sendemail-validate', 'fsmonitor-watchman', 'p4-changelist', 'p4-prepare-changelist', 'p4-post-changelist', 'p4-pre-submit', 'post-index-change']
+/** Standard Git hook events forwarded by YunBox dispatchers, including LFS checkout hooks. */
+export const GIT_HOOK_EVENTS = ['applypatch-msg', 'pre-applypatch', 'post-applypatch', 'pre-commit', 'pre-merge-commit', 'prepare-commit-msg', 'commit-msg', 'post-commit', 'pre-rebase', 'post-checkout', 'post-merge', 'pre-push', 'pre-receive', 'update', 'proc-receive', 'post-receive', 'post-update', 'reference-transaction', 'push-to-checkout', 'pre-auto-gc', 'post-rewrite', 'sendemail-validate', 'fsmonitor-watchman', 'p4-changelist', 'p4-prepare-changelist', 'p4-post-changelist', 'p4-pre-submit', 'post-index-change']
 const MANIFEST = 'yunbox-hooks.json'
 
 /** Directory owned exclusively by YunBox's optional global hook dispatcher. */
@@ -31,11 +31,11 @@ export async function globalHookFiles(context: CliContext): Promise<Record<strin
     if (!(await lstat(join(directory, MANIFEST))).isFile())
       throw new Error('not a file')
     const state = JSON.parse(await readFile(join(directory, MANIFEST), 'utf8')) as { version: number, files: Record<string, string> }
-    if (state.version !== 1 || Object.keys(state.files).sort().join() !== [...EVENTS].sort().join())
+    if (state.version !== 1 || Object.keys(state.files).sort().join() !== [...GIT_HOOK_EVENTS].sort().join())
       throw new Error('invalid manifest')
-    if ((await readdir(directory)).sort().join() !== [...EVENTS, MANIFEST].sort().join())
+    if ((await readdir(directory)).sort().join() !== [...GIT_HOOK_EVENTS, MANIFEST].sort().join())
       throw new Error('unexpected files')
-    for (const name of EVENTS) {
+    for (const name of GIT_HOOK_EVENTS) {
       const stat = await lstat(join(directory, name))
       if (!stat.isFile() || ((stat.mode & 0o111) === 0 && process.platform !== 'win32') || await readFile(join(directory, name), 'utf8') !== state.files[name])
         throw new Error('modified hook')
@@ -74,7 +74,7 @@ export async function manageGlobalHooks(context: CliContext, operation: string, 
     print(context, '已移除全局推送检查，仓库原有钩子保持不变')
     return 0
   }
-  const files = Object.fromEntries(EVENTS.map(event => [event, globalWrapper(event, command!)]))
+  const files = Object.fromEntries(GIT_HOOK_EVENTS.map(event => [event, globalWrapper(event, command!)]))
   await mkdir(dirname(directory), { recursive: true })
   const staging = await mkdtemp(join(dirname(directory), '.hooks-'))
   const backup = `${staging}-previous`

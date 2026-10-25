@@ -18,3 +18,29 @@ import Testing
         try HookStatus.decode(Data(json.replacingOccurrences(of: #""version":1"#, with: #""version":2"#).utf8), exitCode: 0)
     }
 }
+
+@Test func coverageCountsEffectiveProtectionAndCompatibilityWithoutAssumingGlobalCoverage() throws {
+    let base = #"{"version":1,"repository":true,"hook":"none","confirm":true,"globalInstalled":true,"customPath":true,"node":"24.14.0","nodeReady":true,"git":{"found":true},"lfs":{"found":true},"ready":true}"#
+    func status(_ compatibility: String?, protected: Bool = false) throws -> HookStatus {
+        var json = base
+        if let compatibility {
+            json = String(json.dropLast()) + ",\"compatibility\":" + compatibility + "}"
+        }
+        if protected { json = json.replacingOccurrences(of: #""hook":"none""#, with: #""hook":"inspect""#) }
+        return try HookStatus.decode(Data(json.utf8), exitCode: 0)
+    }
+    let active = try status(#"{"registered":true,"state":"active","originalPath":".husky/_"}"#, protected: true)
+    let pending = try status(#"{"registered":false,"state":"pending"}"#)
+    let overwritten = try status(#"{"registered":true,"state":"overridden"}"#)
+    let missing = try status(#"{"registered":true,"state":"missing","missing":"dependencies"}"#)
+    let coverage = HookCoverage(statuses: [active, pending, overwritten, missing], unavailable: 2)
+    #expect(active.isProtected)
+    #expect(!missing.isProtected)
+    #expect(overwritten.isOverridden)
+    #expect(pending.needsCompatibility)
+    #expect(coverage.protected == 1)
+    #expect(coverage.pending == 1)
+    #expect(coverage.overridden == 1)
+    #expect(coverage.unprotected == 1)
+    #expect(coverage.unavailable == 2)
+}

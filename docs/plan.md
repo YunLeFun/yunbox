@@ -263,7 +263,7 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - 不查询 LFS 服务，`uploadBytes=null` 明确实际上传量未知。新分支 LFS 候选可能包含远端已有素材；用户可调整本地预算，后续可增加 Batch 存在性检查。
 - **直连 COS 时查询已有对象（2026-10-20）**：直连模式（`.git/config` 登记了 `yunbox` 传输代理、仓库有 `.yunbox/config`）且本机解析到密钥时，`inspect` 对每个 LFS 候选做一次 HEAD，和传输代理上传前的检查相同，所以 `yunbox policy` 的最小权限就够，不需要列出 bucket。已存在且大小一致的不计入上传量，`remoteChecked=true`、`uploadBytes` 为确定值，LFS 预算、单文件预算和 `changes` 的上传大小都只算需要上传的对象；大小不一致的算作需要上传。并发 8、总时限 5 秒（`YUNBOX_INSPECT_REMOTE_TIMEOUT_MS` 可调，`0` 关闭），全有或全无：任一请求失败或超时就作废整次查询，回到 `uploadBytes=null` 并加一条提示，不阻止推送、不把失败当成已存在。提示只含 HTTP 状态或连接错误，不含密钥和签名地址。服务端模式仍不查询 Batch API。
 - 限制：读取 macOS 钥匙串的密钥不在 5 秒时限内；钥匙串被锁时会先弹出解锁框，这和随后 git-lfs 上传时一样。
-- 多个独立 Git 钩子不会在首个失败后自动停止。新增可安装、可撤销的仓库包装层，检查通过后才执行保存的原钩子；不覆盖自定义 hooksPath。其他独立上传钩子仍需各自串联。
+- 多个独立 Git 钩子不会在首个失败后自动停止。新增可安装、可撤销的仓库包装层，检查通过后才执行保存的原钩子；初版不覆盖自定义 hooksPath；2026-10-25 新增显式本机兼容接入，见下文。其他独立上传钩子仍需各自串联。
 - 限制：统计已提交内容，不扫描未提交构建目录；超出 pack 估算上限只返回下界。首次扫描大型历史可能较慢，Git 子进程有 60 秒超时、分析输出 64 MiB 上限，失败时明确阻止推送。
 - 验证使用隔离 HOME 的本地 Git / git-lfs；没有访问云存储或改变 G2 的生产验收状态。使用和 JSON 字段见 [inspect.md](./inspect.md)。
 
@@ -493,3 +493,11 @@ npm 生态：`ts-git-lfs`、`r2-lfs`、`@ferrlabs/lfsx` 等都是 2026 年才建
 - **S3 提供方新增**：0.1.4 及更早的命令行读不到 `storage.provider = s3`，在 S3 仓库里会提示「还没有 .yunbox/config」。团队改用 S3 前，所有协作者要先升级。
 - **S3 提供方新增**：单个 PUT 的上限（AWS 和 R2 都是 5 GB 左右）高于本项目 2 GB 的单文件上限，所以没有实现分片上传；以后放宽单文件上限时要加分片，并且分片上传要用 `CompleteMultipartUpload` 的条件写入。
 - **S3 提供方新增**：签名里的时间来自本机时钟，偏差超过 15 分钟时 S3 拒绝请求（`RequestTimeTooSkewed`，错误信息会提示校准时间）。HEAD 没有响应体，这时 `doctor` 只能显示 HTTP 403，看不出是时钟问题。
+
+
+### 本机钩子兼容接入（2026-10-25）
+
+- 实施计划见 [plan-hook-compatibility.md](./plan-hook-compatibility.md)。新增 `hook install --compatible`、`hook repair`、`hook clear-missing`，在 Git 元数据目录保存调度器与原配置，原团队目录只读；卸载仅恢复仍由 YunBox 持有的配置。
+- 参数和 stdin 串行转交，检查失败不执行原上传；其他标准钩子转发，既有 YunBox 仓库包装层保持优先，避免重复检查。原目录缺失时停止执行，Husky/node_modules 路径提示可能缺少依赖。
+- CLI JSON 增加兼容接入状态，macOS 新手引导展示全局开关、当前仓库实际状态和已知仓库覆盖统计，提供接入、修复、恢复与失效配置清理。统计只涉及已知仓库，读取失败不计入已保护。
+- linked worktree 保留相对路径语义；启用 worktree 配置后按其范围写入。后置 include 或命令级覆盖导致安装不生效时回滚。独立配置的上传钩子仍需要其管理器保证顺序；未在实际部署工具的私有扩展接口中注入逻辑。

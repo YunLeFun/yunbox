@@ -2,7 +2,7 @@ import type { CliContext } from './context.ts'
 import type { GitResult } from './git.ts'
 import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import { hookStatus, repositoryHookPath, runHook } from './commands/hook.ts'
 import { CliError } from './context.ts'
 import { runGit, shellQuote } from './git.ts'
@@ -46,6 +46,20 @@ export async function installLfsWithHooks(context: CliContext): Promise<GitResul
   const global = await usesGlobalHooks(context)
   const path = await repositoryHookPath(context)
   const status = await hookStatus(context, false)
+  if (status.compatibility) {
+    // Never let git-lfs overwrite a dispatcher, Husky script or generated dependency.
+    // Only configure filters; team-managed hooks must already invoke LFS themselves.
+    const installed = await runGit(context, ['lfs', 'install', '--skip-repo'])
+    if (installed.code !== 0)
+      return installed
+    const original = status.compatibility.originalPath
+    const candidates = original ? [resolve(context.cwd, original, 'pre-push'), ...(original.replaceAll('\\', '/').endsWith('/_') ? [resolve(context.cwd, original, '../pre-push')] : [])] : []
+    for (const candidate of candidates) {
+      if (/\bgit\s+lfs\s+pre-push\b/.test(await readFile(candidate, 'utf8').catch(() => '')))
+        return installed
+    }
+    throw new CliError('团队钩子由原管理器维护，请按 git lfs update --manual 将 git lfs pre-push "$@" 接入原 pre-push 后重试；未修改项目钩子或本机调度器')
+  }
   if (status.scope !== 'repository')
     return runGit(context, [...(global ? ['-c', `core.hooksPath=${dirname(path)}`] : []), 'lfs', 'install'])
 

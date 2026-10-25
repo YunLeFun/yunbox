@@ -1,4 +1,5 @@
 import type { Stats } from 'node:fs'
+import type { CompatibilityStatus } from '../compatibility-hooks.ts'
 import type { CliContext } from '../context.ts'
 import type { ToolVersion } from '../git.ts'
 import { randomUUID } from 'node:crypto'
@@ -7,6 +8,7 @@ import { dirname, isAbsolute, resolve } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
+import { compatibilityStatus, manageCompatibilityHooks } from '../compatibility-hooks.ts'
 import { CliError, print } from '../context.ts'
 import { compareVersions, detectGitLfsVersion, detectGitVersion, findRepositoryRoot, MIN_GIT_LFS_VERSION, MIN_GIT_VERSION, readGitConfig, runGit, runGitChecked, shellQuote } from '../git.ts'
 import { globalHookFiles, globalHooksDirectory, manageGlobalHooks, usesGlobalHooks } from '../global-hooks.ts'
@@ -19,7 +21,9 @@ interface HookState {
   hadOriginal: boolean
 }
 
-export const hookHelp = `用法：yunbox hook install [--global] [--no-confirm | --guard <absolute-path>]
+export const hookHelp = `用法：yunbox hook install [--global | --compatible] [--no-confirm | --guard <absolute-path>]
+      yunbox hook repair [--no-confirm | --guard <absolute-path>]
+      yunbox hook clear-missing
       yunbox hook uninstall [--global] | yunbox hook status [--json]
 
 安装串行 pre-push 包装层：检查通过后才执行原有钩子（包括 git-lfs 上传）。
@@ -29,7 +33,9 @@ export const hookHelp = `用法：yunbox hook install [--global] [--no-confirm |
 --global 可选：本机所有未自定义 core.hooksPath 的仓库；原有仓库钩子仍串行执行。
 纯终端确认：git config yunbox.confirmUI terminal（macOS 也支持）；恢复自动选择用 auto。
 --guard 指定额外的确认程序，例如 ~/.local/libexec/git-confirm-large-push。
-有自定义 core.hooksPath 或非普通文件钩子时拒绝安装，避免改动共享配置。
+--compatible：本机串联已有 core.hooksPath，保留团队脚本；uninstall 恢复原配置。
+repair：保护被覆盖后重新接入当前目录；clear-missing：显式清理本机失效目录配置。
+原目录缺失时先恢复依赖/目录；不修改 .husky 或 node_modules 中的脚本。
 `
 
 /** Install or remove a fail-fast chain around the existing repository pre-push hook. */
@@ -39,23 +45,26 @@ export async function runHook(context: CliContext, args: string[]): Promise<numb
     return 0
   }
   const [operation, ...rest] = args
-  const { values } = parseArgs({ args: rest, options: { 'guard': { type: 'string' }, 'confirm': { type: 'boolean' }, 'no-confirm': { type: 'boolean' }, 'global': { type: 'boolean' }, 'json': { type: 'boolean' } } })
-  if (!['install', 'uninstall', 'status'].includes(operation!) || (operation !== 'install' && (values.guard || values.confirm || values['no-confirm'])) || (values.guard && (values.confirm || values['no-confirm'])) || (values.confirm && values['no-confirm']) || (values.json && operation !== 'status'))
+  const { values } = parseArgs({ args: rest, options: { 'guard': { type: 'string' }, 'confirm': { type: 'boolean' }, 'no-confirm': { type: 'boolean' }, 'global': { type: 'boolean' }, 'compatible': { type: 'boolean' }, 'json': { type: 'boolean' } } })
+  if (!['install', 'uninstall', 'status', 'repair', 'clear-missing'].includes(operation!) || (!['install', 'repair'].includes(operation!) && (values.guard || values.confirm || values['no-confirm'])) || (values.guard && (values.confirm || values['no-confirm'])) || (values.confirm && values['no-confirm']) || (values.json && operation !== 'status') || (values.compatible && (values.global || operation !== 'install')) || (values.global && ['repair', 'clear-missing'].includes(operation!)))
     throw new CliError(hookHelp, 2)
   if (operation === 'status') {
     const status = await hookStatus(context)
-    print(context, values.json ? JSON.stringify(status) : `推送保护：${status.hook} (${status.scope ?? 'none'})${status.confirm ? '，超限询问' : ''}\n全局钩子：${status.globalInstalled ? '已安装' : '未安装'}`)
+    print(context, values.json ? JSON.stringify(status) : `推送保护：${status.hook} (${status.scope ?? 'none'})${status.confirm ? '，超限询问' : ''}${status.compatibility ? `\n兼容接入：${status.compatibility.state}${status.compatibility.state === 'overridden' ? '（保护已被覆盖，运行 yunbox hook repair）' : ''}${status.compatibility.missing ? '（原目录缺失，请恢复依赖/目录，或确认遗留后 hook clear-missing）' : ''}` : ''}\n全局钩子：${status.globalInstalled ? '已安装' : '未安装'}`)
     return 0
   }
-  const command = operation === 'install' ? await hookCommand(values.guard, !values['no-confirm']) : undefined
+  const command = ['install', 'repair'].includes(operation!) ? await hookCommand(values.guard, !values['no-confirm']) : undefined
   if (values.global)
     return manageGlobalHooks(context, operation!, command)
   const root = await findRepositoryRoot(context)
   if (!root)
     throw new CliError('当前目录不在 Git 仓库里')
   const repo = { ...context, cwd: root }
+  const compatibility = (await compatibilityStatus(repo)).compatibility
+  if (values.compatible || ['repair', 'clear-missing'].includes(operation!) || compatibility?.registered)
+    return manageCompatibilityHooks(repo, operation!, command)
   if (await readGitConfig(repo, 'core.hooksPath') !== undefined && !await usesGlobalHooks(repo))
-    throw new CliError('已有自定义 core.hooksPath，请在原钩子管理器中串行接入检查，不自动修改共享钩子')
+    throw new CliError('已有自定义 core.hooksPath，运行 yunbox hook install --compatible 保留原目录并接入；或在原管理器中串行接入')
   const hook = await repositoryHookPath(repo)
   const backup = `${hook}.yunbox-original`
   const statePath = `${hook}.yunbox.json`
@@ -177,7 +186,8 @@ export interface HookStatus {
   version: 1
   repository: boolean
   hook: 'inspect' | 'guard' | 'none'
-  scope?: 'repository' | 'global'
+  scope?: 'repository' | 'global' | 'compatible'
+  compatibility?: CompatibilityStatus
   confirm: boolean
   globalInstalled: boolean
   customPath: boolean
@@ -191,6 +201,8 @@ export interface HookStatus {
 /** Read effective protection and prerequisites for the desktop setup flow. */
 export async function hookStatus(context: CliContext, tools = true): Promise<HookStatus> {
   const root = await findRepositoryRoot(context)
+  if (root)
+    context = { ...context, cwd: root }
   const configured = await readGitConfig(context, 'core.hooksPath')
   const global = await runGit(context, ['config', '--global', '--get', 'core.hooksPath'])
   let globalFiles: Record<string, string> | undefined
@@ -201,8 +213,13 @@ export async function hookStatus(context: CliContext, tools = true): Promise<Hoo
   const globalInstalled = global.stdout.trim() === globalHooksDirectory(context) && !!globalFiles
   const globalEffective = configured === globalHooksDirectory(context) && !!globalFiles
   let wrapper: string | undefined
-  let scope: 'repository' | 'global' | undefined
-  if (root && (configured === undefined || globalEffective)) {
+  let scope: HookStatus['scope']
+  const compatible = root ? await compatibilityStatus(context) : {}
+  if (compatible.wrapper) {
+    wrapper = compatible.wrapper
+    scope = 'compatible'
+  }
+  if (!wrapper && root && (configured === undefined || globalEffective)) {
     try {
       const hook = await repositoryHookPath(context)
       const state = JSON.parse(await readFile(`${hook}.yunbox.json`, 'utf8')) as HookState
@@ -226,9 +243,10 @@ export async function hookStatus(context: CliContext, tools = true): Promise<Hoo
     repository: !!root,
     hook: (wrapper ? wrapper.includes(' inspect --push --stdin ') ? 'inspect' : 'guard' : 'none') as 'inspect' | 'guard' | 'none',
     scope,
+    ...(compatible.compatibility ? { compatibility: compatible.compatibility } : {}),
     confirm: !!wrapper?.includes(' --confirm'),
     globalInstalled,
-    customPath: configured !== undefined && !globalEffective,
+    customPath: configured !== undefined && !globalEffective && scope !== 'compatible',
     ...(tools ? { node: process.versions.node, nodeReady, git, lfs, ready: nodeReady && !!git?.found && compareVersions(git.version, MIN_GIT_VERSION) >= 0 && !!lfs?.found && compareVersions(lfs.version, MIN_GIT_LFS_VERSION) >= 0 } : {}),
   }
 }
