@@ -4,6 +4,8 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ## Unreleased
 
+## 0.1.10 - 2026-10-25
+
 ### Added
 
 - Push protection gains local compatibility mode for Husky and custom project hooks. Original checks and uploads run only after YunBox passes, with repair for overridden protection, configuration restoration, and missing-directory diagnostics.
