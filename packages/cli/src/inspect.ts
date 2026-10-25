@@ -104,19 +104,22 @@ interface Blob {
 
 /** Inspect ordinary Git blobs and LFS pointers, without downloading or uploading content. */
 export async function inspectPush(context: CliContext, range: InspectionRange, limits: InspectionLimits): Promise<PushInspection> {
-  const gitBlobs = await readBlobs(context, range.git)
-  const lfsBlobs = range.git.join('\n') === range.lfs.join('\n') ? gitBlobs : await readBlobs(context, range.lfs)
+  const packCapBytes = Math.max(10 * 1024 * 1024, limits.gitBytes)
+  const gitQuery = readBlobs(context, range.git)
+  const [gitBlobs, lfsBlobs, history, pack] = await Promise.all([
+    gitQuery,
+    range.git.join('\n') === range.lfs.join('\n') ? gitQuery : readBlobs(context, range.lfs),
+    readHistory(context, range.lfs),
+    range.git.length
+      ? inspectGit(context, ['pack-objects', '--revs', '--stdout', '--thin', '--delta-base-offset', '-q'], revisions(range.git), packCapBytes)
+      : { bytes: 0, complete: true },
+  ])
   const allBlobs = new Map([...gitBlobs, ...lfsBlobs].map(blob => [blob.oid, blob]))
   const pointers = await readPointers(context, [...allBlobs.values()])
-  const history = await readHistory(context, range.lfs)
   const paths = history.paths
   const warnings = [...range.warnings]
   if (allBlobs.size && paths.size === 0)
     warnings.push('无法确定文件路径，报告以对象 ID 标识内容')
-  const packCapBytes = Math.max(10 * 1024 * 1024, limits.gitBytes)
-  const pack = range.git.length
-    ? await inspectGit(context, ['pack-objects', '--revs', '--stdout', '--thin', '--delta-base-offset', '-q'], revisions(range.git), packCapBytes)
-    : { bytes: 0, complete: true }
   const gitFiles = gitBlobs.filter(blob => !pointers.has(blob.oid)).map(blob => fileEntry(blob, paths.get(blob.oid) ?? [], limits.fileBytes))
   const lfsFiles = new Map<string, InspectionFile>()
   let pointerBytes = 0

@@ -4,6 +4,10 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ## Unreleased
 
+### Changed
+
+- The macOS over-budget confirmation opens faster, showing the destination, exceeded budgets and decision buttons before loading the file list. Diffs remain on demand, and closing the confirmation window cancels the push.
+
 ## 0.1.8 - 2026-10-25
 
 ### Changed

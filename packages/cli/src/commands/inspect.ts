@@ -100,27 +100,34 @@ export async function runInspect(context: CliContext, args: string[]): Promise<n
         return 1
       }
     }
-    const limits = {
-      gitBytes: await readLimit(repo, values['git-limit'], 'yunbox.inspectGitBytes', 900 * 1024),
-      lfsBytes: await readLimit(repo, values['lfs-limit'], 'yunbox.inspectLfsBytes', 100 * 1024 * 1024),
-      fileBytes: await readLimit(repo, values['file-limit'], 'yunbox.inspectFileBytes', 10 * 1024 * 1024),
-    }
+    const [gitBytes, lfsBytes, fileBytes] = await Promise.all([
+      readLimit(repo, values['git-limit'], 'yunbox.inspectGitBytes', 900 * 1024),
+      readLimit(repo, values['lfs-limit'], 'yunbox.inspectLfsBytes', 100 * 1024 * 1024),
+      readLimit(repo, values['file-limit'], 'yunbox.inspectFileBytes', 10 * 1024 * 1024),
+    ])
+    const limits = { gitBytes, lfsBytes, fileBytes }
     const updates = values.stdin ? await readUpdates(context) : undefined
     const range = await resolveInspectionRange(repo, { updates, base: values.base, head: values.head, remote: values.remote })
-    const report = await inspectPush(repo, range, limits)
+    // Destination labels and transfer settings are independent read-only queries.
+    const [report, display] = await Promise.all([
+      inspectPush(repo, range, limits),
+      json
+        ? undefined
+        : Promise.all([
+            describePush(repo, { remote: values.remote, updates, head: values.head }),
+            readTransferSummary(repo),
+          ]),
+    ])
     if (values.json) {
       context.stdout.write(`${JSON.stringify(report)}\n`)
     }
     else {
-      const [push, transfer] = await Promise.all([
-        describePush(repo, { remote: values.remote, updates, head: values.head }),
-        readTransferSummary(repo),
-      ])
+      const [push, transfer] = display!
       context.stdout.write(formatInspection(report, top, { ...push, transfer, style: terminalFor(context) }))
     }
     if (report.status === 'ok')
       return 0
-    const reply = values.confirm ? await askPush(repo, report, { remote: values.remote, updates, head: values.head, ui: values['confirm-ui'] as ConfirmUi | undefined }) : undefined
+    const reply = values.confirm ? await askPush(repo, report, { push: display?.[0], remote: values.remote, updates, head: values.head, ui: values['confirm-ui'] as ConfirmUi | undefined }) : undefined
     if (values.confirm)
       context.stderr.write(terminalFor(context, 'stderr').paint(reply?.answer === 'continue' ? 'success' : 'warning', formatReply(reply)))
     if (reply?.answer === 'continue') {

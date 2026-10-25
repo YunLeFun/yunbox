@@ -1,19 +1,5 @@
 import type { CliContext } from './context.ts'
 import packageJson from '../package.json' with { type: 'json' }
-import { runBuckets } from './commands/buckets.ts'
-import { runClone } from './commands/clone.ts'
-import { runDoctor } from './commands/doctor.ts'
-import { runFreeze } from './commands/freeze.ts'
-import { runHistory } from './commands/history.ts'
-import { runHook } from './commands/hook.ts'
-import { runInit } from './commands/init.ts'
-import { runInspect } from './commands/inspect.ts'
-import { runLfsAgent } from './commands/lfs-agent.ts'
-import { runLogin, runLogout } from './commands/login.ts'
-import { runPolicy } from './commands/policy.ts'
-import { runStatus } from './commands/status.ts'
-import { runSubaccount } from './commands/subaccount.ts'
-import { runTypes } from './commands/types.ts'
 import { CliError, printError, USAGE_EXIT_CODE } from './context.ts'
 import { recordCurrentRepository } from './used-repositories.ts'
 
@@ -47,22 +33,22 @@ export const mainHelp = `云匣 YunBox 命令行（版本 ${CLI_VERSION}）
 `
 
 const COMMANDS: Record<string, (context: CliContext, args: string[]) => Promise<number>> = {
-  'login': runLogin,
-  'buckets': runBuckets,
-  'subaccount': runSubaccount,
-  'logout': runLogout,
-  'policy': runPolicy,
-  'init': runInit,
-  'types': runTypes,
-  'clone': runClone,
+  'login': (context, args) => import('./commands/login.ts').then(module => module.runLogin(context, args)),
+  'buckets': (context, args) => import('./commands/buckets.ts').then(module => module.runBuckets(context, args)),
+  'subaccount': (context, args) => import('./commands/subaccount.ts').then(module => module.runSubaccount(context, args)),
+  'logout': (context, args) => import('./commands/login.ts').then(module => module.runLogout(context, args)),
+  'policy': (context, args) => import('./commands/policy.ts').then(module => module.runPolicy(context, args)),
+  'init': (context, args) => import('./commands/init.ts').then(module => module.runInit(context, args)),
+  'types': (context, args) => import('./commands/types.ts').then(module => module.runTypes(context, args)),
+  'clone': (context, args) => import('./commands/clone.ts').then(module => module.runClone(context, args)),
   // Started by git-lfs, not by people; see lfs-agent.ts.
-  'lfs-agent': runLfsAgent,
-  'doctor': runDoctor,
-  'status': runStatus,
-  'inspect': runInspect,
-  'hook': runHook,
-  'history': runHistory,
-  'freeze': runFreeze,
+  'lfs-agent': (context, args) => import('./commands/lfs-agent.ts').then(module => module.runLfsAgent(context, args)),
+  'doctor': (context, args) => import('./commands/doctor.ts').then(module => module.runDoctor(context, args)),
+  'status': (context, args) => import('./commands/status.ts').then(module => module.runStatus(context, args)),
+  'inspect': (context, args) => import('./commands/inspect.ts').then(module => module.runInspect(context, args)),
+  'hook': (context, args) => import('./commands/hook.ts').then(module => module.runHook(context, args)),
+  'history': (context, args) => import('./commands/history.ts').then(module => module.runHistory(context, args)),
+  'freeze': (context, args) => import('./commands/freeze.ts').then(module => module.runFreeze(context, args)),
 }
 
 /** Commands that act on the current repository; running one adds it to the record the macOS client reads. */

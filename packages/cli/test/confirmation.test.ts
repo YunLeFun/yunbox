@@ -17,6 +17,28 @@ afterEach(async () => {
 
 // Exercise the real dialog process boundary without displaying a window in CI.
 describe.skipIf(process.platform === 'win32')('confirmation previews', () => {
+  it('reuses the displayed push destination instead of querying Git again before opening', async () => {
+    const sandbox = await createSandbox()
+    sandboxes.push(sandbox)
+    const repo = await createRepository(sandbox)
+    await writeFile(join(repo, 'file.txt'), 'before\n')
+    await git(sandbox, repo, 'add', '.')
+    await git(sandbox, repo, 'commit', '-qm', 'test: base')
+    const base = await git(sandbox, repo, 'rev-parse', 'HEAD')
+    await writeFile(join(repo, 'file.txt'), 'after\n')
+    await git(sandbox, repo, 'add', '.')
+    await git(sandbox, repo, 'commit', '-qm', 'test: change')
+    const head = await git(sandbox, repo, 'rev-parse', 'HEAD')
+    await git(sandbox, repo, 'remote', 'add', 'origin', join(sandbox.root, 'remote.git'))
+    const trace = join(sandbox.root, 'trace.log')
+    await writeFile(join(sandbox.root, 'osascript'), '#!/bin/sh\nprintf "cancel\\nQA metadata\\n"\n', { mode: 0o700 })
+    sandbox.env = { ...sandbox.env, PATH: `${sandbox.root}:${sandbox.env.PATH}`, GIT_TRACE: trace }
+    const result = await runYunBox(sandbox, repo, ['inspect', '--push', '--stdin', '--remote', 'origin', '--file-limit', '1', '--confirm', '--confirm-ui', 'dialog'], `refs/heads/main ${head} refs/heads/main ${base}\n`)
+    expect(result.code).toBe(1)
+    expect(result.stderr).toContain('QA metadata')
+    expect((await readFile(trace, 'utf8')).match(/built-in: git remote get-url --push -- origin/g)).toHaveLength(1)
+  })
+
   it('opens before generating diffs, then prepares only the requested committed file once', async () => {
     const sandbox = await createSandbox()
     sandboxes.push(sandbox)

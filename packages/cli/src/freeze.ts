@@ -380,19 +380,18 @@ export async function readFreezeConfig(context: CliContext, root: string | undef
   const config: FreezeConfig = { windows: [], messages: {}, timeZones: {}, pauses: {} }
   const keys = [FREEZE_KEY, FREEZE_MESSAGE_KEY, FREEZE_TIME_ZONE_KEY, FREEZE_PAUSE_KEY]
   const entries: { scope: FreezeScope, key: string, value: string }[] = []
-  if (root !== undefined) {
-    const file = join(root, LOCATION_FILE)
-    for (const key of keys) {
-      for (const value of await readAll(context, ['--file', file, '--get-all', key]))
-        entries.push({ scope: 'shared', key, value })
-    }
-  }
-  for (const key of keys) {
-    for (const line of await readAll(context, ['--show-scope', '--get-all', key])) {
+  // Independent lookups run together; flattening preserves shared/key/scope order.
+  const groups = await Promise.all([
+    ...(root === undefined
+      ? []
+      : keys.map(async key => (await readAll(context, ['--file', join(root, LOCATION_FILE), '--get-all', key]))
+          .map(value => ({ scope: 'shared' as const, key, value })))),
+    ...keys.map(async key => (await readAll(context, ['--show-scope', '--get-all', key])).map((line) => {
       const tab = line.indexOf('\t')
-      entries.push({ scope: line.slice(0, tab) as FreezeScope, key, value: line.slice(tab + 1) })
-    }
-  }
+      return { scope: line.slice(0, tab) as FreezeScope, key, value: line.slice(tab + 1) }
+    })),
+  ])
+  entries.push(...groups.flat())
   for (const { scope, key, value } of entries) {
     const label = `${SCOPE_LABELS[scope] ?? scope} 的 ${key}`
     // Like `git config --get`, the last message or zone of a scope wins.
