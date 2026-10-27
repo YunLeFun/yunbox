@@ -87,6 +87,9 @@ describe('renderConfirmationHtml', () => {
     expect(html).toContain('<span class="dir">docs/</span><span class="name">guide.md</span>')
     expect(html).toContain('新增')
     expect(html).toContain('无 → 2.00 KiB')
+    expect(html).toContain('Git 增量上传')
+    expect(html).toContain('<th class="num">原始内容</th>')
+    expect(html).not.toContain('本次上传')
   })
 
   it('meters the LFS bytes still to upload once COS has been checked', () => {

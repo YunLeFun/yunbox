@@ -4,7 +4,7 @@ import { readPushHistory, recordPushHistory } from './push-history.ts'
 export const BLOCKED_PUSH_LIMIT = 20
 
 /** Why the pre-push hook stopped a push. */
-export type BlockedPushReason = 'freeze' | 'exceeded' | 'cancelled'
+export type BlockedPushReason = 'freeze' | 'exceeded' | 'cancelled' | 'confirmation'
 
 /** The latest blocked decision for a repository. */
 export interface BlockedPush {

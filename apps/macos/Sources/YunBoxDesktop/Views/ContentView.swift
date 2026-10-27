@@ -269,6 +269,7 @@ extension BlockedPush.Reason {
         case .freeze: String(localized: "禁推时段")
         case .exceeded: String(localized: "超出限额")
         case .cancelled: String(localized: "已取消推送")
+        case .confirmation: String(localized: "推送尚未确认")
         }
     }
 
@@ -277,6 +278,7 @@ extension BlockedPush.Reason {
         case .freeze: "clock.badge.xmark"
         case .exceeded: "exclamationmark.triangle"
         case .cancelled: "xmark.circle"
+        case .confirmation: "questionmark.circle"
         }
     }
 }

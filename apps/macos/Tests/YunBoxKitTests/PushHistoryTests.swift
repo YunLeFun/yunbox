@@ -10,6 +10,19 @@ private let historyEntries = #"""
 ]
 """#
 
+@Test func decodesUnderBudgetConfirmationsAndDistinguishesUnavailableUI() throws {
+    let json = #"{"version":1,"entries":[{"id":"confirm","root":"/work/game","at":"2026-10-25T02:00:00.001Z","reason":"confirmation","outcome":"blocked","summary":"每次推送确认（未超限）"}]}"#
+    let entries = PushHistoryReport.decodeEntries(Data(json.utf8))
+    #expect(entries.count == 1)
+    #expect(entries[0].reason == .confirmation)
+    let directory = FileManager.default.temporaryDirectory.appending(path: "yunbox-confirmation-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: directory) }
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try Data(json.utf8).write(to: directory.appending(path: "push-history.json"))
+    let blocked = BlockedPushes.load(from: directory.appending(path: "blocked-pushes.json"))
+    #expect(blocked.first?.reason == .confirmation)
+}
+
 @Test func decodesMultipleDecisionsForOneProjectIncludingContinuation() throws {
     let data = Data((#"{"version":1,"file":"/local/push-history.json","retention":{"days":90,"perRepository":200,"total":5000},"entries": "# + historyEntries + "}").utf8)
     let report = try PushHistoryReport.decode(data, exitCode: 0)

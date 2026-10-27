@@ -9,10 +9,13 @@ yunbox inspect --push
 yunbox inspect --push --base origin/main --head HEAD --json
 yunbox inspect --push --git-limit 900k --lfs-limit 100m --file-limit 10m --top 20
 yunbox inspect --push --confirm   # 超限时按平台和设置选择确认方式
+yunbox inspect --push --confirm-always   # 未超限也显示确认界面
 yunbox inspect --push --confirm --confirm-ui terminal   # 这次只用终端
 ```
 
-默认比较 HEAD 与本地 upstream 快照；没有 upstream 时检查 HEAD 的全部历史并提示。`--stdin` 接受 Git pre-push 的四列引用更新，支持多分支和删除，不能与 `--base` / `--head` 合用。只有显式提供 `--remote <name/url>` 才会在新分支或缺少旧 tip 时查询远端 Git refs；查询失败或远端对象不在本地时保守估算。不会 fetch 或下载 LFS 内容；直连 COS 的仓库会查询 LFS 对象是否已上传，见下文。
+默认比较 HEAD 与本地 upstream 快照；没有 upstream 时检查 HEAD 的全部历史并提示。`--stdin` 接受 Git pre-push 的四列引用更新，支持多分支和删除，不能与 `--base` / `--head` 合用。已有远端分支的旧 tip 不在本地时，检查以退出码 `2` 失败，提示先运行 `git fetch`，不再把无法可靠计算的体积和文件状态显示为检查通过；补齐对象后重试即可。检查不会自动 fetch、改写引用或下载 LFS 内容。
+
+只有显式提供 `--remote <name/url>` 才会在新分支时查询远端 Git refs，以排除本地可读取且远端已有的 Git 历史。查询失败或部分远端对象不在本地时，会明确提示 Git pack 为保守估算。直连 COS 的仓库还会查询 LFS 对象是否已上传，见下文。
 
 ## 终端报告
 
@@ -22,11 +25,11 @@ yunbox inspect --push --confirm --confirm-ui terminal   # 这次只用终端
 
 ## 统计口径
 
-- **Git pack**：本地 thin-pack 估算，包括提交、目录、普通文件及 LFS 指针。计数超过 `max(10 MiB, Git 限额)` 时停止，报告下界而非精确值；不包含协议握手开销。
+- **Git 增量上传**：本地 thin-pack 估算，包括提交、目录、普通文件及 LFS 指针，并包含压缩和增量编码。计数超过 `max(10 MiB, Git 限额)` 时停止，报告下界而非精确值；不包含协议握手开销，也不代表 Git 已成功上传。
 - **Git 文件明细**：普通 blob 的原始大小，不含识别出的 LFS 指针。同一内容按对象 ID 去重，不同历史版本分别统计，包括后来已删除的大文件。原始大小不等于压缩、增量后的网络上传量。
 - **LFS 候选量**：从推送历史的指针读取素材大小，按 LFS SHA-256 去重。新分支保留完整历史候选，即使 Git pack 可排除远端其他分支已有的对象。
 - **LFS 实际上传量**：仓库[直连 COS](./guide/) 且本机有密钥（`yunbox login`、`TENCENTCLOUD_*` 或 `tccli auth login`）时，对每个候选向 COS 发一次 HEAD（和传输代理上传前的检查相同，只需 `HeadObject` 权限），已存在且大小一致的不计入上传量，`uploadBytes` 给出确定值；LFS 预算、单文件预算和变更文件的上传大小都只按需要上传的对象计算。查询最多同时 8 个请求、总共 5 秒；任一请求失败（无权限、网络错误）或超时，整次查询作废，按原来的方式只给候选量，并在提示里说明原因，不会阻止推送，也不会把查不到当作已上传。环境变量 `YUNBOX_INSPECT_REMOTE_TIMEOUT_MS` 可以调整时限，`0` 关闭查询。使用 YunBox 服务端（`lfs.url`）或未接入的仓库不查询，实际上传量未知。
-- **变更文件**：按路径汇总推送提交中的改动，类似 `git diff --stat` 加上大小：状态（新增、修改、删除，以及「临时」：在本次提交中新增后又删除，内容仍会上传）、推送前后的大小（LFS 为素材大小）、本次上传的版本数和原始大小合计。按本次上传大小降序；同一内容被多个路径使用时每个路径都计入。前后状态取最早和最新一次改动，多分支推送时为近似值。
+- **变更文件**：按路径汇总推送提交中的改动，类似 `git diff --stat` 加上大小：状态（新增、修改、删除，以及「临时」：在本次提交中新增后又删除，内容仍会上传）、推送前后的大小（LFS 为素材大小）、本次涉及的版本数和「原始内容」合计。按原始内容大小降序；同一内容被多个路径使用时每个路径都计入。原始内容和前后大小之差都不是 Git 网络上传量，应以总量中的 pack 估算为准。普通 Git 文件的状态使用 Git 增量范围，不再套用新分支的完整 LFS 历史；LFS 候选仍保守保留。前后状态取最早和最新一次改动，多分支推送时为近似值。
 - **单文件限额**：同时适用于普通 Git 文件和 LFS 素材。文本显示前 10 个变更文件（`--top` 可调至 100）；JSON 包含所有变更、对象、已找到的路径、精确字节数和超限标记。路径未知的对象单独列出对象 ID。
 
 默认预算是 Git pack **900 KiB**、LFS 候选总量 **100 MiB**、单文件 **10 MiB**。这些是本地检查预算，不是托管平台配额。任一项超过预算都会返回超限；等于预算时通过。命令行参数优先于仓库/全局 Git 配置：
@@ -37,7 +40,7 @@ git config yunbox.inspectLfsBytes 100m
 git config yunbox.inspectFileBytes 10m
 ```
 
-支持整数字节及 `k/m/g`、`KiB/MiB/GiB`，均为 1024 进制。退出码：`0` 未超限，`1` 超限，`2` 检查失败。缺失对象、无效指针、超时或分析输出过大均返回失败，不能视为零流量。
+支持整数字节及 `k/m/g`、`KiB/MiB/GiB`，均为 1024 进制。退出码：`0` 放行（未超限或已确认继续），`1` 超限阻止、禁推或未确认，`2` 检查失败。缺失对象、无效指针、超时或分析输出过大均返回失败，不能视为零流量。
 
 ## JSON 接口
 
@@ -50,7 +53,7 @@ git config yunbox.inspectFileBytes 10m
 | `git.packBytes` / `packComplete` | 完整估算值；不完整时 `packBytes` 为 `packCapBytes + 1`，代表下界 |
 | `git.blobBytes` / `blobCount` / `pointerBytes` | Git blob 原始大小与数量（含指针），以及其中指针的大小 |
 | `git.exceedsLimit` / `lfs.exceedsLimit` | 各自总量是否超过预算；单文件超限另见每条明细 |
-| `changes` | 每个变更路径一条：`{ path, status, storage, beforeBytes, afterBytes, beforeOid, afterOid, versions, pushBytes, exceedsFileLimit }`。`status` 为 `added`、`modified`、`deleted` 或 `transient`；`storage` 为 `git` 或 `lfs`；路径不存在或旧对象不在本地时大小为 `null`；`versions` 为 `0` 表示没有新内容需要上传（如删除，或 LFS 对象已在 COS）。新增字段，`schemaVersion` 仍为 `1` |
+| `changes` | 每个变更路径一条：`{ path, status, storage, beforeBytes, afterBytes, beforeOid, afterOid, versions, pushBytes, exceedsFileLimit }`。`pushBytes` 保留原字段名，始终表示各版本的原始内容大小合计，不是压缩后的上传量。`status` 为 `added`、`modified`、`deleted` 或 `transient`；`storage` 为 `git` 或 `lfs`；路径不存在或旧对象不在本地时大小为 `null`；`versions` 为 `0` 表示没有新内容需要上传（如删除，或 LFS 对象已在 COS）。新增字段，`schemaVersion` 仍为 `1` |
 | `changes[].beforeOid` / `afterOid` | 推送前、推送后的内容 ID，用于读取对应版本：LFS 文件为素材的 SHA-256（本地位于 `.git/lfs/objects/<前 2 位>/<3–4 位>/<oid>`，可能尚未下载），普通文件为 Git blob ID（`git cat-file blob <oid>`）。与对应的大小同时为 `null`。不要从工作区读取，工作区可能与推送的提交不同。新增字段，`schemaVersion` 仍为 `1` |
 | `git.files` / `lfs.files` | 完整对象列表，每条为 `{ oid, bytes, paths, exceedsFileLimit }`，按大小降序。`exceedsFileLimit` 表示超过单文件预算且需要上传，COS 上已有的 LFS 对象为 `false` |
 | `lfs.files[].onRemote` | 仅在 `lfs.remoteChecked` 为 `true` 时提供：存储上是否已有这个对象（推送时跳过）。新增字段，`schemaVersion` 仍为 `1` |
@@ -64,13 +67,25 @@ git config yunbox.inspectFileBytes 10m
 
 `--confirm` 在超限时询问是否继续：确认后退出码为 `0`，取消或无人可问时为 `1`。不能与 `--json` 合用。
 
+`--confirm-always` 启用每次确认：未超限也显示确认界面，标题为正常的推送确认；确认后才放行，取消、关闭窗口或界面不可用时返回 `1`。它同样不能与 `--json` 合用，并遵守 `--confirm-ui` 的界面选择。检查失败和禁推时段仍直接阻止推送。
+
+```bash
+yunbox hook install --confirm-always          # 当前仓库每次推送显示 UI
+yunbox hook install --global --confirm-always # 全局保护采用每次确认
+git config yunbox.confirmMode always         # 让已有 --confirm 钩子每次确认，无需重装
+git config yunbox.confirmMode exceeded       # 恢复默认：仅超限询问
+yunbox hook install --confirm-mode exceeded  # 明确仅超限询问，覆盖 Git 配置
+```
+
+确认时机优先使用 `--confirm-always` / `--confirm-mode exceeded|always`，其次读取 `yunbox.confirmMode`，默认 `exceeded`。`--confirm-mode` 在手动检查时需配合 `--confirm`。未启用确认的检查和 `--no-confirm` 钩子不受此偏好影响。macOS「帮助 → 设置向导 → 推送保护」也提供「每次推送显示 UI」，点击应用后生效；`hook status --json` 的 `confirmAlways` 表示有效设置。这里的 UI 是推送确认窗口，完整客户端仍可从窗口中的按钮打开。
+
 - **macOS**：弹出原生对话框（通过 `osascript` 运行，无需安装应用）。标题写明推送目标（如 `github.com/owner/repo`，不含凭据），下面一行是本地仓库名和推送的分支。按钮行可以在 Finder 中显示仓库、用已安装的编辑器（Cursor、VS Code、Zed 或 Sublime Text）打开、在 YunBox 客户端中查看完整信息（已安装时），或在浏览器中打开远端仓库页面，每个按钮带有它所打开应用的图标；这些按钮不会关闭对话框。再往下是 Git pack、LFS 候选、最大单文件三项预算的用量条，以及逐个文件的表格：状态、目录与文件名、推送前后大小及差值、版本数和本次上传大小条，超限文件标红。点击推送后仍存在的文件，用「快速查看」预览推送的版本：修改的文件同时打开推送前和推送后两个版本，用左右方向键切换，新增的文件只显示新版本；修改过的普通 Git 文本文件（每个版本不超过 1 MiB）还多一页带两侧行号、红绿着色的逐行差异，点击文件后先显示推送后的版本，差异生成完成后自动显示这一页；如果已经切到旧版本，则保持当前页。差异仅按需生成，重复查看复用结果，和报告页一样不含脚本；预览不会关闭对话框，点预览窗口的关闭按钮或按 Esc 关闭预览；预览打开时在对话框里按 Esc 也只关闭预览，不会取消推送。预览内容取自 Git 对象或本地 LFS 存储（`.git/lfs/objects`），而不是工作区，因为工作区可能与推送的提交不同；它们复制到仅当前用户可读的临时目录，对话框关闭时删除。本地没有的 LFS 旧版本无法预览。报告页面不含脚本，内容安全策略仍为 `default-src 'none'`。文件很多时只有表格滚动，用量条和表头保持不动。表格下方有一个「原因（可选）」输入框，对话框打开时光标就在里面：写一句为什么取消或继续推送，再点任一按钮即可，不写也行。原因会出现在推送的输出里，告诉发起推送的人或 AI 编程助手；取消或确认继续时也会记入本机推送保护历史。确认框先显示推送目标、超限原因和操作按钮，再加载文件列表，列表加载期间也可以取消或继续。默认按钮为「取消」，按回车即取消；没有打开预览时，按 Esc 或关闭确认窗口也会取消推送。对话框最多列出 300 个文件，其余见 `--json`。
 - **Windows / Linux / 纯终端 macOS**：通过控制终端询问 `[y/N]`，Windows 使用附带的控制台，macOS / Linux 使用 `/dev/tty`，不读取 pre-push 的标准输入。原因可以写在回答后面，例如 `n 先压缩图片` 或 `y 美术已确认`。按回车取消，SSH 默认使用终端。Windows 推荐在 PowerShell / Windows Terminal 中运行；Git Bash 需要附带可用的 Windows 控制台。
 - **无法询问**（无窗口或无控制终端）：阻止推送并提示，不会自动同意。
 
 取消推送时，输出会写明原因（如果填了），并提醒不要提高限额或用 `--no-verify` 绕过检查，这样从 AI 编程助手发起的推送也能知道下一步该做什么。
 
-确认方式可选 `auto`、`dialog`、`terminal` 或 `none`（不询问，超限时直接阻止）。优先级为 `--confirm-ui` > `YUNBOX_CONFIRM_UI` > Git 配置 `yunbox.confirmUI` > `auto`。`--confirm-ui` 必须与 `--confirm` 一起使用。保存偏好后，带 `--confirm` 的 pre-push 包装层也会采用：
+确认方式可选 `auto`、`dialog`、`terminal` 或 `none`（不询问，需要确认时直接阻止）。优先级为 `--confirm-ui` > `YUNBOX_CONFIRM_UI` > Git 配置 `yunbox.confirmUI` > `auto`。`--confirm-ui` 必须与 `--confirm` 或 `--confirm-always` 一起使用。保存偏好后，带 `--confirm` 的 pre-push 包装层也会采用：
 
 ```bash
 git config yunbox.confirmUI terminal          # 当前仓库纯终端
@@ -82,7 +97,7 @@ macOS 的 `auto` 在本机使用原生窗口，可以从窗口中打开 YunBox �
 
 ## 本机推送保护历史
 
-钩子遇到禁推、超限阻止、用户取消或用户确认继续时，都会按项目追加记录时间、原因、处理结果和填写的说明；手动检查不记历史。「确认继续」表示检查放行，实际上传结果由 Git 返回。
+钩子遇到禁推、超限阻止、用户取消或用户确认继续时，都会按项目追加记录时间、原因、处理结果和填写的说明；手动检查不记历史。未超限的每次确认以 `reason: confirmation` 记录，不会误记为超限；没有可用界面记为 `blocked`，人工取消为 `cancelled`，确认继续为 `continued`。「确认继续」表示检查放行，实际上传结果由 Git 返回。
 
 历史只保存在用户电脑的 `~/.config/yunbox/push-history.json`（可由 `YUNBOX_CONFIG_DIR` 或 `XDG_CONFIG_HOME` 指定目录），不会提交进仓库。默认保留最近 90 天，每项目最多 200 条，全部最多 5000 条。旧版最近一次记录会迁入。macOS 客户端可在「推送保护历史」窗口筛选项目、查看与清理。
 

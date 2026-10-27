@@ -1555,22 +1555,22 @@
         }
       }
     },
+    "压缩 / 增量后的预计上传量" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Estimated upload after compression and delta encoding"
+          }
+        }
+      }
+    },
     "压缩包" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Archives"
-          }
-        }
-      }
-    },
-    "压缩后的预计上传量" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Estimated upload after compression"
           }
         }
       }
@@ -2555,6 +2555,16 @@
         }
       }
     },
+    "开启后，未超限也需在确认界面中选择是否继续；关闭窗口或无法显示界面时取消推送。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm every push, including those within budget. Closing the window or having no available interface cancels the push."
+          }
+        }
+      }
+    },
     "开始使用" : {
       "localizations" : {
         "en" : {
@@ -2647,6 +2657,16 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "当前版本 %1$@，上次检查于 %2$@。更新包经过签名校验，安装时会重新打开应用。"
+          }
+        }
+      }
+    },
+    "当前行为：每次推送确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current behavior: confirm every push"
           }
         }
       }
@@ -3037,6 +3057,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "After"
+          }
+        }
+      }
+    },
+    "推送尚未确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Push not confirmed"
           }
         }
       }
@@ -3923,6 +3953,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Check sizes and freeze windows before each push, then upload only when allowed. Protection works with YunBox closed."
+          }
+        }
+      }
+    },
+    "每次推送显示 UI" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show a confirmation for every push"
+          }
+        }
+      }
+    },
+    "每次推送确认" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm every push"
           }
         }
       }

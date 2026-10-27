@@ -21,6 +21,8 @@ public struct HookStatus: Decodable, Sendable {
     public let hook: String
     public let scope: String?
     public let confirm: Bool
+    /// Optional for reports from clients predating always-confirm mode.
+    public let confirmAlways: Bool?
     public let globalInstalled: Bool
     public let customPath: Bool
     public let node: String

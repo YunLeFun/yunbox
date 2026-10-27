@@ -109,13 +109,15 @@ public struct InspectionClient: Sendable {
     }
 
     /// `yunbox hook install`: the pre-push wrapper that enforces freeze windows and size limits.
-    public func installHook(repository: URL, globally: Bool = false, confirm: Bool = true, compatible: Bool = false) async throws -> CommandOutput {
-        try await text(arguments: [cli.path, "hook", "install", confirm ? "--confirm" : "--no-confirm"] + (globally ? ["--global"] : compatible ? ["--compatible"] : []), directory: repository, timeout: 30)
+    public func installHook(repository: URL, globally: Bool = false, confirm: Bool = true, compatible: Bool = false, confirmAlways: Bool = false) async throws -> CommandOutput {
+        let confirmation = confirm ? ["--confirm-mode", confirmAlways ? "always" : "exceeded"] : ["--no-confirm"]
+        return try await text(arguments: [cli.path, "hook", "install"] + confirmation + (globally ? ["--global"] : compatible ? ["--compatible"] : []), directory: repository, timeout: 30)
     }
 
     /// Reattach the current team hook directory after another tool replaces the local setting.
-    public func repairHook(repository: URL, confirm: Bool = true) async throws -> CommandOutput {
-        try await text(arguments: [cli.path, "hook", "repair", confirm ? "--confirm" : "--no-confirm"], directory: repository, timeout: 30)
+    public func repairHook(repository: URL, confirm: Bool = true, confirmAlways: Bool = false) async throws -> CommandOutput {
+        let confirmation = confirm ? ["--confirm-mode", confirmAlways ? "always" : "exceeded"] : ["--no-confirm"]
+        return try await text(arguments: [cli.path, "hook", "repair"] + confirmation, directory: repository, timeout: 30)
     }
 
     /// Restore the original local configuration, preserving any later changes made by the user.

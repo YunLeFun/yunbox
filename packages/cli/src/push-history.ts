@@ -13,7 +13,7 @@ export interface PushHistoryEntry {
   id: string
   root: string
   at: string
-  reason: 'freeze' | 'exceeded'
+  reason: 'freeze' | 'exceeded' | 'confirmation'
   outcome: 'blocked' | 'cancelled' | 'continued'
   summary: string
   note?: string
@@ -98,7 +98,7 @@ export async function readPushHistory(env: NodeJS.ProcessEnv): Promise<PushHisto
       throw new Error('invalid history')
     return retainedPushHistory(data.entries.filter((entry: Partial<PushHistoryEntry> | null): entry is PushHistoryEntry => !!entry
       && typeof entry.id === 'string' && typeof entry.root === 'string' && typeof entry.at === 'string' && Number.isFinite(Date.parse(entry.at))
-      && ['freeze', 'exceeded'].includes(entry.reason ?? '') && ['blocked', 'cancelled', 'continued'].includes(entry.outcome ?? '')
+      && ['freeze', 'exceeded', 'confirmation'].includes(entry.reason ?? '') && ['blocked', 'cancelled', 'continued'].includes(entry.outcome ?? '')
       && typeof entry.summary === 'string' && (entry.note === undefined || typeof entry.note === 'string')))
   }
   catch { throw new Error('本机推送历史格式不正确；可清理全部历史后重新记录') }

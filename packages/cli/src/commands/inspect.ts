@@ -3,6 +3,7 @@ import type { CliContext } from '../context.ts'
 import { Buffer } from 'node:buffer'
 import { parseArgs } from 'node:util'
 import { recordBlockedPush } from '../blocked-pushes.ts'
+import { readConfirmMode } from '../confirm-policy.ts'
 import { askPush } from '../confirm.ts'
 import { checkFreeze, formatFreezeBlock, formatPauseEnd, readFreezeConfig, SCOPE_LABELS } from '../freeze.ts'
 import { inspectGit, InspectionError, resolveInspectionRange } from '../inspect-git.ts'
@@ -24,7 +25,7 @@ export const inspectHelp = `用法：yunbox inspect --push [选项]
   --stdin             从 stdin 读取 Git pre-push 的引用更新，支持多个分支和删除；
                       处在禁推时段（yunbox freeze）时直接中断，退出码 1；
                       保护决定（含确认继续）记入本机配置目录的 push-history.json
-  --remote <name/url>  新分支或旧 tip 缺失时，查询远端 Git refs 以改进 pack 估算
+  --remote <name/url>  新分支时查询远端 Git refs 以改进 pack 估算；旧 tip 缺失需先 git fetch
   --git-limit <size>  Git pack 限额（默认 900k）
   --lfs-limit <size>  LFS 候选总量限额（默认 100m）
   --file-limit <size> 单文件原始大小限额（默认 10m，适用于 Git 和 LFS）
@@ -33,11 +34,15 @@ export const inspectHelp = `用法：yunbox inspect --push [选项]
   --confirm           超限时询问是否继续（macOS 原生对话框，否则终端）；确认后退出码为 0
                       可附一句原因（对话框底部，或终端里写在 y / n 后面），会写进输出
   --confirm-ui <mode> 配合 --confirm，选择 auto / dialog / terminal / none
+  --confirm-always    每次检查都显示确认界面（即使未超限），取消或无人确认时阻止推送
+  --confirm-mode <mode> 配合 --confirm，明确选择 exceeded / always，覆盖 Git 配置
   -h, --help          显示帮助
 
-size 支持字节及 k/m/g、KiB/MiB/GiB（1024 进制）。退出码：0 未超限，1 超限，2 检查失败。
+size 支持字节及 k/m/g、KiB/MiB/GiB（1024 进制）。退出码：0 放行，1 超限 / 禁推 / 未确认，2 检查失败。
 Git 配置：yunbox.inspectGitBytes / yunbox.inspectLfsBytes / yunbox.inspectFileBytes；命令行优先。
 确认界面：--confirm-ui > YUNBOX_CONFIRM_UI > git config yunbox.confirmUI > auto。
+确认时机：--confirm-always / --confirm-mode > git config yunbox.confirmMode（exceeded / always，默认 exceeded）。
+Git 配置仅对启用确认的检查生效；缺少远端基准时检查失败，不自动 fetch。
 macOS 可选原生对话框或纯终端；Windows / Linux 使用控制终端。NO_COLOR=1 关闭颜色。
 直连对象存储（COS 或 S3）的仓库在本机有密钥时，用 HEAD 查询 LFS 候选是否已在存储里（并发 8，共 5 秒），
 已有的不计入上传量；查询失败或超时时上传量按未知处理，不影响推送。其他情况下 LFS 候选量
@@ -60,6 +65,8 @@ export async function runInspect(context: CliContext, args: string[]): Promise<n
       'top': { type: 'string' },
       'json': { type: 'boolean' },
       'confirm': { type: 'boolean' },
+      'confirm-always': { type: 'boolean' },
+      'confirm-mode': { type: 'string' },
       'confirm-ui': { type: 'string' },
       'help': { type: 'boolean', short: 'h' },
     } })
@@ -69,10 +76,13 @@ export async function runInspect(context: CliContext, args: string[]): Promise<n
     }
     if (!values.push || (values.stdin && (values.base !== undefined || values.head !== undefined)))
       throw new InspectionError('请指定 --push；--stdin 不能与 --base / --head 同时使用')
-    if (values.confirm && json)
-      throw new InspectionError('--confirm 不能与 --json 同时使用')
-    if (values['confirm-ui'] !== undefined && (!values.confirm || !['auto', 'dialog', 'terminal', 'none'].includes(values['confirm-ui'])))
-      throw new InspectionError('--confirm-ui 需配合 --confirm，且只能是 auto / dialog / terminal / none')
+    const confirm = values.confirm || values['confirm-always']
+    if (confirm && json)
+      throw new InspectionError('--confirm / --confirm-always 不能与 --json 同时使用')
+    if (values['confirm-ui'] !== undefined && (!confirm || !['auto', 'dialog', 'terminal', 'none'].includes(values['confirm-ui'])))
+      throw new InspectionError('--confirm-ui 需配合 --confirm / --confirm-always，且只能是 auto / dialog / terminal / none')
+    if (values['confirm-mode'] !== undefined && (!confirm || !['exceeded', 'always'].includes(values['confirm-mode']) || (values['confirm-always'] && values['confirm-mode'] !== 'always')))
+      throw new InspectionError('--confirm-mode 需配合 --confirm，且只能是 exceeded / always，不能与 --confirm-always 冲突')
     if (values.remote?.startsWith('-') || values.remote === '')
       throw new InspectionError('无效的远端名称')
     const top = Number(values.top ?? '10')
@@ -100,6 +110,7 @@ export async function runInspect(context: CliContext, args: string[]): Promise<n
         return 1
       }
     }
+    const confirmAlways = confirm && (values['confirm-always'] || (values['confirm-mode'] ?? await readConfirmMode(repo)) === 'always')
     const [gitBytes, lfsBytes, fileBytes] = await Promise.all([
       readLimit(repo, values['git-limit'], 'yunbox.inspectGitBytes', 900 * 1024),
       readLimit(repo, values['lfs-limit'], 'yunbox.inspectLfsBytes', 100 * 1024 * 1024),
@@ -125,20 +136,21 @@ export async function runInspect(context: CliContext, args: string[]): Promise<n
       const [push, transfer] = display!
       context.stdout.write(formatInspection(report, top, { ...push, transfer, style: terminalFor(context) }))
     }
-    if (report.status === 'ok')
+    if (report.status === 'ok' && !confirmAlways)
       return 0
-    const reply = values.confirm ? await askPush(repo, report, { push: display?.[0], remote: values.remote, updates, head: values.head, ui: values['confirm-ui'] as ConfirmUi | undefined }) : undefined
-    if (values.confirm)
+    const reply = confirm ? await askPush(repo, report, { push: display?.[0], remote: values.remote, updates, head: values.head, ui: values['confirm-ui'] as ConfirmUi | undefined }) : undefined
+    if (confirm)
       context.stderr.write(terminalFor(context, 'stderr').paint(reply?.answer === 'continue' ? 'success' : 'warning', formatReply(reply)))
+    const reason = report.status === 'ok' ? 'confirmation' : 'exceeded'
+    const summary = report.status === 'ok' ? '每次推送确认（未超限）' : exceededReasons(report).join('；')
     if (reply?.answer === 'continue') {
       if (values.stdin)
-        await recordPushHistory(context.env, { root: repo.cwd, at: new Date().toISOString(), reason: 'exceeded', outcome: 'continued', summary: exceededReasons(report).join('；'), note: reply.note })
+        await recordPushHistory(context.env, { root: repo.cwd, at: new Date().toISOString(), reason, outcome: 'continued', summary, note: reply.note })
       return 0
     }
     // Only a real push (from the hook) is remembered; manual checks block nothing.
     if (values.stdin) {
-      const summary = exceededReasons(report).join('；')
-      await recordBlockedPush(context.env, { root: repo.cwd, at: new Date().toISOString(), reason: reply ? 'cancelled' : 'exceeded', summary, note: reply?.note })
+      await recordPushHistory(context.env, { root: repo.cwd, at: new Date().toISOString(), reason, outcome: reply ? 'cancelled' : 'blocked', summary, note: reply?.note })
     }
     return 1
   }

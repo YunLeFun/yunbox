@@ -9,6 +9,7 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import { compatibilityStatus, manageCompatibilityHooks } from '../compatibility-hooks.ts'
+import { readConfirmMode } from '../confirm-policy.ts'
 import { CliError, print } from '../context.ts'
 import { compareVersions, detectGitLfsVersion, detectGitVersion, findRepositoryRoot, MIN_GIT_LFS_VERSION, MIN_GIT_VERSION, readGitConfig, runGit, runGitChecked, shellQuote } from '../git.ts'
 import { globalHookFiles, globalHooksDirectory, manageGlobalHooks, usesGlobalHooks } from '../global-hooks.ts'
@@ -21,8 +22,8 @@ interface HookState {
   hadOriginal: boolean
 }
 
-export const hookHelp = `用法：yunbox hook install [--global | --compatible] [--no-confirm | --guard <absolute-path>]
-      yunbox hook repair [--no-confirm | --guard <absolute-path>]
+export const hookHelp = `用法：yunbox hook install [--global | --compatible] [--no-confirm | --confirm-always | --guard <absolute-path>]
+      yunbox hook repair [--no-confirm | --confirm-always | --guard <absolute-path>]
       yunbox hook clear-missing
       yunbox hook uninstall [--global] | yunbox hook status [--json]
 
@@ -30,6 +31,9 @@ export const hookHelp = `用法：yunbox hook install [--global | --compatible] 
 原钩子保留在 pre-push.yunbox-original，uninstall 恢复它。不会修改已有 Git 提交。
 默认超限时询问是否继续（macOS 原生对话框，否则终端），无需打开 App。
 --confirm 显式启用询问（默认）；--no-confirm 超限时直接阻止推送。
+--confirm-always 每次推送都显示确认界面，未超限也需确认。
+--confirm-mode exceeded / always 明确指定确认时机，覆盖 Git 配置。
+已安装的确认钩子也可用 git config yunbox.confirmMode always；恢复默认用 exceeded。
 --global 可选：本机所有未自定义 core.hooksPath 的仓库；原有仓库钩子仍串行执行。
 纯终端确认：git config yunbox.confirmUI terminal（macOS 也支持）；恢复自动选择用 auto。
 --guard 指定额外的确认程序，例如 ~/.local/libexec/git-confirm-large-push。
@@ -45,15 +49,16 @@ export async function runHook(context: CliContext, args: string[]): Promise<numb
     return 0
   }
   const [operation, ...rest] = args
-  const { values } = parseArgs({ args: rest, options: { 'guard': { type: 'string' }, 'confirm': { type: 'boolean' }, 'no-confirm': { type: 'boolean' }, 'global': { type: 'boolean' }, 'compatible': { type: 'boolean' }, 'json': { type: 'boolean' } } })
-  if (!['install', 'uninstall', 'status', 'repair', 'clear-missing'].includes(operation!) || (!['install', 'repair'].includes(operation!) && (values.guard || values.confirm || values['no-confirm'])) || (values.guard && (values.confirm || values['no-confirm'])) || (values.confirm && values['no-confirm']) || (values.json && operation !== 'status') || (values.compatible && (values.global || operation !== 'install')) || (values.global && ['repair', 'clear-missing'].includes(operation!)))
+  const { values } = parseArgs({ args: rest, options: { 'guard': { type: 'string' }, 'confirm': { type: 'boolean' }, 'confirm-always': { type: 'boolean' }, 'confirm-mode': { type: 'string' }, 'no-confirm': { type: 'boolean' }, 'global': { type: 'boolean' }, 'compatible': { type: 'boolean' }, 'json': { type: 'boolean' } } })
+  const confirming = values.confirm || values['confirm-always'] || values['confirm-mode'] !== undefined
+  if (!['install', 'uninstall', 'status', 'repair', 'clear-missing'].includes(operation!) || (!['install', 'repair'].includes(operation!) && (values.guard || confirming || values['no-confirm'])) || (values.guard && (confirming || values['no-confirm'])) || (confirming && values['no-confirm']) || (values['confirm-mode'] !== undefined && (!['exceeded', 'always'].includes(values['confirm-mode']) || (values['confirm-always'] && values['confirm-mode'] !== 'always'))) || (values.json && operation !== 'status') || (values.compatible && (values.global || operation !== 'install')) || (values.global && ['repair', 'clear-missing'].includes(operation!)))
     throw new CliError(hookHelp, 2)
   if (operation === 'status') {
     const status = await hookStatus(context)
-    print(context, values.json ? JSON.stringify(status) : `推送保护：${status.hook} (${status.scope ?? 'none'})${status.confirm ? '，超限询问' : ''}${status.compatibility ? `\n兼容接入：${status.compatibility.state}${status.compatibility.state === 'overridden' ? '（保护已被覆盖，运行 yunbox hook repair）' : ''}${status.compatibility.missing ? '（原目录缺失，请恢复依赖/目录，或确认遗留后 hook clear-missing）' : ''}` : ''}\n全局钩子：${status.globalInstalled ? '已安装' : '未安装'}`)
+    print(context, values.json ? JSON.stringify(status) : `推送保护：${status.hook} (${status.scope ?? 'none'})${status.confirmAlways ? '，每次推送确认' : status.confirm ? '，超限询问' : ''}${status.compatibility ? `\n兼容接入：${status.compatibility.state}${status.compatibility.state === 'overridden' ? '（保护已被覆盖，运行 yunbox hook repair）' : ''}${status.compatibility.missing ? '（原目录缺失，请恢复依赖/目录，或确认遗留后 hook clear-missing）' : ''}` : ''}\n全局钩子：${status.globalInstalled ? '已安装' : '未安装'}`)
     return 0
   }
-  const command = ['install', 'repair'].includes(operation!) ? await hookCommand(values.guard, !values['no-confirm']) : undefined
+  const command = ['install', 'repair'].includes(operation!) ? await hookCommand(values.guard, !values['no-confirm'], !!values['confirm-always'], values['confirm-mode']) : undefined
   if (values.global)
     return manageGlobalHooks(context, operation!, command)
   const root = await findRepositoryRoot(context)
@@ -142,7 +147,7 @@ ${originalExecutable ? `${shellQuote(backup)} "$@" <"$input"` : ':'}
     await unlink(temporaryHook).catch(() => {})
     await unlink(temporaryState).catch(() => {})
   }
-  print(context, `已安装 YunBox pre-push 包装层：检查通过后才执行原有钩子${values.guard ? '' : values['no-confirm'] ? '；超限直接阻止' : '；超限询问是否继续，关闭 App 后仍生效'}`)
+  print(context, `已安装 YunBox pre-push 包装层：检查通过后才执行原有钩子${values.guard ? '' : values['no-confirm'] ? '；超限直接阻止' : values['confirm-always'] || values['confirm-mode'] === 'always' ? '；每次推送确认，关闭 App 后仍生效' : '；超限询问是否继续，关闭 App 后仍生效'}`)
   return 0
 }
 
@@ -166,7 +171,7 @@ export async function repositoryHookPath(context: CliContext): Promise<string> {
   return resolve(context.cwd, await runGitChecked(context, ['rev-parse', '--git-common-dir']), 'hooks/pre-push')
 }
 
-async function hookCommand(guard: string | undefined, confirm: boolean): Promise<string> {
+async function hookCommand(guard: string | undefined, confirm: boolean, always: boolean, mode: string | undefined): Promise<string> {
   if (guard !== undefined) {
     if (!isAbsolute(guard) || !(await regularFile(guard)) || !isExecutableMode((await lstat(guard)).mode))
       throw new CliError('--guard 必须指向已有的绝对路径可执行文件')
@@ -178,7 +183,7 @@ async function hookCommand(guard: string | undefined, confirm: boolean): Promise
   const cli = bundled ? entry : fileURLToPath(new URL(new URL(import.meta.url).pathname.endsWith('.ts') ? '../../dist/cli.mjs' : './cli.mjs', import.meta.url))
   if (!(await regularFile(cli)))
     throw new CliError('请先构建并安装 YunBox CLI，或使用 --guard 指定检查程序')
-  return `${shellQuote(process.execPath.replaceAll('\\', '/'))} ${shellQuote(cli.replaceAll('\\', '/'))} inspect --push --stdin --remote "$2"${confirm ? ' --confirm' : ''}`
+  return `${shellQuote(process.execPath.replaceAll('\\', '/'))} ${shellQuote(cli.replaceAll('\\', '/'))} inspect --push --stdin --remote "$2"${always ? ' --confirm-always' : confirm ? ` --confirm${mode ? ` --confirm-mode ${mode}` : ''}` : ''}`
 }
 
 /** Effective hook ownership and optional prerequisite diagnostics. */
@@ -189,6 +194,7 @@ export interface HookStatus {
   scope?: 'repository' | 'global' | 'compatible'
   compatibility?: CompatibilityStatus
   confirm: boolean
+  confirmAlways: boolean
   globalInstalled: boolean
   customPath: boolean
   node?: string
@@ -245,6 +251,7 @@ export async function hookStatus(context: CliContext, tools = true): Promise<Hoo
     scope,
     ...(compatible.compatibility ? { compatibility: compatible.compatibility } : {}),
     confirm: !!wrapper?.includes(' --confirm'),
+    confirmAlways: !!wrapper?.includes(' --confirm') && (wrapper.includes(' --confirm-always') || wrapper.includes(' --confirm-mode always') || (!wrapper.includes(' --confirm-mode exceeded') && await readConfirmMode(context) === 'always')),
     globalInstalled,
     customPath: configured !== undefined && !globalEffective && scope !== 'compatible',
     ...(tools ? { node: process.versions.node, nodeReady, git, lfs, ready: nodeReady && !!git?.found && compareVersions(git.version, MIN_GIT_VERSION) >= 0 && !!lfs?.found && compareVersions(lfs.version, MIN_GIT_LFS_VERSION) >= 0 } : {}),

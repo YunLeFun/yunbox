@@ -23,6 +23,35 @@ function decision(root: string, outcome: PushHistoryEntry['outcome'] = 'blocked'
 }
 
 describe('local project push history', () => {
+  it.skipIf(process.platform === 'win32')('records under-budget confirmation without calling it an exceeded budget', async () => {
+    const { sandbox, repo } = await fixture()
+    await writeFile(join(repo, 'small.txt'), 'small\n')
+    await git(sandbox, repo, 'add', '.')
+    await git(sandbox, repo, 'commit', '-qm', 'test(history): add small content')
+    const tip = await git(sandbox, repo, 'rev-parse', 'HEAD')
+    const input = `refs/heads/main ${tip} refs/heads/main ${'0'.repeat(40)}\n`
+    const bin = join(sandbox.root, 'bin')
+    await mkdir(bin)
+    const dialog = join(bin, 'osascript')
+    const script = (answer: string) => `#!/bin/sh\ncat > dialog-html\nprintf '%s\\n' "$@" > dialog-args\nprintf '${answer}\\nQA decision\\n'\n`
+    await writeFile(dialog, script('continue'), { mode: 0o755 })
+    Object.assign(sandbox.env, { YUNBOX_CONFIRM_UI: 'dialog', PATH: `${bin}:${sandbox.env.PATH}` })
+    const args = ['inspect', '--push', '--stdin', '--confirm-always']
+    expect((await runYunBox(sandbox, repo, args, input)).code).toBe(0)
+    expect((await readFile(join(repo, 'dialog-args'), 'utf8')).split('\n')).toContain('确认推送')
+    expect(await readFile(join(repo, 'dialog-html'), 'utf8')).toContain('原始内容')
+    expect(await readPushHistory(sandbox.env)).toEqual([expect.objectContaining({ reason: 'confirmation', outcome: 'continued', summary: '每次推送确认（未超限）', note: 'QA decision' })])
+    expect(await readBlockedPushes(sandbox.env)).toEqual([])
+    await writeFile(dialog, script('cancel'), { mode: 0o755 })
+    expect((await runYunBox(sandbox, repo, args, input)).code).toBe(1)
+    expect((await readPushHistory(sandbox.env))[0]).toMatchObject({ reason: 'confirmation', outcome: 'cancelled' })
+    expect((await readBlockedPushes(sandbox.env))[0]).toMatchObject({ reason: 'cancelled' })
+    sandbox.env.YUNBOX_CONFIRM_UI = 'none'
+    expect((await runYunBox(sandbox, repo, args, input)).code).toBe(1)
+    expect((await readPushHistory(sandbox.env))[0]).toMatchObject({ reason: 'confirmation', outcome: 'blocked' })
+    expect((await readBlockedPushes(sandbox.env))[0]).toMatchObject({ reason: 'confirmation' })
+  })
+
   it('appends separate decisions and keeps confirmed continuations out of the blocked shortcut', async () => {
     const { sandbox, repo } = await fixture()
     await recordPushHistory(sandbox.env, decision(repo))

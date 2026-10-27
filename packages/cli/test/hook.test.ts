@@ -25,6 +25,24 @@ afterEach(async () => {
 })
 
 describe('composed pre-push hook', () => {
+  it('installs always-confirm hooks and reports the effective confirmation policy', async () => {
+    const { sandbox, repo, hook, guard } = await fixture()
+    expect((await runYunBox(sandbox, repo, ['hook', 'install', '--confirm-always'])).code).toBe(0)
+    expect(await readFile(hook, 'utf8')).toContain(' --confirm-always')
+    const status = () => runYunBox(sandbox, repo, ['hook', 'status', '--json']).then(result => JSON.parse(result.stdout))
+    expect(await status()).toMatchObject({ confirm: true, confirmAlways: true })
+    expect((await runYunBox(sandbox, repo, ['hook', 'install'])).code).toBe(0)
+    expect(await status()).toMatchObject({ confirm: true, confirmAlways: false })
+    await git(sandbox, repo, 'config', 'yunbox.confirmMode', 'always')
+    expect(await status()).toMatchObject({ confirm: true, confirmAlways: true })
+    expect((await runYunBox(sandbox, repo, ['hook', 'install', '--confirm-mode', 'exceeded'])).code).toBe(0)
+    expect(await status()).toMatchObject({ confirm: true, confirmAlways: false })
+    expect((await runYunBox(sandbox, repo, ['hook', 'install', '--no-confirm'])).code).toBe(0)
+    expect(await status()).toMatchObject({ confirm: false, confirmAlways: false })
+    for (const args of [['--no-confirm'], ['--guard', guard]])
+      expect((await runYunBox(sandbox, repo, ['hook', 'install', '--confirm-always', ...args])).code).toBe(2)
+  })
+
   it('asks on exceeded budgets by default and supports explicit rejection mode', async () => {
     const { sandbox, repo, hook } = await fixture()
     expect((await runYunBox(sandbox, repo, ['hook', 'install'])).code).toBe(0)
@@ -101,6 +119,24 @@ describe('composed pre-push hook', () => {
 })
 
 describe('optional global hook dispatcher', () => {
+  it('stops an under-budget push before the original upload when always-confirm has no UI', async () => {
+    const { sandbox, repo, hook } = await fixture()
+    const remote = join(sandbox.root, 'origin.git')
+    await git(sandbox, sandbox.root, 'init', '--bare', remote)
+    await git(sandbox, repo, 'remote', 'add', 'origin', remote)
+    await writeFile(hook, '#!/bin/sh\ncat > uploaded-input\n', { mode: 0o755 })
+    await writeFile(join(repo, 'small.txt'), 'small\n')
+    await git(sandbox, repo, 'add', 'small.txt')
+    await git(sandbox, repo, 'commit', '-qm', 'test(hook): add small file')
+    expect((await runYunBox(sandbox, repo, ['hook', 'install', '--global', '--confirm-always'])).code).toBe(0)
+    await expect(git(sandbox, repo, 'push', 'origin', 'HEAD:main')).rejects.toThrow()
+    await expect(readFile(join(repo, 'uploaded-input'))).rejects.toThrow()
+    expect(await git(sandbox, remote, 'for-each-ref', '--format=%(refname)')).toBe('')
+    expect((await runYunBox(sandbox, repo, ['hook', 'install', '--global'])).code).toBe(0)
+    await git(sandbox, repo, 'push', 'origin', 'HEAD:main')
+    expect(await readFile(join(repo, 'uploaded-input'), 'utf8')).toContain('refs/heads/main')
+  })
+
   it('enforces the real CLI during push while the desktop app is absent', async () => {
     const { sandbox, repo, hook } = await fixture()
     const remote = join(sandbox.root, 'origin.git')

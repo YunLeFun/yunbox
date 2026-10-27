@@ -2,7 +2,7 @@ import Foundation
 
 /// A locally recorded protection decision; continuing does not establish upload success.
 public struct PushHistoryEntry: Decodable, Sendable, Identifiable, Equatable {
-    public enum Reason: String, Decodable, Sendable { case freeze, exceeded }
+    public enum Reason: String, Decodable, Sendable { case freeze, exceeded, confirmation }
     public enum Outcome: String, Decodable, Sendable { case blocked, cancelled, continued }
 
     public let id: String

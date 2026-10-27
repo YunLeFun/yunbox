@@ -106,17 +106,22 @@ interface Blob {
 export async function inspectPush(context: CliContext, range: InspectionRange, limits: InspectionLimits): Promise<PushInspection> {
   const packCapBytes = Math.max(10 * 1024 * 1024, limits.gitBytes)
   const gitQuery = readBlobs(context, range.git)
-  const [gitBlobs, lfsBlobs, history, pack] = await Promise.all([
+  const sameRange = range.git.join('\n') === range.lfs.join('\n')
+  const historyQuery = readHistory(context, range.git)
+  const [gitBlobs, lfsBlobs, history, lfsHistory, pack] = await Promise.all([
     gitQuery,
-    range.git.join('\n') === range.lfs.join('\n') ? gitQuery : readBlobs(context, range.lfs),
-    readHistory(context, range.lfs),
+    sameRange ? gitQuery : readBlobs(context, range.lfs),
+    historyQuery,
+    sameRange ? historyQuery : readHistory(context, range.lfs),
     range.git.length
       ? inspectGit(context, ['pack-objects', '--revs', '--stdout', '--thin', '--delta-base-offset', '-q'], revisions(range.git), packCapBytes)
       : { bytes: 0, complete: true },
   ])
   const allBlobs = new Map([...gitBlobs, ...lfsBlobs].map(blob => [blob.oid, blob]))
   const pointers = await readPointers(context, [...allBlobs.values()])
-  const paths = history.paths
+  const paths = new Map(lfsHistory.paths)
+  for (const [oid, names] of history.paths)
+    paths.set(oid, [...new Set([...(paths.get(oid) ?? []), ...names])])
   const warnings = [...range.warnings]
   if (allBlobs.size && paths.size === 0)
     warnings.push('无法确定文件路径，报告以对象 ID 标识内容')
@@ -158,7 +163,7 @@ export async function inspectPush(context: CliContext, range: InspectionRange, l
   }
   const lfs = { candidateBytes, candidateCount: files.length, remoteChecked: uploadBytes !== null, ...(remote.status === 'checked' && { remoteStorage: remote.storage }), uploadBytes, exceedsLimit: (uploadBytes ?? candidateBytes) > limits.lfsBytes, files }
   const lfsUploads = new Set(files.filter(file => !file.onRemote).map(file => file.oid))
-  const changes = await readChanges(context, history.events, { blobs: allBlobs, pointers, gitBlobs: new Set(gitBlobs.map(blob => blob.oid)), lfsUploads, fileBytes: limits.fileBytes })
+  const changes = await readChanges(context, history.events, { blobs: allBlobs, pointers, gitBlobs: new Set(gitBlobs.map(blob => blob.oid)), lfsUploads, lfsEvents: lfsHistory.events, fileBytes: limits.fileBytes })
   return {
     schemaVersion: 1,
     status: git.exceedsLimit || lfs.exceedsLimit || [...git.files, ...files].some(file => file.exceedsFileLimit) ? 'exceeded' : 'ok',
@@ -241,19 +246,19 @@ export function formatInspection(report: PushInspection, top = 10, display: Insp
     '',
     style.paint(report.status === 'exceeded' ? 'warning' : 'success', report.status === 'exceeded' ? '! 超过限额，需要确认' : '✓ 未超限'),
     ...exceededReasons(report).map(reason => style.paint('error', `  ! ${reason}`)),
-    style.field('Git 上传', `${report.git.packComplete ? compactBytes(report.git.packBytes) : `> ${compactBytes(report.git.packCapBytes)}`}（pack 估算）；预算 ${compactBytes(report.limits.gitBytes)}`, report.git.exceedsLimit ? 'error' : undefined),
+    style.field('Git 增量上传', `${report.git.packComplete ? compactBytes(report.git.packBytes) : `> ${compactBytes(report.git.packCapBytes)}`}（压缩 / 增量 pack 估算）；预算 ${compactBytes(report.limits.gitBytes)}`, report.git.exceedsLimit ? 'error' : undefined),
     ...describeLfs(report).map(line => style.paint(report.lfs.exceedsLimit ? 'error' : 'info', line)),
     style.field('单文件预算', `${compactBytes(report.limits.fileBytes)}（原始大小）`),
   ]
   const changes = report.changes.filter(change => change.versions > 0)
-  lines.push(`\n${style.paint('title', `变更文件（前 ${Math.min(top, changes.length)} / ${changes.length}，按本次上传原始大小）`)}`)
+  lines.push(`\n${style.paint('title', `变更文件（前 ${Math.min(top, changes.length)} / ${changes.length}，按原始内容大小）`)}`)
   if (!changes.length)
     lines.push(style.paint('muted', '  没有新的文件内容需要上传。'))
   for (const change of changes.slice(0, top)) {
     const versions = change.versions > 1 ? `  ${change.versions} 个版本` : ''
     const tone = change.exceedsFileLimit ? 'error' : change.status === 'added' ? 'success' : 'info'
     lines.push(style.paint(tone, `${change.exceedsFileLimit ? '[超限] ' : ''}${CHANGE_LABELS[change.status]}  ${change.storage === 'lfs' ? 'LFS' : 'Git'}  ${terminalText(JSON.stringify(change.path))}`))
-    lines.push(`  上传 ${compactBytes(change.pushBytes)}  ·  ${describeSizeChange(change)}${versions}`)
+    lines.push(`  原始内容 ${compactBytes(change.pushBytes)}  ·  ${describeSizeChange(change)}${versions}`)
   }
   if (changes.length > top)
     lines.push(style.paint('muted', '  更多文件：yunbox inspect --push --top 100；全部明细见 --json。'))
@@ -389,10 +394,19 @@ interface ChangeSources {
   gitBlobs: Set<string>
   /** LFS payload oids the push uploads. */
   lfsUploads: Set<string>
+  /** LFS candidates can include history already excluded from the Git pack. */
+  lfsEvents: Map<string, PathEvent[]>
   fileBytes: number
 }
 
 async function readChanges(context: CliContext, events: Map<string, PathEvent[]>, sources: ChangeSources): Promise<InspectionChange[]> {
+  events = new Map(events)
+  // Keep conservative LFS candidates visible without applying their full-history
+  // path states to ordinary Git files whose remote base is known.
+  for (const [path, list] of sources.lfsEvents) {
+    if (!events.has(path) && list.some(event => event.after && sources.lfsUploads.has(sources.pointers.get(event.after)?.oid ?? '')))
+      events.set(path, list)
+  }
   // Objects before the push are outside the pushed range; size them (and spot their LFS pointers) separately.
   const unknown = new Set<string>()
   for (const list of events.values()) {
@@ -415,7 +429,7 @@ async function readChanges(context: CliContext, events: Map<string, PathEvent[]>
     const before = list[0]!.before
     const after = list.at(-1)!.after
     const uploaded = new Map<string, number>()
-    for (const { after: version } of list) {
+    for (const { after: version } of [...list, ...(sources.lfsEvents.get(path) ?? [])]) {
       const pointer = version === undefined ? undefined : pointers.get(version)
       if (pointer && sources.lfsUploads.has(pointer.oid))
         uploaded.set(`lfs:${pointer.oid}`, pointer.bytes)

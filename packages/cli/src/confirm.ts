@@ -473,7 +473,7 @@ export function renderConfirmationHtml(report: PushInspection): string {
     .map(status => [status, changes.filter(change => change.status === status).length] as const)
     .filter(([, count]) => count > 0)
   const meters = [
-    meter('Git pack', report.git.packComplete ? report.git.packBytes : report.git.packCapBytes, report.limits.gitBytes, report.git.exceedsLimit, report.git.packComplete ? '压缩后预计上传' : '估算已截断，实际更大', !report.git.packComplete),
+    meter('Git 增量上传', report.git.packComplete ? report.git.packBytes : report.git.packCapBytes, report.limits.gitBytes, report.git.exceedsLimit, report.git.packComplete ? '压缩 / 增量 pack 估算' : '估算已截断，实际更大', !report.git.packComplete),
     report.lfs.uploadBytes === null
       ? meter('LFS 候选', report.lfs.candidateBytes, report.limits.lfsBytes, report.lfs.exceedsLimit, `${report.lfs.candidateCount} 个素材，远端已有的会跳过`)
       : meter('LFS 上传', report.lfs.uploadBytes, report.limits.lfsBytes, report.lfs.exceedsLimit, `${report.lfs.files.filter(file => !file.onRemote).length} 个素材，${report.lfs.files.filter(file => file.onRemote).length} 个已在 COS`),
@@ -486,15 +486,15 @@ export function renderConfirmationHtml(report: PushInspection): string {
     ...report.warnings,
     ...(hidden.length ? [`另有 ${hidden.length} 个文件（合计 ${compactBytes(hidden.reduce((sum, change) => sum + change.pushBytes, 0))}）未列出，完整明细见 yunbox inspect --push --json`] : []),
     ...(unpathed.length ? [`${unpathed.length} 个对象无法确定路径，未列在表中`] : []),
-    '「本次上传」是文件原始大小，Git 会压缩和增量传输；同一文件的每个历史版本分别统计。',
+    '「原始内容」为各历史版本压缩前的大小合计，不是网络上传量，也不是前后大小之差；Git 增量上传量见上方 pack 估算。',
   ]
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
 <style>${STYLE}</style></head><body>
 <section class="meters">${meters.join('')}</section>
-<div class="caption"><strong>变更文件</strong><span>${changes.length} 个文件${counts.map(([status, count]) => ` · <i class="badge ${status}">${CHANGE_LABELS[status]}</i> ${count}`).join('')}</span><span class="spacer"></span><span>${previewable ? '点击文件预览 · ' : ''}按本次上传大小排序</span></div>
-<div class="columns"><table>${COLUMNS}<thead><tr><th>状态</th><th>文件</th><th class="num">大小变化</th><th class="num">本次上传</th></tr></thead></table></div>
+<div class="caption"><strong>变更文件</strong><span>${changes.length} 个文件${counts.map(([status, count]) => ` · <i class="badge ${status}">${CHANGE_LABELS[status]}</i> ${count}`).join('')}</span><span class="spacer"></span><span>${previewable ? '点击文件预览 · ' : ''}按原始内容大小排序</span></div>
+<div class="columns"><table>${COLUMNS}<thead><tr><th>状态</th><th>文件</th><th class="num">大小变化</th><th class="num">原始内容</th></tr></thead></table></div>
 <div class="list"><table>${COLUMNS}<tbody>${rows || '<tr><td colspan="4" class="empty">没有新的文件内容</td></tr>'}</tbody></table></div>
 <ul class="notes">${notes.map(note => `<li>${escapeHtml(note)}</li>`).join('')}</ul>
 </body></html>
@@ -502,7 +502,7 @@ export function renderConfirmationHtml(report: PushInspection): string {
 }
 
 /**
- * Ask whether to push despite an exceeded budget: a native dialog on macOS, else the
+ * Ask whether to push: a native dialog on macOS, else the
  * controlling terminal. Blocks (returns false) when nobody can be asked.
  */
 export async function confirmPush(context: CliContext, report: PushInspection, options: { remote?: string, updates?: string, head?: string, ui?: ConfirmUi } = {}): Promise<boolean> {
@@ -558,13 +558,14 @@ export async function askPush(context: CliContext, report: PushInspection, optio
   }
   if (ui !== 'none') {
     const style = terminalFor(context, 'stderr')
-    const answer = await readTerminalLine(`\n${source}${target ? ` 推送到 ${target}` : ''}\n${style.paint('warning', '? 超过限额，继续推送？[y/N]')} 可附原因（如 n 先压缩图片）：`)
+    const prompt = report.status === 'exceeded' ? '? 超过限额，继续推送？[y/N]' : '? 未超限，确认推送？[y/N]'
+    const answer = await readTerminalLine(`\n${source}${target ? ` 推送到 ${target}` : ''}\n${style.paint('warning', prompt)} 可附原因（如 n 先压缩图片）：`)
     if (answer !== undefined)
       return parseTerminalAnswer(answer)
   }
   const unavailable = ui === 'none'
-    ? '无法请求确认：确认方式设为 none，超限推送已取消。\n请先处理超限文件；需要交互确认时，检查 YUNBOX_CONFIRM_UI 和 git config yunbox.confirmUI 的设置。\n'
-    : '无法请求确认：没有可用的对话框 / 控制终端。已取消推送。\n请在交互式终端重试（Windows 可用 PowerShell / Windows Terminal）。CI 中请先处理超限文件。\n'
+    ? '无法请求确认：确认方式设为 none，推送已取消。\n需要交互确认时，检查 YUNBOX_CONFIRM_UI 和 git config yunbox.confirmUI 的设置。\n'
+    : '无法请求确认：没有可用的对话框 / 控制终端。已取消推送。\n请在交互式终端重试（Windows 可用 PowerShell / Windows Terminal）。\n'
   context.stderr.write(terminalFor(context, 'stderr').paint('warning', unavailable))
   return undefined
 }
@@ -582,8 +583,10 @@ function listedChanges(report: PushInspection): { changes: InspectionChange[], s
 async function askDialog(context: CliContext, report: PushInspection, push: PushEnds): Promise<PushAnswer | undefined> {
   const { shown } = listedChanges(report)
   const height = Math.min(560, Math.max(300, 210 + shown.length * 29))
-  const title = push.target ? `推送到 ${push.target} 超过限额` : '推送超过限额'
-  const info = [push.source, ...exceededReasons(report)].join('\n')
+  const title = report.status === 'exceeded'
+    ? push.target ? `推送到 ${push.target} 超过限额` : '推送超过限额'
+    : push.target ? `确认推送到 ${push.target}` : '确认推送'
+  const info = [push.source, ...(report.status === 'exceeded' ? exceededReasons(report) : ['未超限；已启用每次推送确认'])].join('\n')
   const items = shown.map(previewVersions)
   // Private (0700) and removed when the dialog closes; the dialog removes it too.
   const dir = items.some(versions => versions.length) ? await mkdtemp(join(tmpdir(), 'yunbox-preview-')) : undefined

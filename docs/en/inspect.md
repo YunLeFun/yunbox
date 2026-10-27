@@ -9,13 +9,16 @@ yunbox inspect --push
 yunbox inspect --push --base origin/main --head HEAD --json
 yunbox inspect --push --git-limit 900k --lfs-limit 100m --file-limit 10m --top 20
 yunbox inspect --push --confirm   # ask for confirmation when over budget; see below
+yunbox inspect --push --confirm-always   # ask even when within budget
 ```
 
 By default, `yunbox inspect` compares HEAD with your local snapshot of the upstream branch. If there is no upstream, it checks the whole history of HEAD and tells you so.
 
 `--stdin` reads the four-column ref updates that Git passes to a pre-push hook. It handles several branches and deletions in one push, and can't be combined with `--base` / `--head`.
 
-Remote Git refs are only queried when you pass `--remote <name/url>` explicitly, and only for a new branch or when the old tip is missing. If that query fails, or the remote objects aren't available locally, the estimate errs on the high side. Nothing is fetched and no LFS content is downloaded. For repositories connected directly to COS, YunBox does check whether the LFS objects are already uploaded; see below.
+If an existing remote branch's old tip is missing locally, inspection fails with exit code `2` and asks you to run `git fetch`. It no longer presents unreliable sizes and file statuses as a passed check. Retry after fetching. Inspection never fetches automatically, changes refs, or downloads LFS content.
+
+Remote Git refs are only queried when you pass `--remote <name/url>` explicitly for a new branch, to exclude locally readable history already on the remote. A failed query or remote objects missing locally produces an explicit conservative-estimate warning. For repositories connected directly to COS, YunBox also checks whether LFS objects are already uploaded; see below.
 
 ## Terminal reports
 
@@ -25,7 +28,7 @@ Interactive terminals highlight passed checks in green, warnings in yellow, and 
 
 ## What gets counted
 
-- **Git pack**: an estimate of the local thin pack, covering commits, trees, ordinary files and LFS pointers. Counting stops once it passes `max(10 MiB, Git limit)`, and the report then shows a lower bound instead of an exact value. Protocol handshake overhead isn't included.
+- **Incremental Git upload**: an estimate of the local thin pack, covering commits, trees, ordinary files and LFS pointers, including compression and delta encoding. Counting stops once it passes `max(10 MiB, Git limit)`, and the report then shows a lower bound instead of an exact value. Protocol handshake overhead isn't included, and this estimate does not establish upload success.
 - **Git file details**: the raw size of ordinary blobs, excluding anything recognized as an LFS pointer. Identical content is counted once (deduplicated by object ID), but each historical version counts separately, including large files that were deleted later. Raw size is not the same as the compressed, delta-encoded amount actually sent over the network.
 - **LFS candidate size**: asset sizes read from the pointers in the pushed history, deduplicated by LFS SHA-256. A new branch keeps the candidates from its whole history, even when the Git pack can leave out objects that other remote branches already have.
 - **Actual LFS upload size**: when the repository is [connected directly to COS](./guide/) and this machine has a key (from `yunbox login`, `TENCENTCLOUD_*` or `tccli auth login`), YunBox sends one HEAD request to COS per candidate. This is the same check the transfer agent runs before uploading, and it only needs the `HeadObject` permission. Objects that already exist with the same size don't count toward the upload, and `uploadBytes` gives an exact value. The LFS budget, the per-file budget and the upload size of changed files are all based only on objects that actually need uploading.
@@ -37,7 +40,7 @@ Interactive terminals highlight passed checks in green, warnings in yellow, and 
   - the size before and after the push (for LFS, the asset size)
   - how many versions this push uploads, and their total raw size
 
-  Files are sorted by upload size, largest first. When several paths share the same content, each path counts it. The before and after states come from the earliest and the latest change, so they are approximate when you push several branches at once.
+  Files are sorted by raw content size, largest first. Neither that size nor the difference between before and after sizes represents the network upload; use the total pack estimate for Git. When several paths share the same content, each path counts it. Ordinary Git statuses use the incremental Git range rather than the full conservative LFS history of a new branch. LFS candidates are still retained conservatively. The before and after states come from the earliest and the latest change, so they are approximate when you push several branches at once.
 - **Per-file limit**: applies to both ordinary Git files and LFS assets. Text output shows the top 10 changed files (raise it to at most 100 with `--top`). JSON output includes every change and object, the paths found for them, exact byte counts and over-budget flags. Objects whose path is unknown are listed separately by object ID.
 
 The default budgets are **900 KiB** for the Git pack, **100 MiB** for total LFS candidates and **10 MiB** per file. These are local check budgets, not quotas of any hosting platform. Going over any one of them makes the result over budget; a value exactly at the budget passes. Command-line flags take precedence over repository or global Git config:
@@ -50,7 +53,7 @@ git config yunbox.inspectFileBytes 10m
 
 Values can be plain byte counts or use `k/m/g` or `KiB/MiB/GiB`; all units are powers of 1024.
 
-Exit codes: `0` within budget, `1` over budget, `2` the check failed. Missing objects, invalid pointers, timeouts and analysis output that grows too large all count as failures. A failure never means "zero traffic".
+Exit codes: `0` allowed (within budget or explicitly approved), `1` blocked by a budget, freeze, or missing confirmation, `2` the check failed. Missing objects, invalid pointers, timeouts and analysis output that grows too large all count as failures. A failure never means "zero traffic".
 
 ## JSON output
 
@@ -63,7 +66,7 @@ With `--json`, stdout contains exactly one JSON object, even when something goes
 | `git.packBytes` / `packComplete` | The full estimate. When the estimate is incomplete, `packBytes` is `packCapBytes + 1` and should be read as a lower bound |
 | `git.blobBytes` / `blobCount` / `pointerBytes` | Raw size and number of Git blobs (pointers included), and how much of that is pointers |
 | `git.exceedsLimit` / `lfs.exceedsLimit` | Whether each total is over its budget. Per-file overruns are flagged on each entry instead |
-| `changes` | One entry per changed path: `{ path, status, storage, beforeBytes, afterBytes, beforeOid, afterOid, versions, pushBytes, exceedsFileLimit }`. `status` is `added`, `modified`, `deleted` or `transient`; `storage` is `git` or `lfs`. A size is `null` when the path doesn't exist or the old object isn't available locally. `versions` of `0` means there's no new content to upload (for example a deletion, or an LFS object already in COS). Added later; `schemaVersion` is still `1` |
+| `changes` | One entry per changed path: `{ path, status, storage, beforeBytes, afterBytes, beforeOid, afterOid, versions, pushBytes, exceedsFileLimit }`. The existing `pushBytes` field always means total raw content bytes across versions, not compressed upload bytes. `status` is `added`, `modified`, `deleted` or `transient`; `storage` is `git` or `lfs`. A size is `null` when the path doesn't exist or the old object isn't available locally. `versions` of `0` means there's no new content to upload (for example a deletion, or an LFS object already in COS). Added later; `schemaVersion` is still `1` |
 | `changes[].beforeOid` / `afterOid` | Content IDs before and after the push, for reading that exact version. For LFS files it's the asset's SHA-256 (stored locally at `.git/lfs/objects/<first 2 chars>/<chars 3–4>/<oid>`, and possibly not downloaded yet). For ordinary files it's the Git blob ID (`git cat-file blob <oid>`). It is `null` whenever the matching size is `null`. Don't read from the working tree, which may differ from the pushed commits. Added later; `schemaVersion` is still `1` |
 | `git.files` / `lfs.files` | Full object lists, sorted by size (largest first). Each entry is `{ oid, bytes, paths, exceedsFileLimit }`. `exceedsFileLimit` means the object is over the per-file budget and needs uploading; it is `false` for LFS objects already in COS |
 | `lfs.files[].onRemote` | Present only when `lfs.remoteChecked` is `true`: whether the storage already has this object (so the push skips it). Added later; `schemaVersion` is still `1` |
@@ -76,6 +79,18 @@ With `--json`, stdout contains exactly one JSON object, even when something goes
 ## Confirming over-budget pushes
 
 With `--confirm`, an over-budget result asks whether to go on. If you confirm, the exit code is `0`; if you cancel, or there's no way to ask, it is `1`. `--confirm` can't be combined with `--json`. Like the rest of the CLI's messages, the dialog and terminal prompt are in Chinese for now.
+
+`--confirm-always` asks on every check, even within budget, using a regular confirmation title. Continuing returns `0`; cancelling, closing the window, or having no available interface returns `1`. It also cannot be combined with `--json` and follows `--confirm-ui`. Inspection errors and push freezes still stop the push directly.
+
+```bash
+yunbox hook install --confirm-always          # every push in this repository
+yunbox hook install --global --confirm-always # every push covered by global protection
+git config yunbox.confirmMode always         # existing --confirm hooks, without reinstalling
+git config yunbox.confirmMode exceeded       # restore the default: ask only over budget
+yunbox hook install --confirm-mode exceeded  # explicitly override the Git preference
+```
+
+`--confirm-always` / `--confirm-mode exceeded|always` takes precedence over `yunbox.confirmMode`, which defaults to `exceeded`. Manual inspection requires `--confirm` with `--confirm-mode`. Checks without confirmation and `--no-confirm` hooks ignore this preference. The macOS **Help → Setup Assistant → Push protection** step also offers a **Show a confirmation for every push** toggle; apply the setting to enable it. `hook status --json` reports the effective policy as `confirmAlways`. This UI is the push confirmation panel; the full client can still be opened with its button inside the panel.
 
 - **macOS**: a native dialog appears (run through `osascript`, so no app needs to be installed).
   - The title names the push target (such as `github.com/owner/repo`, without credentials). The line below it shows the local repository name and the branches being pushed.
@@ -91,7 +106,7 @@ With `--confirm`, an over-budget result asks whether to go on. If you confirm, t
 
 When a push is cancelled, the output gives the reason (if one was typed) and says not to raise the budgets or bypass the check with `--no-verify`, so an AI coding assistant that started the push knows what to do next.
 
-Choose `auto`, `dialog`, `terminal` or `none` (do not ask; block over-budget pushes). Precedence: `--confirm-ui` > `YUNBOX_CONFIRM_UI` > Git setting `yunbox.confirmUI` > `auto`. `--confirm-ui` requires `--confirm`. A saved preference also applies to pre-push wrappers installed with `--confirm`:
+Choose `auto`, `dialog`, `terminal` or `none` (do not ask; block pushes that require confirmation). Precedence: `--confirm-ui` > `YUNBOX_CONFIRM_UI` > Git setting `yunbox.confirmUI` > `auto`. `--confirm-ui` requires `--confirm` or `--confirm-always`. A saved preference also applies to pre-push wrappers installed with `--confirm`:
 
 ```bash
 git config yunbox.confirmUI terminal          # This repository: terminal only
@@ -103,6 +118,8 @@ yunbox inspect --push --confirm --confirm-ui terminal # Override this check only
 On macOS, `auto` uses the native window locally (with a button to open the YunBox app), and the terminal over SSH. Explicit `dialog` attempts the native window, then falls back to the terminal if unavailable.
 
 ## Local push protection history
+
+Within-budget decisions in always-confirm mode use `reason: confirmation`, rather than an exceeded-budget reason. An unavailable interface records `blocked`, a user cancellation records `cancelled`, and approval records `continued`.
 
 The hook appends a project-scoped decision for freezes, budget blocks, user cancellations and confirmed continuations, with a timestamp, reason, outcome and optional user note. Manual inspections do not record history. A continuation means the check allowed the push; Git reports the subsequent upload result.
 

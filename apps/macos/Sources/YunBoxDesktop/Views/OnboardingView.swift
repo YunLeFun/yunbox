@@ -117,6 +117,10 @@ struct OnboardingView: View {
             Text("启用推送保护").font(.headline)
             Text("每次推送先检查体积和禁推时段，通过后才上传。关闭云匣后仍然生效。")
             Toggle("超限时询问是否继续", isOn: $setup.confirm)
+            Toggle("每次推送显示 UI", isOn: $setup.confirmAlways)
+                .disabled(!setup.confirm)
+            Text("开启后，未超限也需在确认界面中选择是否继续；关闭窗口或无法显示界面时取消推送。")
+                .font(.caption).foregroundStyle(.secondary)
             Text("macOS 弹出确认框；终端环境在终端询问。无人确认时取消推送，禁推时段始终阻止推送。")
                 .font(.caption).foregroundStyle(.secondary)
             Toggle("启用全局保护（普通仓库）", isOn: $setup.globally)
@@ -150,7 +154,7 @@ struct OnboardingView: View {
             if let status = setup.status, status.isProtected {
                 Label(status.scope == "global" ? "当前仓库已受全局保护" : "当前仓库已启用推送保护", systemImage: "checkmark.shield")
                     .foregroundStyle(.green)
-                Text(status.confirm ? "当前行为：超限询问" : "当前行为：超限直接阻止").font(.callout)
+                Text(status.confirmAlways == true ? "当前行为：每次推送确认" : status.confirm ? "当前行为：超限询问" : "当前行为：超限直接阻止").font(.callout)
             } else {
                 Label("当前仓库尚未启用 YunBox 推送保护", systemImage: "shield.slash").font(.callout)
             }

@@ -2,11 +2,31 @@ import Foundation
 import Testing
 @testable import YunBoxKit
 
+@Test func hookSetupPassesTheSelectedConfirmationPolicyToTheCLI() async throws {
+    let root = FileManager.default.temporaryDirectory.appending(path: "yunbox-hook-options-\(UUID().uuidString)")
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let script = root.appending(path: "cli.sh")
+    try Data("#!/bin/sh\nprintf '%s\\n' \"$@\"\n".utf8).write(to: script)
+    let client = InspectionClient(node: URL(fileURLWithPath: "/bin/sh"), cli: script)
+    let always = try await client.installHook(repository: root, compatible: true, confirmAlways: true)
+    #expect(always.text == "hook\ninstall\n--confirm-mode\nalways\n--compatible\n")
+    let exceeded = try await client.installHook(repository: root)
+    #expect(exceeded.text == "hook\ninstall\n--confirm-mode\nexceeded\n")
+    let disabled = try await client.installHook(repository: root, confirm: false, confirmAlways: true)
+    #expect(disabled.text == "hook\ninstall\n--no-confirm\n")
+    let repaired = try await client.repairHook(repository: root, confirmAlways: true)
+    #expect(repaired.text == "hook\nrepair\n--confirm-mode\nalways\n")
+}
+
 @Test func setupDistinguishesEffectiveProtectionFromAnOverriddenGlobalHook() throws {
     let json = #"{"version":1,"repository":true,"hook":"inspect","scope":"global","confirm":true,"globalInstalled":true,"customPath":false,"node":"24.14.0","nodeReady":true,"git":{"found":true,"version":"2.55.0"},"lfs":{"found":true,"version":"3.7.1"},"ready":true}"#
     let enabled = try HookStatus.decode(Data(json.utf8), exitCode: 0)
     #expect(enabled.isProtected)
     #expect(enabled.confirm)
+    #expect(enabled.confirmAlways == nil)
+    let always = json.replacingOccurrences(of: #""confirm":true"#, with: #""confirm":true,"confirmAlways":true"#)
+    #expect(try HookStatus.decode(Data(always.utf8), exitCode: 0).confirmAlways == true)
     let overridden = json.replacingOccurrences(of: #""hook":"inspect""#, with: #""hook":"none""#)
         .replacingOccurrences(of: #""customPath":false"#, with: #""customPath":true"#)
     let status = try HookStatus.decode(Data(overridden.utf8), exitCode: 0)

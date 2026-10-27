@@ -98,8 +98,7 @@ export async function resolveInspectionRange(context: CliContext, options: { upd
           bases.add(remote)
         }
         else {
-          discoverRemote = true
-          warnings.push('远端旧提交不在本地，按可读取历史保守估算')
+          throw new InspectionError('远端基准提交不在本地，无法可靠计算增量上传量和文件状态。请先运行 git fetch，再重试推送检查。')
         }
       }
     }
@@ -125,7 +124,10 @@ export async function resolveInspectionRange(context: CliContext, options: { upd
     try {
       const result = await inspectGit(context, ['ls-remote', '--refs', '--', options.remote])
       const advertised = result.output.toString('utf8').split('\n').map(line => line.split(/\s+/)[0]!).filter(oid => oidPattern.test(oid))
-      for (const oid of await localObjects(context, [...new Set(advertised)]))
+      const known = await localObjects(context, [...new Set(advertised)])
+      if (known.length < new Set(advertised).size)
+        warnings.push('部分远端引用不在本地，Git pack 为保守估算；先运行 git fetch 可改进增量估算')
+      for (const oid of known)
         bases.add(oid)
     }
     catch {

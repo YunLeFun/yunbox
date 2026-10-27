@@ -10,6 +10,8 @@ public struct BlockedPush: Equatable, Sendable, Identifiable {
         case exceeded
         /// A budget was exceeded and the user chose “cancel” in the confirmation.
         case cancelled
+        /// Confirmation was required but no interface was available.
+        case confirmation
     }
 
     /// Repository root, standardized like the paths of the recent list.
@@ -77,7 +79,7 @@ public enum BlockedPushes {
             return PushHistoryReport.decodeEntries(data).filter { $0.outcome != .continued }.compactMap { entry in
                 let path = URL(fileURLWithPath: entry.root).standardizedFileURL.path
                 guard seen.insert(path).inserted else { return nil }
-                let reason: BlockedPush.Reason = entry.outcome == .cancelled ? .cancelled : entry.reason == .freeze ? .freeze : .exceeded
+                let reason: BlockedPush.Reason = entry.outcome == .cancelled ? .cancelled : entry.reason == .confirmation ? .confirmation : entry.reason == .freeze ? .freeze : .exceeded
                 return BlockedPush(path: path, blockedAt: entry.at, reason: reason,
                                    summary: [entry.note, entry.summary].compactMap { $0 }.joined(separator: "；"))
             }

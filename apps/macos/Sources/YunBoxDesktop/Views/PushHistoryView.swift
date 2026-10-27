@@ -104,6 +104,7 @@ private extension PushHistoryEntry.Reason {
         switch self {
         case .freeze: String(localized: "禁推时段")
         case .exceeded: String(localized: "超出限额")
+        case .confirmation: String(localized: "每次推送确认")
         }
     }
 }

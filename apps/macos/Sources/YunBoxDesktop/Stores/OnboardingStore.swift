@@ -11,6 +11,7 @@ final class OnboardingStore {
     var output: CommandOutput?
     var globally = false
     var confirm = true
+    var confirmAlways = false
     var repositoryStatuses: [String: HookStatus] = [:]
     var unavailable = 0
     private var requestID = UUID()
@@ -32,7 +33,10 @@ final class OnboardingStore {
             status = report
             if updateOptions {
                 globally = report.globalInstalled
-                if report.isProtected { confirm = report.confirm }
+                if report.isProtected {
+                    confirm = report.confirm
+                    confirmAlways = report.confirmAlways == true
+                }
             }
             busy = false
             scanning = true
@@ -78,14 +82,14 @@ final class OnboardingStore {
             var result: CommandOutput
             switch action {
             case .removeGlobal: result = try await client.uninstallGlobalHook(directory: repository)
-            case .repair: result = try await client.repairHook(repository: repository, confirm: confirm)
+            case .repair: result = try await client.repairHook(repository: repository, confirm: confirm, confirmAlways: confirmAlways)
             case .restore: result = try await client.uninstallHook(repository: repository)
             case .clearMissing: result = try await client.clearMissingHook(repository: repository)
             case .apply:
                 let compatible = status?.customPath == true || status?.compatibility?.registered == true
-                result = try await client.installHook(repository: repository, globally: globally, confirm: confirm, compatible: compatible)
+                result = try await client.installHook(repository: repository, globally: globally, confirm: confirm, compatible: compatible, confirmAlways: confirmAlways)
                 if result.succeeded && globally && (compatible || status?.scope == "repository") {
-                    result = try await client.installHook(repository: repository, confirm: confirm, compatible: compatible)
+                    result = try await client.installHook(repository: repository, confirm: confirm, compatible: compatible, confirmAlways: confirmAlways)
                 }
             }
             output = result

@@ -4,6 +4,18 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ## Unreleased
 
+### Added
+
+- Push protection can show a confirmation for every push, including those within budget. Enable it through the CLI, Git configuration, or macOS Setup Assistant; decisions are saved in local history.
+
+### Changed
+
+- Push reports distinguish the compressed, delta-encoded Git upload estimate from raw file content and before/after size changes.
+
+### Fixed
+
+- When an existing remote branch's base commit is missing locally, inspection asks you to fetch before checking instead of showing misleading upload sizes. Ordinary file changes on new branches are no longer incorrectly marked as additions by full LFS history.
+
 ## 0.1.10 - 2026-10-25
 
 ### Added
