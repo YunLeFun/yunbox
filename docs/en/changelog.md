@@ -4,6 +4,8 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ## Unreleased
 
+## 0.1.11 - 2026-10-27
+
 ### Added
 
 - Push protection can show a confirmation for every push, including those within budget. Enable it through the CLI, Git configuration, or macOS Setup Assistant; decisions are saved in local history.
