@@ -13,7 +13,7 @@
 # pinned to a multi-arch index digest so rebuilds are reproducible. Dependabot
 # (.github/dependabot.yml) proposes minor and patch updates; it only reads
 # literal FROM lines, so keep the two in sync.
-FROM node:24.22.0-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5 AS build
+FROM node:24.22.0-bookworm-slim@sha256:91acba91b842bec0bf7ea6f5e09c644c7ccad72c4996ed9616d861d1c7cd60d4 AS build
 WORKDIR /src
 
 # Install the pnpm version pinned in package.json#packageManager.
@@ -30,7 +30,7 @@ RUN pnpm install --offline --frozen-lockfile \
   && pnpm --filter "@yunbox/server..." run build \
   && pnpm --filter @yunbox/server deploy --prod --legacy /app
 
-FROM node:24.22.0-bookworm-slim@sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5 AS runtime
+FROM node:24.22.0-bookworm-slim@sha256:91acba91b842bec0bf7ea6f5e09c644c7ccad72c4996ed9616d861d1c7cd60d4 AS runtime
 
 ENV NODE_ENV=production \
   YUNBOX_HOST=0.0.0.0 \
