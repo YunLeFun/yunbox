@@ -1,6 +1,6 @@
 import type { Sandbox } from './helpers.ts'
 import { execFile } from 'node:child_process'
-import { chmod, readFile, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
@@ -119,6 +119,21 @@ describe('composed pre-push hook', () => {
 })
 
 describe('optional global hook dispatcher', () => {
+  it.each([false, true])('allows git init with global protection and forwards template reference hooks (bare: %s)', async (bare) => {
+    const sandbox = await createSandbox()
+    sandboxes.push(sandbox)
+    expect((await runYunBox(sandbox, sandbox.root, ['hook', 'install', '--global'])).code).toBe(0)
+    const template = join(sandbox.root, 'template')
+    await mkdir(join(template, 'hooks'), { recursive: true })
+    await writeFile(join(template, 'hooks', 'reference-transaction'), '#!/bin/sh\nprintf "%s\\n" "$1" >> "$GIT_DIR/reference-events"\n', { mode: 0o755 })
+    const repo = join(sandbox.root, bare ? 'bare.git' : 'new-repo')
+    await git(sandbox, sandbox.root, 'init', ...(bare ? ['--bare'] : []), '--initial-branch=main', `--template=${template}`, repo)
+    const phases = await readFile(join(repo, ...(bare ? [] : ['.git']), 'reference-events'), 'utf8')
+    expect(phases).toContain('preparing\n')
+    expect(phases).toContain('committed\n')
+    expect(JSON.parse((await runYunBox(sandbox, sandbox.root, ['hook', 'status', '--json'])).stdout)).toMatchObject({ hook: 'inspect', scope: 'global', globalInstalled: true })
+  })
+
   it('stops an under-budget push before the original upload when always-confirm has no UI', async () => {
     const { sandbox, repo, hook } = await fixture()
     const remote = join(sandbox.root, 'origin.git')

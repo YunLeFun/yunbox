@@ -112,11 +112,14 @@ export async function manageGlobalHooks(context: CliContext, operation: string, 
 }
 
 function globalWrapper(event: string, command: string): string {
+  // Git initializes HEAD through this hook before rev-parse recognizes the repository.
+  const common = event === 'reference-transaction'
+    ? `common=$(git rev-parse --git-common-dir 2>/dev/null) || common="\${GIT_COMMON_DIR:-\${GIT_DIR:-}}"\n[ -n "$common" ] || exit 0\n`
+    : 'common=$(git rev-parse --git-common-dir)\n'
   const head = `#!/bin/sh
 ${event === 'pre-push' ? '# yunbox-pre-push-v1' : '# yunbox-global-hooks-v1'}
 set -eu
-common=$(git rev-parse --git-common-dir)
-original="$common/hooks/${event}"
+${common}original="$common/hooks/${event}"
 `
   if (event !== 'pre-push')
     return `${head}[ ! -x "$original" ] || exec "$original" "$@"\n${event === 'fsmonitor-watchman' ? 'exit 1\n' : ''}`
