@@ -4,6 +4,8 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ## Unreleased
 
+## 0.1.12 - 2026-11-18
+
 ### Fixed
 
 - Updating an existing branch now excludes Git history already on other branches at the destination, avoiding false upload-budget warnings after a rebase or merge.
