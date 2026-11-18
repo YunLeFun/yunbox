@@ -161,6 +161,42 @@ describe('push inspection', () => {
     expect(report.changes.find(change => change.path === 'asset.psd')).toMatchObject({ versions: 1, pushBytes: 64 * 1024 })
   })
 
+  it('excludes history already on another remote branch when updating an existing branch', async () => {
+    const { sandbox, repo } = await fixture()
+    await writeFile(join(repo, 'common.txt'), 'common\n')
+    const common = await commit(sandbox, repo)
+    await writeFile(join(repo, 'old-pr.txt'), 'old PR\n')
+    const oldTip = await commit(sandbox, repo)
+    const remote = join(sandbox.root, 'remote.git')
+    await git(sandbox, repo, 'init', '--bare', '-q', remote)
+    await git(sandbox, repo, 'push', remote, 'HEAD:refs/heads/feature')
+
+    await git(sandbox, repo, 'checkout', '-qb', 'dev', common)
+    await writeFile(join(repo, 'shared.bin'), randomBytes(1024 * 1024))
+    const asset = pointer(64 * 1024)
+    await writeFile(join(repo, 'shared.psd'), asset.text)
+    await commit(sandbox, repo)
+    await git(sandbox, repo, 'push', remote, 'HEAD:refs/heads/dev')
+    await writeFile(join(repo, 'new-pr.txt'), 'new PR\n')
+    const tip = await commit(sandbox, repo)
+    const input = `refs/heads/feature ${tip} refs/heads/feature ${oldTip}\n`
+    const args = ['inspect', '--push', '--stdin', '--json', '--remote']
+
+    const checked = await runYunBox(sandbox, repo, [...args, remote], input)
+    const report = JSON.parse(checked.stdout) as PushInspection
+    expect(checked.code).toBe(0)
+    expect(report.git.packBytes).toBeLessThan(900 * 1024)
+    expect(report.git.files.map(file => file.paths)).toEqual([['new-pr.txt']])
+    expect(report.lfs.candidateCount).toBe(1)
+    expect(report.lfs.files[0]?.oid).toBe(asset.oid)
+
+    const unavailable = await runYunBox(sandbox, repo, [...args, join(sandbox.root, 'missing.git')], input)
+    const conservative = JSON.parse(unavailable.stdout) as PushInspection
+    expect(unavailable.code).toBe(1)
+    expect(conservative.git.packBytes).toBeGreaterThan(900 * 1024)
+    expect(conservative.warnings.join(' ')).toContain('无法读取远端引用')
+  })
+
   it('requires fetch for a missing remote tip, then reports only the incremental changes', async () => {
     const { sandbox, repo } = await fixture()
     await writeFile(join(repo, 'edited.txt'), 'before\n')

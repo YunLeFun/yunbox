@@ -25,7 +25,7 @@ export const inspectHelp = `用法：yunbox inspect --push [选项]
   --stdin             从 stdin 读取 Git pre-push 的引用更新，支持多个分支和删除；
                       处在禁推时段（yunbox freeze）时直接中断，退出码 1；
                       保护决定（含确认继续）记入本机配置目录的 push-history.json
-  --remote <name/url>  新分支时查询远端 Git refs 以改进 pack 估算；旧 tip 缺失需先 git fetch
+  --remote <name/url>  推送时查询远端 Git refs 以改进 pack 估算；旧 tip 缺失需先 git fetch
   --git-limit <size>  Git pack 限额（默认 900k）
   --lfs-limit <size>  LFS 候选总量限额（默认 100m）
   --file-limit <size> 单文件原始大小限额（默认 10m，适用于 Git 和 LFS）

@@ -18,7 +18,7 @@ By default, `yunbox inspect` compares HEAD with your local snapshot of the upstr
 
 If an existing remote branch's old tip is missing locally, inspection fails with exit code `2` and asks you to run `git fetch`. It no longer presents unreliable sizes and file statuses as a passed check. Retry after fetching. Inspection never fetches automatically, changes refs, or downloads LFS content.
 
-Remote Git refs are only queried when you pass `--remote <name/url>` explicitly for a new branch, to exclude locally readable history already on the remote. A failed query or remote objects missing locally produces an explicit conservative-estimate warning. For repositories connected directly to COS, YunBox also checks whether LFS objects are already uploaded; see below.
+The push hook queries the destination's Git refs to exclude locally readable history the destination already has, including history on other branches. For a manual check without a usable upstream or explicit base, pass `--remote <name/url>` to query remote refs. If the query fails or some remote objects are missing locally, YunBox flags the Git pack estimate as conservative. For repositories connected directly to COS, YunBox also checks whether LFS objects are already uploaded (see below).
 
 ## Terminal reports
 

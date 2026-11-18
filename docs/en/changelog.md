@@ -6,6 +6,7 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ### Fixed
 
+- Updating an existing branch now excludes Git history already on other branches at the destination, avoiding false upload-budget warnings after a rebase or merge.
 - Global push protection no longer blocks initialization of regular or bare repositories, while preserving reference checks supplied by repository templates.
 
 ## 0.1.11 - 2026-10-27

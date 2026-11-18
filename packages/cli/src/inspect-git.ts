@@ -78,7 +78,7 @@ export async function resolveInspectionRange(context: CliContext, options: { upd
   const tips = new Set<string>()
   const bases = new Set<string>()
   const warnings: string[] = []
-  let discoverRemote = false
+  let discoverRemote = options.updates !== undefined
   const oidPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/
   if (options.updates !== undefined) {
     for (const line of options.updates.split(/\r?\n/).filter(line => line.trim() !== '')) {
@@ -89,10 +89,7 @@ export async function resolveInspectionRange(context: CliContext, options: { upd
       if (/^0+$/.test(local))
         continue
       tips.add(local)
-      if (/^0+$/.test(remote)) {
-        discoverRemote = true
-      }
-      else {
+      if (!/^0+$/.test(remote)) {
         const known = await localObjects(context, [remote])
         if (known.length) {
           bases.add(remote)
@@ -119,13 +116,14 @@ export async function resolveInspectionRange(context: CliContext, options: { upd
       }
     }
   }
+  // Other Git refs establish pack boundaries, but do not prove the LFS payloads are present.
   const lfs = [...tips, ...[...bases].map(oid => `^${oid}`)]
   if (tips.size && discoverRemote && options.remote !== undefined) {
     try {
       const result = await inspectGit(context, ['ls-remote', '--refs', '--', options.remote])
-      const advertised = result.output.toString('utf8').split('\n').map(line => line.split(/\s+/)[0]!).filter(oid => oidPattern.test(oid))
-      const known = await localObjects(context, [...new Set(advertised)])
-      if (known.length < new Set(advertised).size)
+      const advertised = new Set(result.output.toString('utf8').split('\n').map(line => line.split(/\s+/)[0]!).filter(oid => oidPattern.test(oid)))
+      const known = await localObjects(context, [...advertised])
+      if (known.length < advertised.size)
         warnings.push('部分远端引用不在本地，Git pack 为保守估算；先运行 git fetch 可改进增量估算')
       for (const oid of known)
         bases.add(oid)

@@ -15,7 +15,7 @@ yunbox inspect --push --confirm --confirm-ui terminal   # 这次只用终端
 
 默认比较 HEAD 与本地 upstream 快照；没有 upstream 时检查 HEAD 的全部历史并提示。`--stdin` 接受 Git pre-push 的四列引用更新，支持多分支和删除，不能与 `--base` / `--head` 合用。已有远端分支的旧 tip 不在本地时，检查以退出码 `2` 失败，提示先运行 `git fetch`，不再把无法可靠计算的体积和文件状态显示为检查通过；补齐对象后重试即可。检查不会自动 fetch、改写引用或下载 LFS 内容。
 
-只有显式提供 `--remote <name/url>` 才会在新分支时查询远端 Git refs，以排除本地可读取且远端已有的 Git 历史。查询失败或部分远端对象不在本地时，会明确提示 Git pack 为保守估算。直连 COS 的仓库还会查询 LFS 对象是否已上传，见下文。
+推送钩子会传入目标远端，通过查询远端引用排除本地可读取且远端已拥有的 Git 历史，包括其他分支上的历史。手动检查时，如果没有可用的 upstream 和显式基准，也可提供 `--remote <name/url>` 查询远端引用。查询失败或部分远端对象不在本地时，会提示 Git pack 为保守估算。直连 COS 的仓库还会查询 LFS 对象是否已上传，见下文。
 
 ## 终端报告
 
