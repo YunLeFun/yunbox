@@ -16,9 +16,11 @@ By default, `yunbox inspect` compares HEAD with your local snapshot of the upstr
 
 `--stdin` reads the four-column ref updates that Git passes to a pre-push hook. It handles several branches and deletions in one push, and can't be combined with `--base` / `--head`.
 
-If an existing remote branch's old tip is missing locally, inspection fails with exit code `2` and asks you to run `git fetch`. It no longer presents unreliable sizes and file statuses as a passed check. Retry after fetching. Inspection never fetches automatically, changes refs, or downloads LFS content.
+If an existing remote branch's old tip is missing locally, inspection fails with exit code `2` and asks you to run `git fetch`. Retry after fetching. Manual inspection remains read-only.
 
-The push hook queries the destination's Git refs to exclude locally readable history the destination already has, including history on other branches. For a manual check without a usable upstream or explicit base, pass `--remote <name/url>` to query remote refs. If the query fails or some remote objects are missing locally, YunBox flags the Git pack estimate as conservative. For repositories connected directly to COS, YunBox also checks whether LFS objects are already uploaded (see below).
+The push hook uses a Git dry run to read the refs the destination advertises for pushes. The estimate excludes history reachable from those refs when their objects are present locally. For a manual check without a usable upstream or explicit base, pass `--remote <name/url>` to make the same query. If the query fails, the check estimates conservatively using the bases it already knows. For repositories connected directly to COS, YunBox also checks whether LFS objects are already uploaded (see below).
+
+When a new branch is over the Git pack or Git file budget and its destination advertises a default-branch tip that is missing locally, the hook tries to fetch the missing Git objects and recomputes the estimate. The fetch writes to the object store and preserves the current branch, working tree, remote-tracking refs and `FETCH_HEAD`. If the fetch fails, the hook enforces the budgets using its previous estimate. You can also fetch the objects with `git fetch <remote>`.
 
 ## Terminal reports
 

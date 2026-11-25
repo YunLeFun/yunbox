@@ -4,6 +4,14 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 
 ## Unreleased
 
+### Changed
+
+- When a new branch is over the Git budget and the remote default branch is missing locally, push protection tries to fetch the missing objects and recalculate to reduce repeated uploads.
+
+### Fixed
+
+- Push checks estimate upload size using refs visible to Git during a push. When pushing a new branch from an older commit, the budget includes any history Git needs to resend.
+
 ## 0.1.12 - 2026-11-18
 
 ### Fixed

@@ -6,7 +6,7 @@ import { recordBlockedPush } from '../blocked-pushes.ts'
 import { readConfirmMode } from '../confirm-policy.ts'
 import { askPush } from '../confirm.ts'
 import { checkFreeze, formatFreezeBlock, formatPauseEnd, readFreezeConfig, SCOPE_LABELS } from '../freeze.ts'
-import { inspectGit, InspectionError, resolveInspectionRange } from '../inspect-git.ts'
+import { inspectGit, InspectionError, refreshNewBranchBases, resolveInspectionRange } from '../inspect-git.ts'
 import { exceededReasons, formatInspection, inspectPush } from '../inspect.ts'
 import { describePush } from '../push-context.ts'
 import { recordPushHistory } from '../push-history.ts'
@@ -23,9 +23,10 @@ export const inspectHelp = `用法：yunbox inspect --push [选项]
   --base <ref>        指定已存在的基准引用
   --head <ref>        指定待推送引用（默认 HEAD）
   --stdin             从 stdin 读取 Git pre-push 的引用更新，支持多个分支和删除；
+                      新分支 Git 超限且缺少远端默认分支对象时，补齐对象后重算；
                       处在禁推时段（yunbox freeze）时直接中断，退出码 1；
                       保护决定（含确认继续）记入本机配置目录的 push-history.json
-  --remote <name/url>  推送时查询远端 Git refs 以改进 pack 估算；旧 tip 缺失需先 git fetch
+  --remote <name/url>  查询远端在 Git 推送时提供的引用；旧 tip 缺失需先 git fetch
   --git-limit <size>  Git pack 限额（默认 900k）
   --lfs-limit <size>  LFS 候选总量限额（默认 100m）
   --file-limit <size> 单文件原始大小限额（默认 10m，适用于 Git 和 LFS）
@@ -42,7 +43,7 @@ size 支持字节及 k/m/g、KiB/MiB/GiB（1024 进制）。退出码：0 放行
 Git 配置：yunbox.inspectGitBytes / yunbox.inspectLfsBytes / yunbox.inspectFileBytes；命令行优先。
 确认界面：--confirm-ui > YUNBOX_CONFIRM_UI > git config yunbox.confirmUI > auto。
 确认时机：--confirm-always / --confirm-mode > git config yunbox.confirmMode（exceeded / always，默认 exceeded）。
-Git 配置仅对启用确认的检查生效；缺少远端基准时检查失败，不自动 fetch。
+Git 配置仅对启用确认的检查生效；已有远端分支的旧 tip 缺失时，请先运行 git fetch。
 macOS 可选原生对话框或纯终端；Windows / Linux 使用控制终端。NO_COLOR=1 关闭颜色。
 直连对象存储（COS 或 S3）的仓库在本机有密钥时，用 HEAD 查询 LFS 候选是否已在存储里（并发 8，共 5 秒），
 已有的不计入上传量；查询失败或超时时上传量按未知处理，不影响推送。其他情况下 LFS 候选量
@@ -120,7 +121,7 @@ export async function runInspect(context: CliContext, args: string[]): Promise<n
     const updates = values.stdin ? await readUpdates(context) : undefined
     const range = await resolveInspectionRange(repo, { updates, base: values.base, head: values.head, remote: values.remote })
     // Destination labels and transfer settings are independent read-only queries.
-    const [report, display] = await Promise.all([
+    const [initialReport, display] = await Promise.all([
       inspectPush(repo, range, limits),
       json
         ? undefined
@@ -129,6 +130,9 @@ export async function runInspect(context: CliContext, args: string[]): Promise<n
             readTransferSummary(repo),
           ]),
     ])
+    const gitExceeded = initialReport.git.exceedsLimit || initialReport.git.files.some(file => file.exceedsFileLimit)
+    const refreshed = values.remote && gitExceeded ? await refreshNewBranchBases(repo, range, values.remote) : undefined
+    const report = refreshed ? await inspectPush(repo, refreshed, limits) : initialReport
     if (values.json) {
       context.stdout.write(`${JSON.stringify(report)}\n`)
     }

@@ -1,6 +1,10 @@
 import type { Sandbox } from './helpers.ts'
-import { execFile } from 'node:child_process'
+import { Buffer } from 'node:buffer'
+import { execFile, spawn } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
+import { once } from 'node:events'
 import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { createServer } from 'node:http'
 import { join } from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
@@ -170,6 +174,117 @@ describe('optional global hook dispatcher', () => {
     await git(sandbox, repo, 'push', 'origin', 'HEAD:main')
     expect(await readFile(join(repo, 'uploaded-input'), 'utf8')).toContain('refs/heads/main')
     expect(await git(sandbox, remote, 'rev-parse', 'refs/heads/main')).toBe(await git(sandbox, repo, 'rev-parse', 'HEAD'))
+  })
+
+  it('blocks a stale first push if fetching fails and otherwise fetches before sending the pack', async () => {
+    const { sandbox, repo, hook } = await fixture()
+    const remote = join(sandbox.root, 'origin.git')
+    const maintainer = join(sandbox.root, 'maintainer')
+    await writeFile(join(repo, 'historical-asset.bin'), randomBytes(1280 * 1024))
+    await git(sandbox, repo, 'add', '.')
+    await git(sandbox, repo, 'commit', '-qm', 'Record historical asset')
+    const oldMain = await git(sandbox, repo, 'rev-parse', 'HEAD')
+    await git(sandbox, sandbox.root, 'clone', '-q', '--bare', '--no-local', repo, remote)
+    await git(sandbox, sandbox.root, 'clone', '-q', remote, maintainer)
+    await git(sandbox, maintainer, 'commit', '--allow-empty', '-qm', 'Advance remote main')
+    await git(sandbox, maintainer, 'push', remote, 'HEAD:main')
+    const remoteMain = await git(sandbox, remote, 'rev-parse', 'refs/heads/main')
+    await git(sandbox, remote, 'update-ref', 'refs/pull/254/head', oldMain)
+    await git(sandbox, remote, 'config', 'receive.hideRefs', 'refs/pull')
+    await git(sandbox, remote, 'config', 'http.receivepack', 'true')
+    await git(sandbox, repo, 'switch', '-qc', 'landing')
+    await writeFile(join(repo, 'landing.md'), 'New landing page\n')
+    await git(sandbox, repo, 'add', 'landing.md')
+    await git(sandbox, repo, 'commit', '-qm', 'Update landing page')
+    const landing = await git(sandbox, repo, 'rev-parse', 'HEAD')
+    await writeFile(join(repo, 'landing.md'), 'Uncommitted edits\n')
+    await git(sandbox, repo, 'config', 'http.postBuffer', '2m')
+    await writeFile(hook, '#!/bin/sh\ncat > uploaded-input\n', { mode: 0o755 })
+    expect((await runYunBox(sandbox, repo, ['hook', 'install', '--global', '--no-confirm'])).code).toBe(0)
+
+    const uploads: number[] = []
+    let allowFetch = true
+    const server = createServer((request, response) => {
+      const url = new URL(request.url!, 'http://localhost')
+      if (!allowFetch && url.searchParams.get('service') === 'git-upload-pack') {
+        response.writeHead(403).end()
+        return
+      }
+      if (url.pathname.endsWith('/git-receive-pack'))
+        uploads.push(Number(request.headers['content-length']))
+      const child = spawn('git', ['http-backend'], { env: {
+        ...sandbox.env,
+        GIT_PROJECT_ROOT: sandbox.root,
+        GIT_HTTP_EXPORT_ALL: '1',
+        PATH_INFO: url.pathname,
+        QUERY_STRING: url.search.slice(1),
+        REQUEST_METHOD: request.method,
+        CONTENT_TYPE: request.headers['content-type'],
+        CONTENT_LENGTH: request.headers['content-length'],
+        HTTP_GIT_PROTOCOL: request.headers['git-protocol'] as string | undefined,
+      }, stdio: ['pipe', 'pipe', 'ignore'] })
+      const output: Buffer[] = []
+      child.stdout.on('data', chunk => output.push(chunk))
+      child.stdin.on('error', () => {})
+      child.on('error', () => response.destroy())
+      child.on('close', (code) => {
+        if (code !== 0) {
+          response.writeHead(500).end()
+          return
+        }
+        const result = Buffer.concat(output)
+        const end = result.indexOf('\r\n\r\n')
+        for (const line of result.subarray(0, end).toString().split('\r\n')) {
+          const separator = line.indexOf(':')
+          const value = line.slice(separator + 1).trim()
+          if (line.startsWith('Status:'))
+            response.statusCode = Number.parseInt(value)
+          else
+            response.setHeader(line.slice(0, separator), value)
+        }
+        response.end(result.subarray(end + 4))
+      })
+      request.pipe(child.stdin)
+    })
+    server.listen(0, '127.0.0.1')
+    try {
+      await once(server, 'listening')
+      const address = server.address()
+      if (!address || typeof address === 'string')
+        throw new Error('Missing test server address')
+      const destination = `http://127.0.0.1:${address.port}/origin.git`
+      await git(sandbox, repo, 'remote', 'add', 'origin', destination)
+      await git(sandbox, repo, 'update-ref', 'refs/remotes/origin/main', oldMain)
+      await writeFile(join(repo, '.git', 'FETCH_HEAD'), `${oldMain}\t\tprevious fetch\n`)
+      expect(await git(sandbox, repo, 'ls-remote', 'origin', 'refs/pull/254/head')).toContain(oldMain)
+      await expect(git(sandbox, repo, 'cat-file', '-e', remoteMain)).rejects.toThrow()
+
+      const manual = await runYunBox(sandbox, repo, ['inspect', '--push', '--remote', 'origin', '--json'])
+      expect(manual.code).toBe(1)
+      await expect(git(sandbox, repo, 'cat-file', '-e', remoteMain)).rejects.toThrow()
+
+      allowFetch = false
+      await expect(git(sandbox, repo, 'push', 'origin', 'HEAD:refs/heads/landing')).rejects.toThrow()
+      expect(uploads).toEqual([])
+      await expect(readFile(join(repo, 'uploaded-input'))).rejects.toThrow()
+      expect(await git(sandbox, remote, 'for-each-ref', 'refs/heads/landing')).toBe('')
+
+      allowFetch = true
+      const retried = await git(sandbox, repo, 'push', 'origin', 'HEAD:refs/heads/landing')
+      expect(retried).toContain('已补齐远端默认分支对象')
+      expect(uploads).toHaveLength(1)
+      expect(uploads[0]).toBeLessThan(4096)
+      expect(await readFile(join(repo, 'uploaded-input'), 'utf8')).toContain('refs/heads/landing')
+      expect(await git(sandbox, remote, 'rev-parse', 'refs/heads/landing')).toBe(landing)
+      await git(sandbox, repo, 'cat-file', '-e', remoteMain)
+      expect(await git(sandbox, repo, 'rev-parse', 'HEAD')).toBe(landing)
+      expect(await git(sandbox, repo, 'rev-parse', 'refs/remotes/origin/main')).toBe(oldMain)
+      expect(await readFile(join(repo, '.git', 'FETCH_HEAD'), 'utf8')).toBe(`${oldMain}\t\tprevious fetch\n`)
+      expect(await readFile(join(repo, 'landing.md'), 'utf8')).toBe('Uncommitted edits\n')
+    }
+    finally {
+      await new Promise<void>(resolve => server.close(() => resolve()))
+    }
   })
 
   it('blocks uploads before the original hook and forwards stdin, other events and worktrees', async () => {
