@@ -11,6 +11,7 @@ The command-line tool (the `yunbox` npm package) and the macOS app share one ver
 ### Fixed
 
 - Push checks estimate upload size using refs visible to Git during a push. When pushing a new branch from an older commit, the budget includes any history Git needs to resend.
+- When moving a directory across paths causes Git's default sparse packing to resend objects from excluded base commits, push checks now report the non-sparse estimate relative to the active base and suggest adding `-c pack.useSparse=false` to your `git push` command.
 
 ## 0.1.12 - 2026-11-18
 

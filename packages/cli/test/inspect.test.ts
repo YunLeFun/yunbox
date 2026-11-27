@@ -2,7 +2,7 @@ import type { PushInspection } from '../src/inspect.ts'
 import type { Sandbox } from './helpers.ts'
 import { Buffer } from 'node:buffer'
 import { createHash, randomBytes } from 'node:crypto'
-import { readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import process from 'node:process'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -373,5 +373,31 @@ describe('push inspection', () => {
     const result = await runYunBox(sandbox, repo, ['inspect', '--push', '--json'])
     expect(result.code).toBe(2)
     expect(JSON.parse(result.stdout).error.message).toContain('LFS 指针')
+  })
+
+  it('warns when sparse packing resends existing remote blobs on directory moves', async () => {
+    const { sandbox, repo } = await fixture()
+    await mkdir(join(repo, 'apps/site/public/works'), { recursive: true })
+    await writeFile(join(repo, 'apps/site/public/works/art.bin'), randomBytes(200 * 1024))
+    const base = await commit(sandbox, repo)
+    await mkdir(join(repo, 'demo/public/works'), { recursive: true })
+    await git(sandbox, repo, 'mv', 'apps/site/public/works/art.bin', 'demo/public/works/art.bin')
+    await commit(sandbox, repo)
+
+    const sparse = await runYunBox(sandbox, repo, ['inspect', '--push', '--base', base, '--git-limit', '64k', '--json'])
+    const sparseReport = JSON.parse(sparse.stdout) as PushInspection
+    expect(sparse.code).toBe(1)
+    expect(sparseReport.git.exceedsLimit).toBe(true)
+    expect(sparseReport.git.packBytes).toBeGreaterThanOrEqual(100 * 1024)
+    expect(sparseReport.git.files).toEqual([])
+    expect(sparseReport.warnings.join(' ')).toContain('pack.useSparse=false')
+
+    await git(sandbox, repo, 'config', 'pack.useSparse', 'false')
+    const nonSparse = await runYunBox(sandbox, repo, ['inspect', '--push', '--base', base, '--git-limit', '64k', '--json'])
+    const nonSparseReport = JSON.parse(nonSparse.stdout) as PushInspection
+    expect(nonSparse.code).toBe(0)
+    expect(nonSparseReport.git.exceedsLimit).toBe(false)
+    expect(nonSparseReport.git.packBytes).toBeLessThan(16 * 1024)
+    expect(nonSparseReport.warnings.join(' ')).not.toContain('pack.useSparse=false')
   })
 })

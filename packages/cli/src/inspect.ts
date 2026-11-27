@@ -123,6 +123,29 @@ export async function inspectPush(context: CliContext, range: InspectionRange, l
   for (const [oid, names] of history.paths)
     paths.set(oid, [...new Set([...(paths.get(oid) ?? []), ...names])])
   const warnings = [...range.warnings]
+  if (range.git.some(rev => rev.startsWith('^')) && pack.bytes > limits.gitBytes) {
+    try {
+      const sparseEnabled = await inspectGit(context, ['config', '--type=bool', '--get', 'pack.useSparse']).then(
+        result => result.output.toString('utf8').trim() !== 'false',
+        () => true,
+      )
+      if (sparseEnabled) {
+        const nonSparse = await inspectGit(
+          context,
+          ['pack-objects', '--revs', '--no-sparse', '--stdout', '--thin', '--delta-base-offset', '-q'],
+          revisions(range.git),
+          packCapBytes,
+        )
+        if (nonSparse.complete && nonSparse.bytes <= limits.gitBytes)
+          warnings.push(`Git 默认稀疏打包会重发已排除基准中的历史对象（相对当前检查基准关闭稀疏打包后约 ${compactBytes(nonSparse.bytes)}，未超预算）；可在原推送命令中加上 git -c pack.useSparse=false push ... 避免重复上传`)
+        else if (nonSparse.complete && pack.bytes - nonSparse.bytes >= 64 * 1024)
+          warnings.push(`Git 默认稀疏打包会额外重发已排除基准中的历史对象（相对当前检查基准关闭稀疏打包后约 ${compactBytes(nonSparse.bytes)}）；可在原推送命令中加上 git -c pack.useSparse=false push ... 减少重复上传`)
+      }
+    }
+    catch {
+      // Ignore on older Git builds that do not recognize --no-sparse.
+    }
+  }
   if (allBlobs.size && paths.size === 0)
     warnings.push('无法确定文件路径，报告以对象 ID 标识内容')
   const gitFiles = gitBlobs.filter(blob => !pointers.has(blob.oid)).map(blob => fileEntry(blob, paths.get(blob.oid) ?? [], limits.fileBytes))
